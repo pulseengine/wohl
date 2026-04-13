@@ -1,0 +1,83 @@
+package pulseengine:wohl-rules@0.1.0;
+
+/// Home supervision rules — configurable thresholds and automation.
+/// Uses Relay Limit Checker for threshold evaluation and
+/// Relay Stored Command for time-based automation sequences.
+interface rules {
+    use pulseengine:relay-common-types/types.{timestamp, duration};
+
+    /// A supervision rule: condition → action.
+    record supervision-rule {
+        rule-id: u32,
+        name: string,
+        condition: rule-condition,
+        action: rule-action,
+        enabled: bool,
+    }
+
+    /// What triggers the rule.
+    variant rule-condition {
+        /// Sensor exceeds threshold (maps to Relay LC watchpoint)
+        threshold(threshold-condition),
+        /// No event from a sensor for a duration (absence detection)
+        absence(absence-condition),
+        /// Time-of-day trigger (maps to Relay SCH schedule slot)
+        schedule(schedule-condition),
+        /// Combination of conditions
+        all-of(list<rule-condition>),
+        any-of(list<rule-condition>),
+    }
+
+    record threshold-condition {
+        sensor-id: u32,
+        comparison: comparison,
+        value: i64,
+    }
+
+    enum comparison {
+        above,
+        below,
+        equal,
+    }
+
+    record absence-condition {
+        sensor-id: u32,
+        timeout: duration,
+    }
+
+    record schedule-condition {
+        /// Hour (0-23)
+        hour: u8,
+        /// Minute (0-59)
+        minute: u8,
+        /// Days of week bitmask (bit 0 = Monday)
+        days: u8,
+    }
+
+    /// What happens when the rule fires.
+    variant rule-action {
+        /// Send alert to user
+        alert(alert-action),
+        /// Control a device
+        switch-device(switch-action),
+        /// Run a stored command sequence
+        run-sequence(u32),
+    }
+
+    record alert-action {
+        severity: alert-severity,
+        message: string,
+    }
+
+    enum alert-severity {
+        info,
+        warning,
+        critical,
+        emergency,
+    }
+
+    record switch-action {
+        device-id: u32,
+        on: bool,
+    }
+}

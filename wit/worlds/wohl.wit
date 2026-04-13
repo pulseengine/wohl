@@ -1,0 +1,36 @@
+package pulseengine:wohl-worlds@0.1.0;
+
+/// Full Wohl system — all monitors composed.
+///
+/// Stream pipeline:
+///
+///   Sensors (ESP32/Zigbee)
+///       ↓
+///   stream<temperature>  → Temperature Monitor ─┐
+///   stream<water-event>  → Water Leak Detector ─┤
+///   stream<air-quality>  → Air Quality Monitor ─┤→ stream<alert> → Alert Dispatcher → notifications
+///   stream<contact>      → Door/Window Watch  ──┤
+///   stream<power>        → Power Meter ─────────┘
+///
+///   Relay Scheduler drives periodic checks.
+///   Relay Limit Checker provides verified threshold evaluation.
+///   Relay Housekeeping aggregates telemetry for dashboard.
+///
+/// Hub: Raspberry Pi (Kiln interpreter) or STM32H7 (Synth → Gale).
+/// Sensor nodes: ESP32-C3 or STM32G0 (Synth → Gale).
+world wohl-full {
+    import pulseengine:wohl-sensors/sensors;
+    import pulseengine:wohl-actuators/actuators;
+    import pulseengine:relay-common-types/types;
+    import pulseengine:relay-time/time;
+    import pulseengine:relay-events/events;
+}
+
+/// Minimal Wohl: temperature + water leak only.
+/// The smallest useful home supervisor. Start here.
+world wohl-minimal {
+    import pulseengine:wohl-sensors/sensors;
+    import pulseengine:wohl-actuators/actuators;
+    import pulseengine:relay-common-types/types;
+    import pulseengine:relay-time/time;
+}

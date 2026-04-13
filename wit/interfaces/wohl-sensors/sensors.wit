@@ -1,0 +1,79 @@
+package pulseengine:wohl-sensors@0.1.0;
+
+/// Home sensor types — domain-specific types for residential monitoring.
+/// Built on Relay common types for stream transport.
+interface sensors {
+    use pulseengine:relay-common-types/types.{timestamp, sensor-reading};
+
+    /// Temperature reading with location context.
+    record temperature {
+        /// Degrees Celsius × 100 (fixed-point, e.g., 2150 = 21.50°C)
+        value: i32,
+        /// Which room/zone
+        zone: zone-id,
+        time: timestamp,
+    }
+
+    /// Relative humidity reading.
+    record humidity {
+        /// Percent × 100 (e.g., 6500 = 65.00%)
+        value: u32,
+        zone: zone-id,
+        time: timestamp,
+    }
+
+    /// Water presence detection.
+    record water-event {
+        /// true = water detected
+        wet: bool,
+        zone: zone-id,
+        time: timestamp,
+    }
+
+    /// Air quality measurement.
+    record air-quality {
+        /// CO2 in ppm
+        co2-ppm: u32,
+        /// PM2.5 in µg/m³ × 10
+        pm25: u32,
+        /// VOC index (0-500)
+        voc-index: u32,
+        zone: zone-id,
+        time: timestamp,
+    }
+
+    /// Door/window contact state.
+    record contact-event {
+        /// true = open, false = closed
+        open: bool,
+        /// Which door/window
+        contact-id: u32,
+        zone: zone-id,
+        time: timestamp,
+    }
+
+    /// Motion detection.
+    record motion-event {
+        /// true = motion detected
+        detected: bool,
+        zone: zone-id,
+        time: timestamp,
+    }
+
+    /// Power consumption reading.
+    record power-reading {
+        /// Watts × 10 (e.g., 15230 = 1523.0W)
+        watts: u32,
+        /// Watt-hours today × 10
+        wh-today: u32,
+        /// Which circuit/plug
+        circuit-id: u32,
+        time: timestamp,
+    }
+
+    /// Zone identifier for room/area tagging.
+    type zone-id = u32;
+
+    /// Known zones (configurable via table).
+    /// Examples: kitchen=1, bathroom=2, bedroom=3, basement=4, garage=5
+}

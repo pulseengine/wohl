@@ -1,0 +1,37 @@
+package pulseengine:wohl-actuators@0.1.0;
+
+/// Home actuator commands — actions the system can take.
+interface actuators {
+    use pulseengine:relay-common-types/types.{timestamp};
+
+    /// Turn a switch on or off (smart plug, relay, valve).
+    record switch-command {
+        device-id: u32,
+        on: bool,
+        time: timestamp,
+    }
+
+    /// Set a dimmer/thermostat level.
+    record level-command {
+        device-id: u32,
+        /// Level 0-10000 (0 = off, 10000 = max)
+        level: u32,
+        time: timestamp,
+    }
+
+    /// Send an alert to the user.
+    record alert {
+        severity: alert-severity,
+        title: string,
+        message: string,
+        zone: u32,
+        time: timestamp,
+    }
+
+    enum alert-severity {
+        info,
+        warning,
+        critical,
+        emergency,
+    }
+}

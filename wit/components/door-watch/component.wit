@@ -1,0 +1,24 @@
+package pulseengine:wohl-door-watch@0.1.0;
+
+/// Door/Window Watch — stream transformer: contact events → alerts.
+///
+/// Rules: door open too long at night → alert
+///        all doors closed at bedtime → arm
+///        unexpected opening while away → alert
+///
+/// Uses Relay Stored Command for time-based rules.
+world door-watch {
+    import pulseengine:wohl-sensors/sensors;
+    import pulseengine:relay-time/time;
+    import pulseengine:relay-events/events;
+
+    export watch: func(
+        contacts: stream<contact-event>,
+        motion: stream<motion-event>,
+        config: stream<table-update>,
+    ) -> stream<alert>;
+}
+
+use pulseengine:wohl-sensors/sensors.{contact-event, motion-event};
+use pulseengine:wohl-actuators/actuators.{alert};
+use pulseengine:relay-common-types/types.{table-update};

@@ -1,0 +1,22 @@
+package pulseengine:wohl-temperature@0.1.0;
+
+/// Temperature Monitor — stream transformer: raw readings → alerts + telemetry.
+///
+/// Uses Relay Limit Checker (verified) for threshold evaluation.
+/// Detects: freeze risk, overheating, rapid temperature changes.
+///
+/// stream<temperature> → [check thresholds] → stream<alert> + stream<telemetry>
+world temperature-monitor {
+    import pulseengine:wohl-sensors/sensors;
+    import pulseengine:relay-events/events;
+
+    /// Process temperature readings, emit alerts on violations.
+    export monitor: func(
+        readings: stream<temperature>,
+        config: stream<table-update>,
+    ) -> stream<alert>;
+}
+
+use pulseengine:wohl-sensors/sensors.{temperature};
+use pulseengine:wohl-actuators/actuators.{alert};
+use pulseengine:relay-common-types/types.{table-update};

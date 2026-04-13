@@ -1,0 +1,22 @@
+package pulseengine:wohl-air-quality@0.1.0;
+
+/// Air Quality Monitor — stream transformer: air readings → ventilation commands + alerts.
+///
+/// CO2 > 1000ppm → open ventilation
+/// PM2.5 high → close windows, start purifier
+/// VOC high → alert + ventilate
+///
+/// stream<air-quality> → [evaluate] → stream<alert> + stream<switch-command>
+world air-quality {
+    import pulseengine:wohl-sensors/sensors;
+    import pulseengine:relay-events/events;
+
+    export monitor: func(
+        readings: stream<air-quality-reading>,
+        config: stream<table-update>,
+    ) -> stream<alert>;
+}
+
+use pulseengine:wohl-sensors/sensors.{air-quality as air-quality-reading};
+use pulseengine:wohl-actuators/actuators.{alert};
+use pulseengine:relay-common-types/types.{table-update};

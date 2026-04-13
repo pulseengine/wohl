@@ -1,0 +1,33 @@
+package pulseengine:wohl-sensor-node@0.1.0;
+
+/// Sensor node — runs on ESP32-C3 or STM32G0.
+/// Reads one or more physical sensors, publishes streams over BLE/WiFi.
+///
+/// Compiled via: Meld → Loom → Synth → ARM ELF → Gale RTOS
+/// P3 callback mode, single stack, no alloc.
+///
+/// Each sensor node is a single WASM component that exports
+/// typed sensor streams.
+world sensor-node-temp-humidity {
+    import pulseengine:relay-time/time;
+
+    /// Produces temperature + humidity readings.
+    export read-temperature: func() -> stream<temperature>;
+    export read-humidity: func() -> stream<humidity>;
+}
+
+world sensor-node-water {
+    import pulseengine:relay-time/time;
+
+    /// Produces water detection events.
+    export read-water: func() -> stream<water-event>;
+}
+
+world sensor-node-air {
+    import pulseengine:relay-time/time;
+
+    /// Produces air quality readings.
+    export read-air: func() -> stream<air-quality-reading>;
+}
+
+use pulseengine:wohl-sensors/sensors.{temperature, humidity, water-event, air-quality as air-quality-reading};

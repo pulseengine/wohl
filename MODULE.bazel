@@ -1,0 +1,13 @@
+module(
+    name = "wohl",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_rust", version = "0.61.0")
+bazel_dep(name = "rules_wasm_component", version = "0.1.0")
+bazel_dep(name = "rules_verus", version = "0.1.0")
+bazel_dep(name = "rules_rocq_rust", version = "0.1.0")
+bazel_dep(name = "rules_lean", version = "0.1.0")
+
+# Relay dependency for shared types and stream interfaces
+bazel_dep(name = "relay", version = "0.1.0")

@@ -1,0 +1,38 @@
+package pulseengine:wohl-alert-dispatcher@0.1.0;
+
+/// Alert Dispatcher — fan-in of all alert streams → notification delivery.
+///
+/// Collects alerts from all monitor components, deduplicates,
+/// rate-limits, and dispatches via configured channels:
+///   - Push notification (phone)
+///   - MQTT publish (Home Assistant)
+///   - Webhook (custom integrations)
+///   - Local buzzer/LED on hub
+///
+/// stream<alert> (from all monitors) → [deduplicate, rate-limit] → notifications
+world alert-dispatcher {
+    import pulseengine:relay-events/events;
+    import pulseengine:relay-time/time;
+
+    export dispatch: func(
+        alerts: stream<alert>,
+        config: stream<table-update>,
+    ) -> stream<notification>;
+}
+
+use pulseengine:wohl-actuators/actuators.{alert};
+use pulseengine:relay-common-types/types.{table-update, timestamp};
+
+/// A dispatched notification (after dedup and rate-limiting).
+record notification {
+    alert: alert,
+    channel: notification-channel,
+    delivered: bool,
+}
+
+enum notification-channel {
+    push,
+    mqtt,
+    webhook,
+    local-buzzer,
+}

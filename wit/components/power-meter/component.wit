@@ -1,0 +1,21 @@
+package pulseengine:wohl-power-meter@0.1.0;
+
+/// Power Meter — stream transformer: power readings → usage telemetry + anomaly alerts.
+///
+/// Aggregates per-circuit power into housekeeping telemetry.
+/// Detects anomalies: sudden spikes, devices left on, unusual patterns.
+///
+/// Uses Relay Housekeeping for aggregation.
+world power-meter {
+    import pulseengine:wohl-sensors/sensors;
+    import pulseengine:relay-events/events;
+
+    export meter: func(
+        readings: stream<power-reading>,
+        config: stream<table-update>,
+    ) -> stream<alert>;
+}
+
+use pulseengine:wohl-sensors/sensors.{power-reading};
+use pulseengine:wohl-actuators/actuators.{alert};
+use pulseengine:relay-common-types/types.{table-update};

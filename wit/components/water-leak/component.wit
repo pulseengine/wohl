@@ -1,0 +1,20 @@
+package pulseengine:wohl-water-leak@0.1.0;
+
+/// Water Leak Detector — stream transformer: water events → emergency alerts + valve control.
+///
+/// SAFETY-CRITICAL: water damage is expensive and time-sensitive.
+/// On detection: immediately alert + optionally close water valve.
+///
+/// stream<water-event> → [detect] → stream<alert> + stream<switch-command>
+world water-leak {
+    import pulseengine:wohl-sensors/sensors;
+    import pulseengine:relay-events/events;
+
+    /// Process water sensor events, emit alerts and valve commands.
+    export detect: func(
+        events: stream<water-event>,
+    ) -> stream<alert>;
+}
+
+use pulseengine:wohl-sensors/sensors.{water-event};
+use pulseengine:wohl-actuators/actuators.{alert};
