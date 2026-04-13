@@ -1,0 +1,17 @@
+artifacts:
+  - id: SWDD-POWER-001
+    type: sw-detail-design
+    title: PowerMonitor overconsumption and spike detection design
+    status: approved
+    description: >
+      The PowerMonitor delegates overconsumption threshold checking to
+      relay-lc (verified) and handles spike detection (rate-of-change)
+      as domain-specific logic. Fixed-size arrays (MAX_CIRCUITS=16).
+      
+      Verus properties: POWER-P01 through POWER-P04.
+    tags: [power, threshold, detailed-design]
+    fields:
+      unit: crates/wohl-power/src/engine.rs
+    links:
+      - type: refines
+        target: SWARCH-WOHL-001

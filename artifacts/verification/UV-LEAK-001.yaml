@@ -1,40 +1,14 @@
 artifacts:
   - id: UV-LEAK-001
     type: unit-verification
-    title: LeakDetector unit tests
+    title: "Unit tests for SWDD-LEAK-001"
     status: approved
     description: >
-      Unit tests in src/leak/core.rs (plain Rust) covering:
-      - Wet event produces critical alert
-      - Dry event clears leak state
-      - Duplicate wet events are idempotent
-      - Zone state transitions are correct
-      - Zone map capacity boundary (33rd zone)
+      Automated unit tests verifying the detailed design of wohl-leak.
       Run via: cargo test -p wohl-leak
-    tags: [testing, unit, water-leak, swe-4]
+    tags: [testing, unit]
     fields:
       method: automated-test
-    links:
-      - type: verifies
-        target: SWDD-LEAK-001
-
-  - id: UV-LEAK-002
-    type: unit-verification
-    title: LeakDetector formal verification (Verus)
-    status: planned
-    description: >
-      Verus proofs in src/leak/core.rs covering properties LEAK-P01
-      through LEAK-P06:
-      - P01: wet==true always produces critical alert
-      - P02: wet-then-dry leaves Dry state
-      - P03: zone count bounded at 32, no overflow
-      - P04: no arithmetic overflow
-      - P05: state transitions exhaustive
-      - P06: critical severity always used for wet detection
-      Run via: bazel test //:wohl_leak_verus_test
-    tags: [formal-verification, verus, water-leak, swe-4]
-    fields:
-      method: formal-verification
     links:
       - type: verifies
         target: SWDD-LEAK-001

@@ -1,0 +1,14 @@
+artifacts:
+  - id: UV-ALERT-001
+    type: unit-verification
+    title: "Unit tests for SWDD-ALERT-001"
+    status: approved
+    description: >
+      Automated unit tests verifying alert dispatcher dedup and rate limiting.
+      Run via: cargo test -p wohl-alert
+    tags: [testing, unit]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWDD-ALERT-001

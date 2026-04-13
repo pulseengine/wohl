@@ -1,0 +1,19 @@
+artifacts:
+  - id: SWDD-ALERT-001
+    type: sw-detail-design
+    title: AlertDispatcher deduplication and rate limiting design
+    status: approved
+    description: >
+      The AlertDispatcher deduplicates alerts by (zone_id, alert_type)
+      within a 5-minute cooldown window and rate-limits to 10 alerts
+      per minute. Uses fixed-size arrays (MAX_RECENT_ALERTS=64).
+      
+      Verus properties: ALERT-P01 through ALERT-P04.
+    tags: [alert, dedup, rate-limit, detailed-design]
+    fields:
+      unit: crates/wohl-alert/src/engine.rs
+    links:
+      - type: refines
+        target: SWARCH-WOHL-004
+      - type: refines
+        target: SWARCH-WOHL-004

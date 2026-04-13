@@ -1,43 +1,14 @@
 artifacts:
   - id: UV-DOOR-001
     type: unit-verification
-    title: DoorWatch unit tests
+    title: "Unit tests for SWDD-DOOR-001"
     status: approved
     description: >
-      Unit tests in src/door/core.rs (plain Rust) covering:
-      - Open event starts timeout timer
-      - Close event cancels pending timeout
-      - Timeout expiry produces warning alert
-      - Night-hour timeout reduction to 120s
-      - Night-hour severity escalation to critical
-      - Boundary times (21:59, 22:00, 05:59, 06:00)
-      - Contact state capacity (33rd contact)
-      - No re-alerting for alerted contacts
+      Automated unit tests verifying the detailed design of wohl-door.
       Run via: cargo test -p wohl-door
-    tags: [testing, unit, door-watch, swe-4]
+    tags: [testing, unit]
     fields:
       method: automated-test
-    links:
-      - type: verifies
-        target: SWDD-DOOR-001
-
-  - id: UV-DOOR-002
-    type: unit-verification
-    title: DoorWatch formal verification (Verus)
-    status: planned
-    description: >
-      Verus proofs in src/door/core.rs covering properties DOOR-P01
-      through DOOR-P06:
-      - P01: open + timeout always produces alert
-      - P02: close before timeout produces no alert
-      - P03: night hours use 120s timeout
-      - P04: night hours use critical severity
-      - P05: contact state bounded at 32
-      - P06: no re-alerting
-      Run via: bazel test //:wohl_door_verus_test
-    tags: [formal-verification, verus, door-watch, swe-4]
-    fields:
-      method: formal-verification
     links:
       - type: verifies
         target: SWDD-DOOR-001

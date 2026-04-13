@@ -1,38 +1,14 @@
 artifacts:
   - id: UV-AIR-001
     type: unit-verification
-    title: AirMonitor unit tests
+    title: "Unit tests for SWDD-AIR-001"
     status: approved
     description: >
-      Unit tests in src/air/core.rs (plain Rust) covering:
-      - CO2 threshold boundaries (999, 1000, 1001, 1999, 2000, 2001)
-      - PM2.5 threshold boundaries (349, 350, 351, 1499, 1500, 1501)
-      - VOC index threshold boundaries (249, 250, 251, 399, 400, 401)
-      - Multi-metric max-severity selection
-      - All-normal produces no alert
+      Automated unit tests verifying the detailed design of wohl-air.
       Run via: cargo test -p wohl-air
-    tags: [testing, unit, air-quality, swe-4]
+    tags: [testing, unit]
     fields:
       method: automated-test
-    links:
-      - type: verifies
-        target: SWDD-AIR-001
-
-  - id: UV-AIR-002
-    type: unit-verification
-    title: AirMonitor formal verification (Verus)
-    status: planned
-    description: >
-      Verus proofs in src/air/core.rs covering properties AIR-P01
-      through AIR-P04:
-      - P01: CO2 > 1000 always produces alert
-      - P02: max-severity selection correct
-      - P03: severity ordering total and antisymmetric
-      - P04: no arithmetic overflow
-      Run via: bazel test //:wohl_air_verus_test
-    tags: [formal-verification, verus, air-quality, swe-4]
-    fields:
-      method: formal-verification
     links:
       - type: verifies
         target: SWDD-AIR-001

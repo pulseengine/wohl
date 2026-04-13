@@ -1,40 +1,14 @@
 artifacts:
   - id: UV-TEMP-001
     type: unit-verification
-    title: TemperatureMonitor unit tests
+    title: "Unit tests for SWDD-TEMP-001"
     status: approved
     description: >
-      Unit tests in src/temp/core.rs (plain Rust) covering:
-      - Freeze threshold boundary (299, 300, 301)
-      - Overheat warning threshold (3999, 4000, 4001)
-      - Overheat critical threshold (4999, 5000, 5001)
-      - Rate-of-change detection (2.00 C drop in 10 min window)
-      - Circular buffer capacity and overflow
-      - Simultaneous threshold + rate alert
+      Automated unit tests verifying the detailed design of wohl-temp.
       Run via: cargo test -p wohl-temp
-    tags: [testing, unit, temperature, swe-4]
+    tags: [testing, unit]
     fields:
       method: automated-test
-    links:
-      - type: verifies
-        target: SWDD-TEMP-001
-
-  - id: UV-TEMP-002
-    type: unit-verification
-    title: TemperatureMonitor formal verification (Verus)
-    status: planned
-    description: >
-      Verus proofs in src/temp/core.rs covering properties TEMP-P01
-      through TEMP-P05:
-      - P01: freeze threshold never missed
-      - P02: overheat severity correct
-      - P03: rate calculation no overflow
-      - P04: circular buffer bounded
-      - P05: severity ordering correct
-      Run via: bazel test //:wohl_temp_verus_test
-    tags: [formal-verification, verus, temperature, swe-4]
-    fields:
-      method: formal-verification
     links:
       - type: verifies
         target: SWDD-TEMP-001

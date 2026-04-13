@@ -1,0 +1,14 @@
+artifacts:
+  - id: SV-WOHL-002
+    type: sys-verification
+    title: "System verification for SYSREQ-WOHL-002"
+    status: approved
+    description: >
+      System-level verification via integration testing of composed
+      Wohl components on target platform (Kiln interpreter or Gale RTOS).
+    tags: [system-verification]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SYSREQ-WOHL-002
