@@ -1,0 +1,57 @@
+artifacts:
+  - id: SWARCH-WOHL-005
+    type: sw-arch-component
+    title: Relay Limit Checker dependency for verified threshold evaluation
+    status: approved
+    description: >
+      The wohl-temp, wohl-air, and wohl-power components depend on
+      relay-lc (Relay Limit Checker) for verified threshold evaluation.
+      Rather than implementing threshold comparison logic inline, these
+      components delegate all threshold checks to relay-lc's WatchpointTable,
+      which provides formally verified (Verus) comparison operations.
+
+      Each component uses relay-lc as follows:
+
+      - wohl-temp: creates LessOrEqual watchpoints for freeze detection and
+        GreaterOrEqual watchpoints for overheat detection. Two watchpoints
+        per zone (freeze + overheat). Rate-of-change detection remains
+        domain-specific in the wohl-temp module.
+
+      - wohl-air: creates GreaterOrEqual watchpoints for all six air quality
+        thresholds (CO2 warn/critical, PM2.5 warn/critical, VOC warn/critical).
+        Six watchpoints per zone. All threshold evaluation is delegated to
+        relay-lc.
+
+      - wohl-power: creates GreaterThan watchpoints for overconsumption
+        detection. One watchpoint per circuit. Spike detection (rate-of-change)
+        remains domain-specific in the wohl-power module.
+
+      This architecture separates concerns: Relay provides the VERIFIED
+      threshold engine, Wohl provides CONFIGURATION and DOMAIN GLUE.
+      The relay-lc proofs guarantee that threshold comparisons are correct
+      for all inputs, so Wohl components inherit that safety property
+      without re-proving it.
+    tags: [relay-lc, threshold, verified, dependency, architecture]
+    fields:
+      interfaces:
+        provided:
+          - "Verified threshold evaluation for temperature, air quality, and power"
+          - "Watchpoint-based sensor monitoring with configurable persistence"
+        required:
+          - "relay-lc::engine::WatchpointTable — verified watchpoint storage and evaluation"
+          - "relay-lc::engine::Watchpoint — threshold configuration (sensor_id, op, threshold, persistence)"
+          - "relay-lc::engine::SensorReading — input value for evaluation"
+          - "relay-lc::engine::ComparisonOp — LessOrEqual, GreaterOrEqual, GreaterThan"
+      relay-lc-usage:
+        wohl-temp: "2 watchpoints per zone (freeze=LessOrEqual, overheat=GreaterOrEqual)"
+        wohl-air: "6 watchpoints per zone (warn+critical for CO2, PM2.5, VOC)"
+        wohl-power: "1 watchpoint per circuit (overconsumption=GreaterThan)"
+    links:
+      - type: allocated-from
+        target: SWREQ-TEMP-001
+      - type: allocated-from
+        target: SWREQ-TEMP-002
+      - type: allocated-from
+        target: SWREQ-AIR-001
+      - type: allocated-from
+        target: SWREQ-AIR-002

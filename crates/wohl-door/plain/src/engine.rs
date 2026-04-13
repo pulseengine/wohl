@@ -193,3 +193,78 @@ mod tests {
     #[test] fn test_unknown_contact() { let mut w = DoorWatch::new(); let r = w.process_event(99, true, 1000); assert_eq!(r.alert_count, 0); }
     #[test] fn test_multiple_contacts() { let mut w = DoorWatch::new(); w.register_contact(make_config(1, 10)); w.register_contact(make_config(2, 20)); w.process_event(1, true, 43200); w.process_event(2, true, 43200); let r = w.check_timeouts(43200 + 400); assert_eq!(r.alert_count, 2); }
 }
+
+// ── Kani bounded model checking harnesses ────────────────────
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    /// DOOR-P03: alert_count never exceeds MAX_ALERTS_PER_CHECK
+    #[kani::proof]
+    fn verify_alert_count_bounded() {
+        let mut w = DoorWatch::new();
+        let config = ContactConfig {
+            contact_id: 1,
+            zone_id: 10,
+            max_open_sec: kani::any(),
+            night_start_hour: kani::any(),
+            night_end_hour: kani::any(),
+            enabled: true,
+        };
+        w.register_contact(config);
+        let open: bool = kani::any();
+        let time: u64 = kani::any();
+        let r = w.process_event(1, open, time);
+        assert!(r.alert_count as usize <= MAX_ALERTS_PER_CHECK);
+        // Also verify check_timeouts is bounded
+        let current: u64 = kani::any();
+        let r2 = w.check_timeouts(current);
+        assert!(r2.alert_count as usize <= MAX_ALERTS_PER_CHECK);
+    }
+
+    /// DOOR-P04: process_event correctly tracks open/close state
+    #[kani::proof]
+    fn verify_open_close_state() {
+        let mut w = DoorWatch::new();
+        let config = ContactConfig {
+            contact_id: 1,
+            zone_id: 10,
+            max_open_sec: 300,
+            night_start_hour: 22,
+            night_end_hour: 6,
+            enabled: true,
+        };
+        w.register_contact(config);
+        // Open the door during daytime (no night alert)
+        w.process_event(1, true, 43200); // noon
+        // State should be open
+        assert!(w.states[0].open);
+        // Close the door
+        w.process_event(1, false, 43260);
+        // State should be closed
+        assert!(!w.states[0].open);
+    }
+
+    /// No panics for any combination of symbolic inputs
+    #[kani::proof]
+    fn verify_no_panic() {
+        let mut w = DoorWatch::new();
+        let contact_id: u32 = kani::any();
+        kani::assume(contact_id < 100);
+        let config = ContactConfig {
+            contact_id,
+            zone_id: kani::any(),
+            max_open_sec: kani::any(),
+            night_start_hour: kani::any(),
+            night_end_hour: kani::any(),
+            enabled: kani::any(),
+        };
+        w.register_contact(config);
+        let open: bool = kani::any();
+        let time: u64 = kani::any();
+        let _ = w.process_event(contact_id, open, time);
+        let current: u64 = kani::any();
+        let _ = w.check_timeouts(current);
+    }
+}

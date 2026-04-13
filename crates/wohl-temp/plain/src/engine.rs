@@ -274,3 +274,83 @@ mod tests {
         assert_eq!(r.alert_count, 0);
     }
 }
+
+// ── Kani bounded model checking harnesses ────────────────────
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    /// TEMP-P04: alert_count never exceeds MAX_ALERTS_PER_READING
+    #[kani::proof]
+    fn verify_alert_count_bounded() {
+        let mut m = TemperatureMonitor::new();
+        let config = ZoneConfig {
+            zone_id: 1,
+            freeze_threshold: kani::any(),
+            overheat_threshold: kani::any(),
+            rate_threshold: kani::any(),
+            enabled: true,
+        };
+        m.register_zone(config);
+        // First reading to establish baseline for rate detection
+        let v1: i32 = kani::any();
+        let t1: u64 = kani::any();
+        kani::assume(t1 < u64::MAX / 2);
+        m.process_reading(1, v1, t1);
+        // Second reading may trigger rate-of-change alerts too
+        let v2: i32 = kani::any();
+        let t2: u64 = kani::any();
+        kani::assume(t2 > t1);
+        let r = m.process_reading(1, v2, t2);
+        assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
+    }
+
+    /// TEMP-P01: value <= freeze_threshold produces Freeze alert (via relay-lc)
+    #[kani::proof]
+    fn verify_freeze_detection() {
+        let mut m = TemperatureMonitor::new();
+        let freeze_thr: i32 = kani::any();
+        kani::assume(freeze_thr > i32::MIN + 100 && freeze_thr < i32::MAX - 100);
+        let config = ZoneConfig {
+            zone_id: 1,
+            freeze_threshold: freeze_thr,
+            overheat_threshold: i32::MAX, // won't trigger overheat
+            rate_threshold: i32::MAX,     // won't trigger rate
+            enabled: true,
+        };
+        m.register_zone(config);
+        let value: i32 = kani::any();
+        kani::assume(value <= freeze_thr);
+        let r = m.process_reading(1, value, 100);
+        // relay-lc uses LessOrEqual, so value <= freeze_threshold fires
+        let mut found_freeze = false;
+        let mut j: u32 = 0;
+        while j < r.alert_count {
+            if r.alerts[j as usize].alert_type == TempAlertType::Freeze {
+                found_freeze = true;
+            }
+            j += 1;
+        }
+        assert!(found_freeze);
+    }
+
+    /// No panics for any combination of symbolic inputs
+    #[kani::proof]
+    fn verify_no_panic() {
+        let mut m = TemperatureMonitor::new();
+        let zone_id: u32 = kani::any();
+        kani::assume(zone_id < 100);
+        let config = ZoneConfig {
+            zone_id,
+            freeze_threshold: kani::any(),
+            overheat_threshold: kani::any(),
+            rate_threshold: kani::any(),
+            enabled: kani::any(),
+        };
+        m.register_zone(config);
+        let value: i32 = kani::any();
+        let time: u64 = kani::any();
+        let _ = m.process_reading(zone_id, value, time);
+    }
+}

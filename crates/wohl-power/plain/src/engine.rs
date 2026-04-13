@@ -147,3 +147,84 @@ mod tests {
     #[test] fn test_unknown() { let mut m = PowerMonitor::new(); assert_eq!(m.process_reading(99, 50000, 100).alert_count, 0); }
     #[test] fn test_idle() { let mut m = PowerMonitor::new(); m.register_circuit(make_config(1)); assert!(m.check_idle(1, 50)); assert!(!m.check_idle(1, 200)); }
 }
+
+// ── Kani bounded model checking harnesses ────────────────────
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    /// POWER-P03: alert_count never exceeds MAX_ALERTS_PER_READING
+    #[kani::proof]
+    fn verify_alert_count_bounded() {
+        let mut m = PowerMonitor::new();
+        let config = CircuitConfig {
+            circuit_id: 1,
+            max_watts: kani::any(),
+            idle_watts: kani::any(),
+            spike_threshold: kani::any(),
+            enabled: true,
+        };
+        m.register_circuit(config);
+        // First reading to establish baseline for spike detection
+        let w1: u32 = kani::any();
+        let t1: u64 = kani::any();
+        kani::assume(t1 < u64::MAX / 2);
+        m.process_reading(1, w1, t1);
+        // Second reading may trigger both overconsumption and spike
+        let w2: u32 = kani::any();
+        let t2: u64 = kani::any();
+        kani::assume(t2 > t1);
+        let r = m.process_reading(1, w2, t2);
+        assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
+    }
+
+    /// POWER-P01: watts > max_watts produces OverConsumption (via relay-lc)
+    #[kani::proof]
+    fn verify_overconsumption_via_relay_lc() {
+        let mut m = PowerMonitor::new();
+        let max_watts: u32 = kani::any();
+        kani::assume(max_watts < u32::MAX - 1);
+        let config = CircuitConfig {
+            circuit_id: 1,
+            max_watts,
+            idle_watts: 0,
+            spike_threshold: u32::MAX, // won't trigger spike
+            enabled: true,
+        };
+        m.register_circuit(config);
+        let watts: u32 = kani::any();
+        kani::assume(watts > max_watts);
+        let r = m.process_reading(1, watts, 100);
+        // relay-lc uses GreaterThan, so watts > max_watts fires
+        let mut found_oc = false;
+        let mut j: u32 = 0;
+        while j < r.alert_count {
+            if r.alerts[j as usize].alert_type == PowerAlertType::OverConsumption {
+                found_oc = true;
+            }
+            j += 1;
+        }
+        assert!(found_oc);
+    }
+
+    /// No panics for any combination of symbolic inputs
+    #[kani::proof]
+    fn verify_no_panic() {
+        let mut m = PowerMonitor::new();
+        let circuit_id: u32 = kani::any();
+        kani::assume(circuit_id < 100);
+        let config = CircuitConfig {
+            circuit_id,
+            max_watts: kani::any(),
+            idle_watts: kani::any(),
+            spike_threshold: kani::any(),
+            enabled: kani::any(),
+        };
+        m.register_circuit(config);
+        let watts: u32 = kani::any();
+        let time: u64 = kani::any();
+        let _ = m.process_reading(circuit_id, watts, time);
+        let _ = m.check_idle(circuit_id, watts);
+    }
+}

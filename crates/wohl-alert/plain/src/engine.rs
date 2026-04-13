@@ -100,3 +100,59 @@ mod tests {
     #[test] fn test_clear_expired() { let mut d = AlertDispatcher::new(); d.process_alert(1, 1, 1000); assert_eq!(d.recent_count, 1); d.clear_expired(1301); assert_eq!(d.recent_count, 0); let r = d.process_alert(1, 1, 1301); assert_eq!(r.action, DispatchAction::Send); }
     #[test] fn test_different_zone_not_deduplicated() { let mut d = AlertDispatcher::new(); d.process_alert(1, 1, 1000); let r = d.process_alert(2, 1, 1000); assert_eq!(r.action, DispatchAction::Send); }
 }
+
+// ── Kani bounded model checking harnesses ────────────────────
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    /// ALERT-P03: same (zone, type) within cooldown returns Deduplicated
+    #[kani::proof]
+    fn verify_dedup_works() {
+        let mut d = AlertDispatcher::new();
+        let zone_id: u32 = kani::any();
+        let alert_type: u8 = kani::any();
+        let time1: u64 = kani::any();
+        kani::assume(time1 < u64::MAX - DEDUP_COOLDOWN_SEC);
+        // First alert should be Send
+        let r1 = d.process_alert(zone_id, alert_type, time1);
+        assert_eq!(r1.action, DispatchAction::Send);
+        // Same zone+type within cooldown should be Deduplicated
+        let time2: u64 = kani::any();
+        kani::assume(time2 >= time1 && time2 < time1 + DEDUP_COOLDOWN_SEC);
+        let r2 = d.process_alert(zone_id, alert_type, time2);
+        assert_eq!(r2.action, DispatchAction::Deduplicated);
+    }
+
+    /// ALERT-P04: after MAX_ALERTS_PER_MINUTE distinct alerts, returns RateLimited
+    #[kani::proof]
+    fn verify_rate_limit() {
+        let mut d = AlertDispatcher::new();
+        let time: u64 = kani::any();
+        kani::assume(time < u64::MAX - 60);
+        // Send MAX_ALERTS_PER_MINUTE alerts with distinct zone_ids
+        let mut i: u32 = 0;
+        while i < MAX_ALERTS_PER_MINUTE {
+            let r = d.process_alert(1000 + i, 1, time);
+            assert_eq!(r.action, DispatchAction::Send);
+            i += 1;
+        }
+        // Next alert within same minute should be RateLimited
+        let r = d.process_alert(9999, 1, time);
+        assert_eq!(r.action, DispatchAction::RateLimited);
+    }
+
+    /// No panics for any combination of symbolic inputs
+    #[kani::proof]
+    fn verify_no_panic() {
+        let mut d = AlertDispatcher::new();
+        let zone_id: u32 = kani::any();
+        let alert_type: u8 = kani::any();
+        let time: u64 = kani::any();
+        let _ = d.process_alert(zone_id, alert_type, time);
+        let _ = d.process_alert(zone_id, alert_type, time);
+        let clear_time: u64 = kani::any();
+        d.clear_expired(clear_time);
+    }
+}

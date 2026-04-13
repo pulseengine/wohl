@@ -185,3 +185,93 @@ mod tests {
         assert_eq!(r.alert_count, 0);
     }
 }
+
+// ── Kani bounded model checking harnesses ────────────────────
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    /// AIR-P03: alert_count never exceeds MAX_ALERTS_PER_READING
+    #[kani::proof]
+    fn verify_alert_count_bounded() {
+        let mut m = AirMonitor::new();
+        let config = AirConfig {
+            zone_id: 1,
+            co2_warn: kani::any(),
+            co2_critical: kani::any(),
+            pm25_warn: kani::any(),
+            pm25_critical: kani::any(),
+            voc_warn: kani::any(),
+            voc_critical: kani::any(),
+            enabled: true,
+        };
+        m.register_zone(config);
+        let reading = AirReading {
+            zone_id: 1,
+            co2_ppm: kani::any(),
+            pm25: kani::any(),
+            voc_index: kani::any(),
+            time: kani::any(),
+        };
+        let r = m.process_reading(reading);
+        assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
+    }
+
+    /// AIR-P04: values below all thresholds produce 0 alerts
+    #[kani::proof]
+    fn verify_normal_no_alerts() {
+        let mut m = AirMonitor::new();
+        let co2_warn: u32 = kani::any();
+        let pm25_warn: u32 = kani::any();
+        let voc_warn: u32 = kani::any();
+        kani::assume(co2_warn > 1 && pm25_warn > 1 && voc_warn > 1);
+        let config = AirConfig {
+            zone_id: 1,
+            co2_warn,
+            co2_critical: u32::MAX,
+            pm25_warn,
+            pm25_critical: u32::MAX,
+            voc_warn,
+            voc_critical: u32::MAX,
+            enabled: true,
+        };
+        m.register_zone(config);
+        let co2: u32 = kani::any();
+        let pm25: u32 = kani::any();
+        let voc: u32 = kani::any();
+        // All values strictly below their warn thresholds
+        kani::assume(co2 < co2_warn && pm25 < pm25_warn && voc < voc_warn);
+        let r = m.process_reading(AirReading {
+            zone_id: 1, co2_ppm: co2, pm25, voc_index: voc, time: 100,
+        });
+        assert_eq!(r.alert_count, 0);
+    }
+
+    /// No panics for any combination of symbolic inputs
+    #[kani::proof]
+    fn verify_no_panic() {
+        let mut m = AirMonitor::new();
+        let zone_id: u32 = kani::any();
+        kani::assume(zone_id < 100);
+        let config = AirConfig {
+            zone_id,
+            co2_warn: kani::any(),
+            co2_critical: kani::any(),
+            pm25_warn: kani::any(),
+            pm25_critical: kani::any(),
+            voc_warn: kani::any(),
+            voc_critical: kani::any(),
+            enabled: kani::any(),
+        };
+        m.register_zone(config);
+        let reading = AirReading {
+            zone_id,
+            co2_ppm: kani::any(),
+            pm25: kani::any(),
+            voc_index: kani::any(),
+            time: kani::any(),
+        };
+        let _ = m.process_reading(reading);
+    }
+}
