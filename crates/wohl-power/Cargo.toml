@@ -1,0 +1,11 @@
+[package]
+name = "wohl-power"
+description = "Wohl Power Meter — verified power consumption monitoring and anomaly detection"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85.0"
+
+[lib]
+path = "plain/src/lib.rs"
+crate-type = ["cdylib"]

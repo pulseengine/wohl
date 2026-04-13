@@ -7,11 +7,19 @@ name = "wohl-air"
 version = "0.1.0"
 
 [[package]]
+name = "wohl-alert"
+version = "0.1.0"
+
+[[package]]
 name = "wohl-door"
 version = "0.1.0"
 
 [[package]]
 name = "wohl-leak"
+version = "0.1.0"
+
+[[package]]
+name = "wohl-power"
 version = "0.1.0"
 
 [[package]]

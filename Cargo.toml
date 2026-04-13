@@ -5,6 +5,8 @@ members = [
     "crates/wohl-temp",
     "crates/wohl-air",
     "crates/wohl-door",
+    "crates/wohl-power",
+    "crates/wohl-alert",
 ]
 
 [workspace.package]
