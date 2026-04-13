@@ -8,4 +8,7 @@ rust-version = "1.85.0"
 
 [lib]
 path = "plain/src/lib.rs"
-crate-type = ["cdylib"]
+crate-type = ["rlib"]
+
+[dependencies]
+relay-lc.workspace = true
