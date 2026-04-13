@@ -1,0 +1,24 @@
+artifacts:
+  - id: SYSREQ-WOHL-007
+    type: system-req
+    title: Sensor node data acquisition
+    status: approved
+    description: >
+      The system shall acquire sensor data from distributed sensor nodes
+      (ESP32-C3 or STM32G0 running Synth-to-Gale firmware) via typed
+      streams. Each sensor node publishes one or more stream types
+      (temperature, water-event, air-quality, contact-event, power-reading).
+      The hub shall detect sensor node disconnection within 30 seconds and
+      raise a warning alert.
+    tags: [sensor-node, data-acquisition, connectivity]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Integration test with simulated sensor node streams.
+        Disconnection detection verified with timeout-based stream
+        monitoring. Typed stream deserialization verified against
+        WIT interface definitions.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

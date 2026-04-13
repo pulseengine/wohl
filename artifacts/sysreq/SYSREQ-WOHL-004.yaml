@@ -1,0 +1,23 @@
+artifacts:
+  - id: SYSREQ-WOHL-004
+    type: system-req
+    title: Door and window supervision
+    status: approved
+    description: >
+      The system shall monitor door and window contact sensors and generate
+      alerts when a door or window is left open beyond a configurable timeout
+      (default 10 minutes). During night hours (22:00-06:00), the timeout
+      shall be reduced to 2 minutes and alerts shall be elevated to critical
+      severity. The system shall track per-contact open/close state.
+    tags: [door-watch, security, monitoring]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Unit tests for timeout expiry and night-hour severity escalation.
+        Formal verification (Verus) proves alert is raised after timeout
+        for every open contact event. Integration test with time-advancing
+        streams.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

@@ -1,0 +1,310 @@
+-- Wohl Home Supervision System — AADL Architecture Model
+--
+-- Modeled for Spar analysis: timing, deployment, schedulability.
+-- Each monitor component is a periodic/sporadic thread consuming
+-- sensor streams and producing alert streams.
+--
+-- Target platforms:
+--   Hub: STM32H743 (Cortex-M7, 480MHz, 1MB SRAM) or RPi (Linux/Kiln)
+--   Sensor nodes: ESP32-C3 or STM32G031 (Cortex-M0+, 64MHz, 8KB SRAM)
+
+package Wohl
+public
+  with Data_Model;
+  with Deployment;
+
+  -- ═════════════════���═════════════════════════════════════════
+  -- Data Types
+  -- ═══════════════════════════════════════════════════════════
+
+  data Temperature
+    properties
+      Data_Model::Data_Representation => Integer;
+      Data_Model::Integer_Range => -4000 .. 12500; -- centidegrees
+      Data_Size => 4 Bytes;
+  end Temperature;
+
+  data Humidity
+    properties
+      Data_Model::Data_Representation => Integer;
+      Data_Model::Integer_Range => 0 .. 10000; -- percent x100
+      Data_Size => 4 Bytes;
+  end Humidity;
+
+  data WaterEvent
+    properties
+      Data_Model::Data_Representation => Boolean;
+      Data_Size => 1 Bytes;
+  end WaterEvent;
+
+  data AirQuality
+    properties
+      Data_Size => 12 Bytes; -- co2(4) + pm25(4) + voc(4)
+  end AirQuality;
+
+  data ContactEvent
+    properties
+      Data_Size => 8 Bytes; -- contact_id(4) + open(1) + padding(3)
+  end ContactEvent;
+
+  data PowerReading
+    properties
+      Data_Size => 12 Bytes; -- watts(4) + wh_today(4) + circuit_id(4)
+  end PowerReading;
+
+  data Alert
+    properties
+      Data_Size => 32 Bytes; -- severity(1) + zone(4) + message(27)
+  end Alert;
+
+  -- ══════════════════════════════════════════════════���════════
+  -- Sensor Devices (physical sensors on nodes)
+  -- ═══════════════════════════════��═══════════════════════════
+
+  device TemperatureSensor
+    features
+      reading: out data port Temperature;
+    properties
+      Period => 1000 ms; -- 1 Hz sampling
+  end TemperatureSensor;
+
+  device WaterSensor
+    features
+      event_out: out event data port WaterEvent;
+    properties
+      -- Sporadic: fires only on state change
+      Dispatch_Protocol => Sporadic;
+  end WaterSensor;
+
+  device AirQualitySensor
+    features
+      reading: out data port AirQuality;
+    properties
+      Period => 5000 ms; -- 0.2 Hz (slow sensor)
+  end AirQualitySensor;
+
+  device DoorContact
+    features
+      event_out: out event data port ContactEvent;
+    properties
+      Dispatch_Protocol => Sporadic;
+  end DoorContact;
+
+  device PowerMeter
+    features
+      reading: out data port PowerReading;
+    properties
+      Period => 10000 ms; -- 0.1 Hz
+  end PowerMeter;
+
+  -- ═══════════════════════════════════════════════��═══════════
+  -- Monitor Threads (verified WASM components on hub)
+  -- ═══════════════════════════════════════════════════════════
+
+  thread WaterLeakMonitor
+    features
+      water_in: in event data port WaterEvent;
+      alert_out: out event data port Alert;
+    properties
+      Dispatch_Protocol => Sporadic; -- fires on water event
+      Compute_Execution_Time => 0 ms .. 1 ms; -- verified bounded
+      Deadline => 5 ms; -- SYSREQ-WOHL-001: detect within 5 seconds
+      Priority => 1; -- highest priority (safety-critical)
+      Stack_Size => 1024 Bytes; -- P3 callback mode, single stack
+  end WaterLeakMonitor;
+
+  thread implementation WaterLeakMonitor.Verified
+    -- Backed by: wohl-leak/src/core.rs
+    -- Verus properties: LEAK-P01 through LEAK-P06
+    -- WCET: bounded by MAX_ZONES (32) × compare cost
+    properties
+      Compute_Execution_Time => 0 ms .. 1 ms;
+  end WaterLeakMonitor.Verified;
+
+  thread TemperatureMonitor
+    features
+      temp_in: in data port Temperature;
+      alert_out: out event data port Alert;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 1000 ms; -- check every second
+      Compute_Execution_Time => 0 ms .. 2 ms;
+      Deadline => 100 ms;
+      Priority => 3;
+      Stack_Size => 1024 Bytes;
+  end TemperatureMonitor;
+
+  thread implementation TemperatureMonitor.Verified
+    -- Backed by: wohl-temp/src/core.rs
+    -- Verus properties: TEMP-P01 through TEMP-P05
+    properties
+      Compute_Execution_Time => 0 ms .. 2 ms;
+  end TemperatureMonitor.Verified;
+
+  thread AirQualityMonitor
+    features
+      air_in: in data port AirQuality;
+      alert_out: out event data port Alert;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 5000 ms; -- match sensor rate
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 500 ms;
+      Priority => 5;
+      Stack_Size => 1024 Bytes;
+  end AirQualityMonitor;
+
+  thread implementation AirQualityMonitor.Verified
+    -- Backed by: wohl-air/src/core.rs
+    -- Verus properties: AIR-P01 through AIR-P04
+    properties
+      Compute_Execution_Time => 0 ms .. 1 ms;
+  end AirQualityMonitor.Verified;
+
+  thread DoorWatchMonitor
+    features
+      contact_in: in event data port ContactEvent;
+      alert_out: out event data port Alert;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 50 ms;
+      Priority => 4;
+      Stack_Size => 1024 Bytes;
+  end DoorWatchMonitor;
+
+  thread implementation DoorWatchMonitor.Verified
+    -- Backed by: wohl-door/src/core.rs
+    -- Verus properties: DOOR-P01 through DOOR-P04
+    properties
+      Compute_Execution_Time => 0 ms .. 1 ms;
+  end DoorWatchMonitor.Verified;
+
+  thread DoorTimeoutChecker
+    features
+      alert_out: out event data port Alert;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 10000 ms; -- check timeouts every 10 seconds
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 1000 ms;
+      Priority => 6;
+      Stack_Size => 512 Bytes;
+  end DoorTimeoutChecker;
+
+  thread AlertDispatcher
+    features
+      alert_in: in event data port Alert;
+      notification_out: out event data port Alert;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 5 ms; -- includes network I/O
+      Deadline => 100 ms;
+      Priority => 2; -- high priority for delivery
+      Stack_Size => 2048 Bytes; -- needs buffer for notification formatting
+  end AlertDispatcher;
+
+  thread Scheduler
+    features
+      tick_out: out event port;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 1000 ms; -- 1 Hz scheduler tick
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 10 ms;
+      Priority => 1; -- highest (drives the system)
+      Stack_Size => 512 Bytes;
+  end Scheduler;
+
+  -- ════════════════════��════════════════════════════��═════════
+  -- Hub Process (all monitors composed)
+  -- ═══════════════════════════════════════════════════════════
+
+  process HubProcess
+  end HubProcess;
+
+  process implementation HubProcess.Verified
+    subcomponents
+      scheduler: thread Scheduler;
+      water_mon: thread WaterLeakMonitor.Verified;
+      temp_mon: thread TemperatureMonitor.Verified;
+      air_mon: thread AirQualityMonitor.Verified;
+      door_mon: thread DoorWatchMonitor.Verified;
+      door_timeout: thread DoorTimeoutChecker;
+      alert_disp: thread AlertDispatcher;
+    connections
+      c_water: port water_mon.alert_out -> alert_disp.alert_in;
+      c_temp: port temp_mon.alert_out -> alert_disp.alert_in;
+      c_air: port air_mon.alert_out -> alert_disp.alert_in;
+      c_door: port door_mon.alert_out -> alert_disp.alert_in;
+      c_door_to: port door_timeout.alert_out -> alert_disp.alert_in;
+  end HubProcess.Verified;
+
+  -- ═══════════════════════════════════════════════════════════
+  -- Processors (deployment targets)
+  -- ═══════════════════════════════��═══════════════════════════
+
+  processor STM32H743
+    -- Cortex-M7, 480 MHz, 1 MB SRAM, FPU
+    -- Target: Synth → ARM → Gale RTOS
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Rate_Monotonic_Protocol);
+  end STM32H743;
+
+  processor implementation STM32H743.Gale
+    properties
+      -- Gale RTOS: verified scheduler (SC01-SC16)
+      -- Priority ceiling protocol for mutexes (M01-M11)
+      Scheduling_Protocol => (Rate_Monotonic_Protocol);
+  end STM32H743.Gale;
+
+  processor RaspberryPi4
+    -- BCM2711, 1.5 GHz quad-core, 4 GB RAM
+    -- Target: Kiln interpreter (std path)
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Posix_1003_Highest_Priority_First_Protocol);
+  end RaspberryPi4;
+
+  processor ESP32C3
+    -- RISC-V, 160 MHz, 400 KB SRAM
+    -- Target: Synth → RISC-V → Gale RTOS (sensor node)
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Rate_Monotonic_Protocol);
+  end ESP32C3;
+
+  -- ══════════════════════════════════════════════════���════════
+  -- System Compositions
+  -- ════════════════════════════════════��══════════════════════
+
+  -- Embedded deployment: STM32H7 hub + ESP32 sensor nodes
+  system WohlEmbedded
+  end WohlEmbedded;
+
+  system implementation WohlEmbedded.Deployed
+    subcomponents
+      hub_cpu: processor STM32H743.Gale;
+      hub: process HubProcess.Verified;
+      node_kitchen: processor ESP32C3;
+      node_bathroom: processor ESP32C3;
+      node_basement: processor ESP32C3;
+    properties
+      -- All hub threads run on the STM32H7
+      Actual_Processor_Binding => reference (hub_cpu) applies to hub;
+  end WohlEmbedded.Deployed;
+
+  -- Development deployment: Raspberry Pi hub
+  system WohlDev
+  end WohlDev;
+
+  system implementation WohlDev.Deployed
+    subcomponents
+      rpi: processor RaspberryPi4;
+      hub: process HubProcess.Verified;
+    properties
+      Actual_Processor_Binding => reference (rpi) applies to hub;
+  end WohlDev.Deployed;
+
+end Wohl;

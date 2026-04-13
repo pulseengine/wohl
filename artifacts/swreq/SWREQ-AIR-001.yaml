@@ -1,0 +1,21 @@
+artifacts:
+  - id: SWREQ-AIR-001
+    type: sw-req
+    title: "AIR-P01: CO2 threshold alerting"
+    status: approved
+    description: >
+      The AirMonitor shall evaluate CO2 readings from air-quality events.
+      When co2_ppm > 1000, emit a warning alert. When co2_ppm > 2000,
+      emit a critical alert. Thresholds shall be configurable. Only the
+      highest applicable severity alert shall be emitted per reading.
+    tags: [air-quality, co2, health, verus]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Verus proof: for all inputs where co2_ppm > 1000, output contains
+        an alert of appropriate severity. Unit tests at boundary values
+        (999, 1000, 1001, 1999, 2000, 2001).
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-003

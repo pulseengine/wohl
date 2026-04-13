@@ -1,0 +1,20 @@
+artifacts:
+  - id: SWREQ-TEMP-001
+    type: sw-req
+    title: "TEMP-P01: Freeze alert when temperature below threshold"
+    status: approved
+    description: >
+      When a temperature reading has value < 300 (3.00 C fixed-point), the
+      TemperatureMonitor shall emit a critical freeze alert for that zone.
+      The threshold shall be configurable but default to 300.
+    tags: [temperature, freeze, safety, verus]
+    fields:
+      req-type: safety
+      priority: must
+      verification-criteria: >
+        Verus proof: for all inputs where value < freeze_threshold,
+        output contains a critical alert. Unit tests at boundary
+        values (299, 300, 301).
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-002

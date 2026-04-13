@@ -1,0 +1,23 @@
+artifacts:
+  - id: SYSREQ-WOHL-006
+    type: system-req
+    title: Alert dispatch and notification
+    status: approved
+    description: >
+      The system shall collect alerts from all monitor components via a
+      unified stream<alert> and dispatch notifications to configured
+      channels (push notification, email, local buzzer). The dispatcher
+      shall deduplicate identical alerts within a 60-second window and
+      rate-limit non-critical alerts to at most 1 per zone per 5 minutes.
+      Critical and emergency alerts shall never be rate-limited or suppressed.
+    tags: [alert, notification, dispatcher]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Unit tests for deduplication window and rate-limiting logic.
+        Formal verification (Verus) proves critical alerts are never
+        suppressed. Integration test with multi-source alert streams.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

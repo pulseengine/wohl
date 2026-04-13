@@ -1,0 +1,20 @@
+artifacts:
+  - id: SWREQ-LEAK-001
+    type: sw-req
+    title: "LEAK-P01: Water detection triggers immediate alert"
+    status: approved
+    description: >
+      When a water-event with wet == true is received, the LeakDetector
+      shall emit a critical alert within one processing cycle. No debounce,
+      no delay — water detection is unconditionally urgent.
+    tags: [water-leak, safety, critical, verus]
+    fields:
+      req-type: safety
+      priority: must
+      verification-criteria: >
+        Verus proof: for all inputs where wet == true, output contains
+        exactly one critical alert. Unit test: single wet event produces
+        alert. Proptest: random event sequences never miss a wet == true.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-001

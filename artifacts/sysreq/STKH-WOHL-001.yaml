@@ -1,0 +1,15 @@
+artifacts:
+  - id: STKH-WOHL-001
+    type: stakeholder-req
+    title: Continuous home supervision with verified alerting
+    status: approved
+    description: >
+      Homeowners need a reliable, always-on system that monitors their home
+      for environmental hazards (water leaks, temperature extremes, poor air
+      quality), security events (open doors/windows), and energy consumption
+      anomalies. The system must alert promptly and never miss a critical
+      event. Core monitoring logic must be formally verified.
+    tags: [stakeholder, home-supervision, safety]
+    fields:
+      priority: must
+      source: "Residential home supervision use case — PulseEngine Wohl"

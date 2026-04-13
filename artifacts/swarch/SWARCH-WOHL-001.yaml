@@ -1,0 +1,46 @@
+artifacts:
+  - id: SWARCH-WOHL-001
+    type: sw-arch-component
+    title: Component stream architecture (overall data flow)
+    status: approved
+    description: >
+      The Wohl system is composed of stream transformer components following
+      the Relay pattern. Sensor nodes publish typed streams which flow into
+      monitor components on the hub. Each monitor transforms its input stream
+      into stream<alert>. All alert streams merge into the Alert Dispatcher
+      which deduplicates, rate-limits, and delivers notifications.
+
+      Data flow:
+        Sensors (ESP32/Zigbee)
+          -> stream<temperature>  -> TemperatureMonitor -+
+          -> stream<water-event>  -> LeakDetector -------+
+          -> stream<air-quality>  -> AirMonitor ---------+-> stream<alert> -> AlertDispatcher -> notifications
+          -> stream<contact>      -> DoorWatch ----------+
+          -> stream<power>        -> PowerMeter ---------+
+
+      All components are no_std, no_alloc. Composition is stream wiring
+      via the Relay scheduler. No shared mutable state between components.
+    tags: [architecture, stream, data-flow]
+    fields:
+      interfaces:
+        provided:
+          - "stream<alert> — unified alert output from all monitors"
+          - "notifications — push, email, buzzer outputs"
+        required:
+          - "pulseengine:wohl-sensors/sensors — all sensor input types"
+          - "pulseengine:wohl-actuators/actuators — alert and switch outputs"
+          - "pulseengine:relay-common-types/types — stream transport"
+          - "pulseengine:relay-time/time — scheduler and timestamps"
+          - "pulseengine:relay-events/events — event bus"
+      concurrency: "single-threaded cooperative scheduling via Relay Scheduler"
+    links:
+      - type: allocated-from
+        target: SWREQ-LEAK-001
+      - type: allocated-from
+        target: SWREQ-TEMP-001
+      - type: allocated-from
+        target: SWREQ-AIR-001
+      - type: allocated-from
+        target: SWREQ-DOOR-001
+      - type: allocated-from
+        target: SWREQ-ALERT-001

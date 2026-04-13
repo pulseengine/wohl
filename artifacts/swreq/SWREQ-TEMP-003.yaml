@@ -1,0 +1,23 @@
+artifacts:
+  - id: SWREQ-TEMP-003
+    type: sw-req
+    title: "TEMP-P03: Rapid temperature drop detection"
+    status: approved
+    description: >
+      The TemperatureMonitor shall track the rate of temperature change
+      per zone. When the temperature drops by more than 200 (2.00 C) within
+      a 10-minute window, the monitor shall emit a warning alert indicating
+      rapid cooling. This detects conditions like a broken window in winter
+      or HVAC failure.
+    tags: [temperature, rate-detection, verus]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Unit test with synthetic time-series showing 2.01 C drop in
+        9 minutes triggers alert; 1.99 C drop does not. Verus proof
+        that rate calculation does not overflow for any valid
+        temperature range.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-002

@@ -1,0 +1,22 @@
+artifacts:
+  - id: SYSREQ-WOHL-005
+    type: system-req
+    title: Power consumption monitoring
+    status: approved
+    description: >
+      The system shall monitor power consumption readings per circuit and
+      generate alerts for usage anomalies (sudden spikes above 2x baseline),
+      sustained high load (above configurable threshold for > 30 minutes),
+      and daily consumption exceeding configurable budget. Alerts shall
+      include circuit identifier and current power reading.
+    tags: [power, monitoring, anomaly-detection]
+    fields:
+      req-type: functional
+      priority: should
+      verification-criteria: >
+        Unit tests for spike detection, sustained load, and budget
+        exceedance. Proptest with random power-reading sequences to
+        verify anomaly detection invariants.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

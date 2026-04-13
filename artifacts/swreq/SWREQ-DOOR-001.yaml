@@ -1,0 +1,22 @@
+artifacts:
+  - id: SWREQ-DOOR-001
+    type: sw-req
+    title: "DOOR-P01: Open door/window timeout alert"
+    status: approved
+    description: >
+      The DoorWatch shall track contact-event open/close state per
+      contact_id. When a contact remains open for longer than the
+      configured timeout (default 600 seconds / 10 minutes), the
+      monitor shall emit a warning alert. Closing the contact before
+      timeout cancels the pending alert.
+    tags: [door-watch, timeout, security, verus]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Verus proof: open event followed by timeout expiry always
+        produces alert; close event before timeout produces no alert.
+        Unit tests for timeout boundary (599s, 600s, 601s).
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-004

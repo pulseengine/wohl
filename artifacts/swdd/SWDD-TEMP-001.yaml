@@ -1,0 +1,54 @@
+artifacts:
+  - id: SWDD-TEMP-001
+    type: sw-detail-design
+    title: TemperatureMonitor threshold and rate detection design
+    status: approved
+    description: >
+      The TemperatureMonitor processes stream<temperature> and emits
+      stream<alert>. It performs two checks per reading:
+
+      1. Absolute threshold check:
+         - value < freeze_threshold (default 300) -> Critical freeze alert
+         - value > critical_high (default 5000) -> Critical overheat alert
+         - value > warn_high (default 4000) -> Warning overheat alert
+
+      2. Rate-of-change check:
+         - Maintains a circular buffer of recent readings per zone
+           (heapless::Deque<(timestamp, i32), 16>)
+         - Computes delta between newest and oldest reading in window
+         - If oldest reading timestamp is within 600s (10 min) and
+           delta < -200 (drop > 2.00 C): Warning rapid-cooling alert
+
+      The process function:
+        fn process(reading: Temperature, state: &mut MonitorState) -> ArrayVec<Alert, 2>
+        - May return 0, 1, or 2 alerts (threshold + rate can fire simultaneously)
+        - All arithmetic uses saturating ops to prevent overflow
+
+      Verus properties verified:
+        TEMP-P01: freeze threshold never missed (SWREQ-TEMP-001)
+        TEMP-P02: overheat threshold correct severity (SWREQ-TEMP-002)
+        TEMP-P03: rate calculation no overflow (SWREQ-TEMP-003)
+        TEMP-P04: circular buffer bounded at 16 entries per zone
+        TEMP-P05: severity ordering: critical > warning > info
+    tags: [temperature, threshold, rate-detection, verus, detailed-design]
+    fields:
+      unit: src/temp/core.rs
+      function: "TemperatureMonitor::process"
+      algorithm: >
+        1. Check absolute thresholds (freeze < 300, overheat > 4000/5000)
+        2. Push reading to per-zone circular buffer
+        3. If buffer has >= 2 entries and time span <= 600s:
+           compute rate = (newest.value - oldest.value)
+           if rate < -200: emit rapid-cooling warning
+        4. Return collected alerts (ArrayVec<Alert, 2>)
+        Zone state: heapless::FnvIndexMap<zone_id, ZoneHistory, 16>
+        ZoneHistory: heapless::Deque<(timestamp, i32), 16>
+    links:
+      - type: refines
+        target: SWARCH-WOHL-001
+      - type: satisfies
+        target: SWREQ-TEMP-001
+      - type: satisfies
+        target: SWREQ-TEMP-002
+      - type: satisfies
+        target: SWREQ-TEMP-003

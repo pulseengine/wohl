@@ -1,0 +1,21 @@
+artifacts:
+  - id: SWREQ-TEMP-002
+    type: sw-req
+    title: "TEMP-P02: Overheat alert when temperature above threshold"
+    status: approved
+    description: >
+      When a temperature reading has value > high_threshold (default 4000,
+      i.e. 40.00 C), the TemperatureMonitor shall emit a warning alert.
+      When value > critical_threshold (default 5000, i.e. 50.00 C), the
+      alert shall be critical severity.
+    tags: [temperature, overheat, safety, verus]
+    fields:
+      req-type: safety
+      priority: must
+      verification-criteria: >
+        Verus proof: for all inputs where value > high_threshold,
+        output contains an alert. Unit tests at boundary values
+        for both warning and critical thresholds.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-002

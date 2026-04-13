@@ -1,0 +1,21 @@
+artifacts:
+  - id: SYSREQ-WOHL-001
+    type: system-req
+    title: Water leak detection and alerting
+    status: approved
+    description: >
+      The system shall detect water presence via water-event sensors and
+      raise a critical alert within 5 seconds of detection. Water leak is
+      the highest-priority monitor — no delay, no dedup, immediate dispatch.
+      The alert shall include the affected zone identifier.
+    tags: [water-leak, safety, critical]
+    fields:
+      req-type: safety
+      priority: must
+      verification-criteria: >
+        Unit tests confirm alert generation within 5-second window.
+        Formal verification (Verus) proves no missed detection when
+        water-event.wet == true. Integration test with simulated sensor stream.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

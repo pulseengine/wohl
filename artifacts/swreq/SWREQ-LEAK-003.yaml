@@ -1,0 +1,23 @@
+artifacts:
+  - id: SWREQ-LEAK-003
+    type: sw-req
+    title: "LEAK-P03: Zone state is bounded and never overflows"
+    status: approved
+    description: >
+      The LeakDetector shall track per-zone leak state using a fixed-size
+      data structure (maximum 32 zones). If a water-event arrives for a
+      zone beyond capacity, the alert shall still be emitted but zone
+      tracking shall saturate rather than panic or overflow.
+    tags: [water-leak, bounded, no-alloc, verus]
+    fields:
+      req-type: safety
+      priority: must
+      verification-criteria: >
+        Verus proof: zone count never exceeds 32; no arithmetic overflow.
+        Unit test: 33rd zone event still produces alert. Kani bounded
+        model check for overflow.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-001
+      - type: derives-from
+        target: SYSREQ-WOHL-008

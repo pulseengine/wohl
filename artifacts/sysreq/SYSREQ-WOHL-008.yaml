@@ -1,0 +1,23 @@
+artifacts:
+  - id: SYSREQ-WOHL-008
+    type: system-req
+    title: System always-on availability
+    status: approved
+    description: >
+      The system shall operate continuously without manual intervention.
+      All monitor components shall be no_std and no_alloc to prevent
+      heap-related failures. The hub shall restart failed monitor components
+      automatically. Watchdog timers shall reset the system if the main
+      processing loop stalls for more than 10 seconds. The system shall
+      maintain monitoring state across soft restarts.
+    tags: [availability, reliability, no-std]
+    fields:
+      req-type: constraint
+      priority: must
+      verification-criteria: >
+        Build verification confirms no_std and no_alloc compliance.
+        Watchdog integration test with simulated stall. State
+        persistence verified across restart cycle.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

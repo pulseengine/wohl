@@ -1,0 +1,45 @@
+artifacts:
+  - id: SWARCH-WOHL-003
+    type: sw-arch-component
+    title: Hub architecture (RPi/Kiln or STM32H7/Gale)
+    status: approved
+    description: >
+      The hub runs all monitor components and the alert dispatcher. Two
+      deployment targets are supported:
+
+      1. Raspberry Pi running the Kiln WASM interpreter — standard path
+         for prototyping and homes with mains power and network.
+      2. STM32H7 running Synth-to-Gale compiled firmware — embedded path
+         for battery-backed or industrial deployments.
+
+      On both targets, the Relay scheduler drives periodic checks and
+      stream processing. Components are wired at build time by Meld
+      (stream composition tool). Loom optimizes stream access patterns.
+
+      The hub receives typed streams from sensor nodes, routes each to its
+      corresponding monitor component, collects alert outputs, and feeds
+      them to the AlertDispatcher for notification delivery.
+    tags: [hub, rpi, stm32h7, kiln, gale, relay]
+    fields:
+      interfaces:
+        provided:
+          - "Monitor execution environment"
+          - "Alert collection and dispatch"
+          - "Telemetry dashboard (via Relay Housekeeping)"
+        required:
+          - "Sensor node streams (all types)"
+          - "Notification channels (push, email, buzzer)"
+          - "Relay Scheduler, Meld, Loom"
+      concurrency: "cooperative single-threaded (Relay Scheduler)"
+      resource-budgets:
+        ram-kiln: "64 MB (RPi target)"
+        ram-gale: "512 KB (STM32H7 target)"
+    links:
+      - type: allocated-from
+        target: SWREQ-ALERT-001
+      - type: allocated-from
+        target: SWREQ-ALERT-002
+      - type: allocated-from
+        target: SWREQ-LEAK-001
+      - type: allocated-from
+        target: SWREQ-TEMP-001

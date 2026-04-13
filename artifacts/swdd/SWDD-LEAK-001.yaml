@@ -1,0 +1,53 @@
+artifacts:
+  - id: SWDD-LEAK-001
+    type: sw-detail-design
+    title: LeakDetector state machine design
+    status: approved
+    description: >
+      The LeakDetector is a stream transformer that processes stream<water-event>
+      and emits stream<alert>. It maintains per-zone state in a heapless::FnvIndexMap
+      with capacity 32.
+
+      State machine per zone:
+        Dry --(wet==true)--> Leaking [emit critical alert]
+        Leaking --(wet==false)--> Dry [emit info "leak cleared" alert]
+        Leaking --(wet==true)--> Leaking [no-op, already alerting]
+        Dry --(wet==false)--> Dry [no-op]
+
+      The process function:
+        fn process(event: WaterEvent, state: &mut ZoneMap) -> Option<Alert>
+        1. If event.wet == true AND zone not in Leaking state:
+           - Set zone state to Leaking
+           - Return Some(Alert { severity: Critical, zone, title: "Water leak detected" })
+        2. If event.wet == false AND zone in Leaking state:
+           - Set zone state to Dry
+           - Return Some(Alert { severity: Info, zone, title: "Leak cleared" })
+        3. Otherwise: Return None
+
+      Verus properties verified:
+        LEAK-P01: wet==true always produces alert (SWREQ-LEAK-001)
+        LEAK-P02: wet-then-dry leaves Dry state (SWREQ-LEAK-002)
+        LEAK-P03: zone count bounded at 32 (SWREQ-LEAK-003)
+        LEAK-P04: no arithmetic overflow in zone map operations
+        LEAK-P05: state machine transitions are exhaustive
+        LEAK-P06: critical severity is always used for wet detection
+    tags: [water-leak, state-machine, verus, detailed-design]
+    fields:
+      unit: src/leak/core.rs
+      function: "LeakDetector::process"
+      algorithm: >
+        Match on (event.wet, zone_state):
+          (true, Dry|Unknown) -> set Leaking, emit Critical alert
+          (false, Leaking) -> set Dry, emit Info alert
+          _ -> None
+        Zone map: heapless::FnvIndexMap<zone_id, ZoneState, 32>
+        On map full: still emit alert, skip state tracking
+    links:
+      - type: refines
+        target: SWARCH-WOHL-001
+      - type: satisfies
+        target: SWREQ-LEAK-001
+      - type: satisfies
+        target: SWREQ-LEAK-002
+      - type: satisfies
+        target: SWREQ-LEAK-003

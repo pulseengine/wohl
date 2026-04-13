@@ -1,0 +1,22 @@
+artifacts:
+  - id: SWREQ-ALERT-002
+    type: sw-req
+    title: "ALERT-P02: Critical alerts are never suppressed"
+    status: approved
+    description: >
+      The AlertDispatcher shall never suppress, rate-limit, or delay
+      alerts with severity == critical or severity == emergency. These
+      alerts bypass all deduplication and rate-limiting logic and are
+      dispatched immediately to all configured notification channels.
+    tags: [alert, critical, safety, verus]
+    fields:
+      req-type: safety
+      priority: must
+      verification-criteria: >
+        Verus proof: for all alerts where severity in {critical, emergency},
+        the alert appears in the dispatch output unconditionally. Unit test:
+        rapid-fire critical alerts all delivered. This is the primary safety
+        property of the alert pipeline.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-006

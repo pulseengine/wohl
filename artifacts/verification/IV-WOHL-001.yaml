@@ -1,0 +1,35 @@
+artifacts:
+  - id: IV-WOHL-001
+    type: sw-integration-verification
+    title: End-to-end alert pipeline integration test
+    status: planned
+    description: >
+      Integration test exercising the full pipeline: simulated sensor
+      streams -> monitor components -> alert dispatcher -> notification
+      output. Verifies that alerts flow correctly through the composed
+      stream architecture and that deduplication/rate-limiting works
+      across monitor boundaries.
+    tags: [testing, integration, pipeline, swe-5]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWARCH-WOHL-001
+      - type: verifies
+        target: SWARCH-WOHL-004
+
+  - id: IV-WOHL-002
+    type: sw-integration-verification
+    title: Hub component composition integration test
+    status: planned
+    description: >
+      Integration test verifying that all monitor components can be
+      composed and scheduled on the hub architecture. Tests Relay
+      scheduler driving all monitors concurrently with interleaved
+      sensor streams.
+    tags: [testing, integration, hub, swe-5]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWARCH-WOHL-003

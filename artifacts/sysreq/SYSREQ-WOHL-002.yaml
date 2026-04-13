@@ -1,0 +1,22 @@
+artifacts:
+  - id: SYSREQ-WOHL-002
+    type: system-req
+    title: Temperature monitoring with freeze protection
+    status: approved
+    description: >
+      The system shall monitor temperature readings from all zones and
+      generate alerts for freeze risk (below 3.0 C), overheat conditions
+      (above configurable threshold), and rapid temperature drops exceeding
+      2.0 C per 10 minutes. Freeze alerts shall be critical severity.
+    tags: [temperature, freeze-protection, safety]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Unit tests for threshold detection at boundary values.
+        Formal verification (Verus) proves freeze alert is always raised
+        when temperature < 300 (3.00 C fixed-point). Rate-of-change
+        detection verified with synthetic time-series streams.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

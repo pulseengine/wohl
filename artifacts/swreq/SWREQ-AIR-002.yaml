@@ -1,0 +1,22 @@
+artifacts:
+  - id: SWREQ-AIR-002
+    type: sw-req
+    title: "AIR-P02: PM2.5 and VOC threshold alerting"
+    status: approved
+    description: >
+      The AirMonitor shall evaluate PM2.5 and VOC index from air-quality
+      events. PM2.5 thresholds: > 350 (35.0 ug/m3 x10) warning, > 1500
+      (150.0 ug/m3 x10) critical. VOC index thresholds: > 250 warning,
+      > 400 critical. When multiple metrics exceed thresholds, the highest
+      severity across all metrics determines the alert severity.
+    tags: [air-quality, pm25, voc, health, verus]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Verus proof: multi-metric max-severity selection is correct.
+        Unit tests for each metric at boundary values. Proptest with
+        random air-quality records verifying severity monotonicity.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-003

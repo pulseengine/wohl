@@ -1,0 +1,19 @@
+artifacts:
+  - id: SWREQ-LEAK-002
+    type: sw-req
+    title: "LEAK-P02: Dry event clears active leak state"
+    status: approved
+    description: >
+      When a water-event with wet == false is received for a zone that
+      previously had an active leak, the LeakDetector shall transition
+      that zone to dry state and emit an info-level "leak cleared" alert.
+    tags: [water-leak, state-management, verus]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Verus proof: wet-then-dry sequence leaves zone in dry state.
+        Unit test: state transition from active to cleared.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-001

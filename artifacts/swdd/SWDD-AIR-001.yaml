@@ -1,0 +1,48 @@
+artifacts:
+  - id: SWDD-AIR-001
+    type: sw-detail-design
+    title: AirMonitor multi-metric threshold design
+    status: approved
+    description: >
+      The AirMonitor processes stream<air-quality> and emits stream<alert>.
+      It evaluates three metrics independently and selects the highest
+      severity across all metrics for the emitted alert.
+
+      Metric evaluation:
+        CO2:  co2_ppm > 2000 -> Critical, > 1000 -> Warning, else None
+        PM2.5: pm25 > 1500 -> Critical, > 350 -> Warning, else None
+        VOC:  voc_index > 400 -> Critical, > 250 -> Warning, else None
+
+      Severity selection: max(co2_severity, pm25_severity, voc_severity)
+      If max severity is None, no alert is emitted.
+
+      The process function:
+        fn process(reading: AirQuality) -> Option<Alert>
+        - Evaluates all three metrics
+        - Takes max severity
+        - Constructs alert message listing which metrics exceeded thresholds
+        - Returns None if all metrics within normal range
+
+      Verus properties verified:
+        AIR-P01: CO2 > 1000 always produces alert (SWREQ-AIR-001)
+        AIR-P02: max-severity selection is correct (SWREQ-AIR-002)
+        AIR-P03: severity ordering is total and antisymmetric
+        AIR-P04: no arithmetic overflow in threshold comparisons
+    tags: [air-quality, multi-metric, threshold, verus, detailed-design]
+    fields:
+      unit: src/air/core.rs
+      function: "AirMonitor::process"
+      algorithm: >
+        1. co2_sev = if co2_ppm > 2000 { Critical } else if > 1000 { Warning } else { None }
+        2. pm_sev = if pm25 > 1500 { Critical } else if > 350 { Warning } else { None }
+        3. voc_sev = if voc_index > 400 { Critical } else if > 250 { Warning } else { None }
+        4. max_sev = max(co2_sev, pm_sev, voc_sev)
+        5. if max_sev != None: emit Alert with max_sev and metric details
+        Stateless — no per-zone history needed for threshold checks.
+    links:
+      - type: refines
+        target: SWARCH-WOHL-001
+      - type: satisfies
+        target: SWREQ-AIR-001
+      - type: satisfies
+        target: SWREQ-AIR-002

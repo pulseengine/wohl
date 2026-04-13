@@ -1,0 +1,21 @@
+artifacts:
+  - id: SWREQ-DOOR-002
+    type: sw-req
+    title: "DOOR-P02: Night-hour severity escalation"
+    status: approved
+    description: >
+      During night hours (22:00-06:00 local time), the DoorWatch shall
+      reduce the open timeout to 120 seconds (2 minutes) and escalate
+      alert severity from warning to critical. The night-hour window
+      shall be configurable. Time is obtained from the Relay time service.
+    tags: [door-watch, night-mode, security, verus]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Verus proof: during night hours, timeout is <= 120s and severity
+        is critical. Unit tests for boundary times (21:59, 22:00, 05:59,
+        06:00). Integration test with mock time service.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-004

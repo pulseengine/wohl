@@ -1,0 +1,23 @@
+artifacts:
+  - id: SYSREQ-WOHL-003
+    type: system-req
+    title: Air quality monitoring
+    status: approved
+    description: >
+      The system shall monitor air quality metrics (CO2, PM2.5, VOC index)
+      from air-quality sensors and generate alerts when any metric exceeds
+      its configured threshold. CO2 > 1000 ppm triggers warning; > 2000 ppm
+      triggers critical. PM2.5 > 35 ug/m3 triggers warning; > 150 ug/m3
+      triggers critical. VOC index > 250 triggers warning; > 400 triggers
+      critical.
+    tags: [air-quality, health, monitoring]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Unit tests for each metric threshold at boundary values.
+        Formal verification (Verus) proves alert is raised for every
+        threshold exceedance. Multi-metric combination tests.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

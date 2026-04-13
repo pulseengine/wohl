@@ -1,0 +1,41 @@
+artifacts:
+  - id: SWARCH-WOHL-004
+    type: sw-arch-component
+    title: Alert pipeline architecture (monitors to dispatcher to notifications)
+    status: approved
+    description: >
+      The alert pipeline connects monitor outputs to the notification
+      delivery system. Each monitor component emits stream<alert> with
+      severity, title, message, zone, and timestamp fields (matching the
+      actuators::alert WIT record).
+
+      Pipeline stages:
+      1. Collection — all monitor alert streams are merged into a single
+         stream<alert> via Relay stream composition.
+      2. Deduplication — identical alerts (same severity + zone + title)
+         within a 60-second window are collapsed.
+      3. Rate limiting — non-critical alerts are limited to 1 per zone
+         per 5 minutes. Critical/emergency alerts bypass rate limiting.
+      4. Dispatch — alerts are delivered to configured notification
+         channels (push notification, email, local buzzer).
+
+      The pipeline is stateful (dedup window, rate counters) but all state
+      is stack-allocated with bounded sizes (heapless).
+    tags: [alert, pipeline, notification, dispatcher]
+    fields:
+      interfaces:
+        provided:
+          - "Notification delivery to external channels"
+          - "Alert telemetry for dashboard"
+        required:
+          - "stream<alert> from each monitor component"
+          - "Notification channel drivers (push, email, buzzer)"
+          - "Relay time service for dedup/rate windows"
+      resource-budgets:
+        dedup-window-entries: 32
+        rate-limit-buckets: 64
+    links:
+      - type: allocated-from
+        target: SWREQ-ALERT-001
+      - type: allocated-from
+        target: SWREQ-ALERT-002

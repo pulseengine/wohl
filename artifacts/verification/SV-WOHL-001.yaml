@@ -1,0 +1,91 @@
+artifacts:
+  - id: SV-WOHL-001
+    type: sw-verification
+    title: Water leak SW requirement verification
+    status: approved
+    description: >
+      SW-level verification that the LeakDetector satisfies all water leak
+      software requirements. Combines unit test evidence (UV-LEAK-001)
+      and formal verification evidence (UV-LEAK-002) to demonstrate
+      SWREQ-LEAK-001 through SWREQ-LEAK-003 are met.
+    tags: [verification, water-leak, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-LEAK-001
+      - type: verifies
+        target: SWREQ-LEAK-002
+      - type: verifies
+        target: SWREQ-LEAK-003
+
+  - id: SV-WOHL-002
+    type: sw-verification
+    title: Temperature monitoring SW requirement verification
+    status: approved
+    description: >
+      SW-level verification that the TemperatureMonitor satisfies all
+      temperature software requirements. Combines unit test evidence
+      (UV-TEMP-001) and formal verification evidence (UV-TEMP-002).
+    tags: [verification, temperature, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-TEMP-001
+      - type: verifies
+        target: SWREQ-TEMP-002
+      - type: verifies
+        target: SWREQ-TEMP-003
+
+  - id: SV-WOHL-003
+    type: sw-verification
+    title: Air quality SW requirement verification
+    status: approved
+    description: >
+      SW-level verification that the AirMonitor satisfies all air quality
+      software requirements. Combines unit test evidence (UV-AIR-001)
+      and formal verification evidence (UV-AIR-002).
+    tags: [verification, air-quality, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-AIR-001
+      - type: verifies
+        target: SWREQ-AIR-002
+
+  - id: SV-WOHL-004
+    type: sw-verification
+    title: Door watch SW requirement verification
+    status: approved
+    description: >
+      SW-level verification that the DoorWatch satisfies all door/window
+      supervision software requirements. Combines unit test evidence
+      (UV-DOOR-001) and formal verification evidence (UV-DOOR-002).
+    tags: [verification, door-watch, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-DOOR-001
+      - type: verifies
+        target: SWREQ-DOOR-002
+
+  - id: SV-WOHL-005
+    type: sw-verification
+    title: Alert dispatcher SW requirement verification
+    status: planned
+    description: >
+      SW-level verification that the AlertDispatcher satisfies alert
+      dispatch software requirements. Unit tests for deduplication
+      and rate limiting, plus formal verification that critical alerts
+      are never suppressed.
+    tags: [verification, alert, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-ALERT-001
+      - type: verifies
+        target: SWREQ-ALERT-002

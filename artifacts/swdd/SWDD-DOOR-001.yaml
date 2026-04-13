@@ -1,0 +1,63 @@
+artifacts:
+  - id: SWDD-DOOR-001
+    type: sw-detail-design
+    title: DoorWatch timeout and night-hour design
+    status: approved
+    description: >
+      The DoorWatch processes stream<contact-event> and time ticks, emitting
+      stream<alert>. It maintains per-contact state tracking open time.
+
+      State per contact_id:
+        Closed — no timer active
+        Open(opened_at: timestamp) — timer running
+
+      On contact-event:
+        open==true  -> set Open(now), start timeout
+        open==false -> set Closed, cancel timeout
+
+      On time tick (checked by Relay Scheduler):
+        For each Open contact:
+          elapsed = now - opened_at
+          timeout = if is_night_hour(now) { 120s } else { 600s }
+          severity = if is_night_hour(now) { Critical } else { Warning }
+          if elapsed >= timeout:
+            emit alert with severity
+            set state to Alerted (avoid re-alerting)
+
+      Night hour check:
+        fn is_night_hour(t: timestamp) -> bool
+        Extract hour from timestamp. Return true if hour >= 22 || hour < 6.
+
+      State storage: heapless::FnvIndexMap<contact_id, ContactState, 32>
+
+      Verus properties verified:
+        DOOR-P01: open + timeout always produces alert (SWREQ-DOOR-001)
+        DOOR-P02: close before timeout produces no alert (SWREQ-DOOR-001)
+        DOOR-P03: night hours use 120s timeout (SWREQ-DOOR-002)
+        DOOR-P04: night hours use critical severity (SWREQ-DOOR-002)
+        DOOR-P05: contact state bounded at 32 entries
+        DOOR-P06: no re-alerting for already-alerted contacts
+    tags: [door-watch, timeout, night-mode, state-machine, verus, detailed-design]
+    fields:
+      unit: src/door/core.rs
+      function: "DoorWatch::process"
+      algorithm: >
+        On contact-event:
+          open==true  -> Insert Open(now) into state map
+          open==false -> Remove from state map (cancel timer)
+        On tick:
+          For each (id, Open(t)) in state:
+            elapsed = now.saturating_sub(t)
+            night = hour >= 22 || hour < 6
+            timeout = if night { 120 } else { 600 }
+            if elapsed >= timeout:
+              emit Alert(severity: if night { Critical } else { Warning })
+              update state to Alerted
+        State: heapless::FnvIndexMap<u32, ContactState, 32>
+    links:
+      - type: refines
+        target: SWARCH-WOHL-001
+      - type: satisfies
+        target: SWREQ-DOOR-001
+      - type: satisfies
+        target: SWREQ-DOOR-002

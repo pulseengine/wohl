@@ -1,0 +1,23 @@
+artifacts:
+  - id: SWREQ-ALERT-001
+    type: sw-req
+    title: "ALERT-P01: Alert deduplication and rate limiting"
+    status: approved
+    description: >
+      The AlertDispatcher shall deduplicate identical alerts (matching
+      severity + zone + title) within a 60-second sliding window. For
+      non-critical alerts, the dispatcher shall enforce a rate limit of
+      at most 1 alert per zone per 5 minutes. Dedup and rate-limit state
+      shall be bounded (max 32 dedup entries, max 64 rate buckets).
+    tags: [alert, dedup, rate-limit, verus]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Verus proof: duplicate alert within window is suppressed; unique
+        alert is never suppressed. Unit tests for window boundary (59s,
+        60s, 61s). Proptest with random alert sequences verifying bounded
+        state size.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-006
