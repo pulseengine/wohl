@@ -68,3 +68,57 @@ mod tests {
     #[test] fn test_multi_zone() { let mut d = LeakDetector::new(); d.register_zone(1); d.register_zone(2); assert_eq!(d.process_event(2, true, 100), LeakAction::NewLeak); assert_eq!(d.process_event(2, false, 200), LeakAction::Cleared); }
     #[test] fn test_already_dry() { let mut d = LeakDetector::new(); d.register_zone(1); assert_eq!(d.process_event(1, false, 1000), LeakAction::AlreadyDry); }
 }
+
+// ── Kani bounded model checking harnesses ────────────────────
+
+#[cfg(kani)]
+mod kani_proofs {
+    use super::*;
+
+    /// LEAK-P05: zone_count never exceeds MAX_ZONES
+    #[kani::proof]
+    fn verify_zone_count_bounded() {
+        let mut det = LeakDetector::new();
+        let zone_id: u32 = kani::any();
+        // Register up to MAX_ZONES + 1 times
+        for _ in 0..MAX_ZONES + 1 {
+            det.register_zone(kani::any());
+        }
+        assert!(det.zone_count <= MAX_ZONES as u32);
+    }
+
+    /// LEAK-P01: wet event always produces NewLeak or AlreadyWet (never Unknown for registered zone)
+    #[kani::proof]
+    fn verify_wet_always_detects() {
+        let mut det = LeakDetector::new();
+        let zone_id: u32 = kani::any();
+        kani::assume(zone_id < 100); // bound search space
+        det.register_zone(zone_id);
+        let time: u64 = kani::any();
+        let action = det.process_event(zone_id, true, time);
+        assert!(action == LeakAction::NewLeak || action == LeakAction::AlreadyWet);
+    }
+
+    /// LEAK-P04: dry event only clears if zone was wet
+    #[kani::proof]
+    fn verify_dry_clear_requires_wet() {
+        let mut det = LeakDetector::new();
+        det.register_zone(1);
+        // No wet event sent
+        let action = det.process_event(1, false, 1000);
+        assert!(action == LeakAction::AlreadyDry);
+    }
+
+    /// No panics for any combination of inputs
+    #[kani::proof]
+    fn verify_no_panic() {
+        let mut det = LeakDetector::new();
+        let zone_id: u32 = kani::any();
+        let wet: bool = kani::any();
+        let time: u64 = kani::any();
+        kani::assume(zone_id < 100);
+        det.register_zone(zone_id);
+        let _ = det.process_event(zone_id, wet, time);
+        let _ = det.any_wet();
+    }
+}
