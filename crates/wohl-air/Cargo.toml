@@ -1,0 +1,11 @@
+[package]
+name = "wohl-air"
+description = "Wohl Air Quality Monitor — verified CO2/PM2.5/VOC threshold detection"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85.0"
+
+[lib]
+path = "plain/src/lib.rs"
+crate-type = ["cdylib"]

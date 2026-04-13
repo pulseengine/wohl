@@ -3,5 +3,17 @@
 version = 4
 
 [[package]]
+name = "wohl-air"
+version = "0.1.0"
+
+[[package]]
+name = "wohl-door"
+version = "0.1.0"
+
+[[package]]
 name = "wohl-leak"
+version = "0.1.0"
+
+[[package]]
+name = "wohl-temp"
 version = "0.1.0"

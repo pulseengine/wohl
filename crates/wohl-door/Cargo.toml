@@ -1,0 +1,11 @@
+[package]
+name = "wohl-door"
+description = "Wohl Door Watch — verified open-too-long and night-open detection"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85.0"
+
+[lib]
+path = "plain/src/lib.rs"
+crate-type = ["cdylib"]
