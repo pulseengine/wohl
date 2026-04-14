@@ -291,8 +291,14 @@ public
       node_bathroom: processor ESP32C3;
       node_basement: processor ESP32C3;
     properties
-      -- All hub threads run on the STM32H7
-      Actual_Processor_Binding => reference (hub_cpu) applies to hub;
+      Actual_Processor_Binding => (reference (hub_cpu)) applies to hub;
+      Actual_Processor_Binding => (reference (hub_cpu)) applies to hub.scheduler;
+      Actual_Processor_Binding => (reference (hub_cpu)) applies to hub.water_mon;
+      Actual_Processor_Binding => (reference (hub_cpu)) applies to hub.temp_mon;
+      Actual_Processor_Binding => (reference (hub_cpu)) applies to hub.air_mon;
+      Actual_Processor_Binding => (reference (hub_cpu)) applies to hub.door_mon;
+      Actual_Processor_Binding => (reference (hub_cpu)) applies to hub.door_timeout;
+      Actual_Processor_Binding => (reference (hub_cpu)) applies to hub.alert_disp;
   end WohlEmbedded.Deployed;
 
   -- Development deployment: Raspberry Pi hub
@@ -304,7 +310,13 @@ public
       rpi: processor RaspberryPi4;
       hub: process HubProcess.Verified;
     properties
-      Actual_Processor_Binding => reference (rpi) applies to hub;
+      Actual_Processor_Binding => reference (rpi) applies to hub.scheduler;
+      Actual_Processor_Binding => reference (rpi) applies to hub.water_mon;
+      Actual_Processor_Binding => reference (rpi) applies to hub.temp_mon;
+      Actual_Processor_Binding => reference (rpi) applies to hub.air_mon;
+      Actual_Processor_Binding => reference (rpi) applies to hub.door_mon;
+      Actual_Processor_Binding => reference (rpi) applies to hub.door_timeout;
+      Actual_Processor_Binding => reference (rpi) applies to hub.alert_disp;
   end WohlDev.Deployed;
 
 end Wohl;
