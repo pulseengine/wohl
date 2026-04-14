@@ -175,14 +175,14 @@ impl TemperatureMonitor {
                     let last = self.states[idx].last_value;
                     let rate_thr = self.configs[idx].rate_threshold;
 
-                    if last - value > rate_thr && (res.alert_count as usize) < MAX_ALERTS_PER_READING {
+                    if last.saturating_sub(value) > rate_thr && (res.alert_count as usize) < MAX_ALERTS_PER_READING {
                         res.alerts[res.alert_count as usize] = TempAlert {
                             zone_id, alert_type: TempAlertType::RapidDrop, value, threshold: rate_thr, time,
                         };
                         res.alert_count += 1;
                     }
 
-                    if value - last > rate_thr && (res.alert_count as usize) < MAX_ALERTS_PER_READING {
+                    if value.saturating_sub(last) > rate_thr && (res.alert_count as usize) < MAX_ALERTS_PER_READING {
                         res.alerts[res.alert_count as usize] = TempAlert {
                             zone_id, alert_type: TempAlertType::RapidRise, value, threshold: rate_thr, time,
                         };

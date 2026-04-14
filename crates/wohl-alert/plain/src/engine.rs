@@ -91,7 +91,7 @@ impl AlertDispatcher {
         // ── Phase 1: dedup check (domain-specific) ──
 
         // Reset minute counter if new minute window
-        if time >= self.minute_start + 60 {
+        if time >= self.minute_start.saturating_add(60) {
             self.minute_count = 0;
             self.minute_start = time;
         }
@@ -103,7 +103,7 @@ impl AlertDispatcher {
             let idx = i as usize;
             if self.recent[idx].zone_id == zone_id
                 && self.recent[idx].alert_type == alert_type
-                && time < self.recent[idx].time + DEDUP_COOLDOWN_SEC
+                && time < self.recent[idx].time.saturating_add(DEDUP_COOLDOWN_SEC)
             {
                 return DispatchResult { action: DispatchAction::Deduplicated, queue_depth: self.recent_count };
             }
@@ -135,7 +135,7 @@ impl AlertDispatcher {
 
         while read < rc {
             let ridx = read as usize;
-            if self.recent[ridx].time + DEDUP_COOLDOWN_SEC >= current_time {
+            if self.recent[ridx].time.saturating_add(DEDUP_COOLDOWN_SEC) >= current_time {
                 if write != read {
                     self.recent[write as usize] = self.recent[ridx];
                 }
