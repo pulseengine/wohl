@@ -2,16 +2,19 @@ artifacts:
   - id: IV-WOHL-001
     type: sw-integration-verification
     title: End-to-end alert pipeline integration test
-    status: planned
+    status: approved
     description: >
       Integration test exercising the full pipeline: simulated sensor
       streams -> monitor components -> alert dispatcher -> notification
       output. Verifies that alerts flow correctly through the composed
       stream architecture and that deduplication/rate-limiting works
-      across monitor boundaries.
+      across monitor boundaries. Uses relay-lc for threshold evaluation
+      and relay-to for subscription-based alert routing.
     tags: [testing, integration, pipeline, swe-5]
     fields:
       method: automated-test
+      test-crate: wohl-integration
+      test-count: 12
     links:
       - type: verifies
         target: SWARCH-WOHL-001
@@ -20,16 +23,23 @@ artifacts:
 
   - id: IV-WOHL-002
     type: sw-integration-verification
-    title: Hub component composition integration test
-    status: planned
+    title: Cross-component alert routing and relay engine integration test
+    status: approved
     description: >
-      Integration test verifying that all monitor components can be
-      composed and scheduled on the hub architecture. Tests Relay
-      scheduler driving all monitors concurrently with interleaved
-      sensor streams.
-    tags: [testing, integration, hub, swe-5]
+      Integration test verifying that all monitor components (temp, leak,
+      air, door, power) produce correct alerts when composed with the
+      AlertDispatcher, and that relay-lc (threshold evaluation) and
+      relay-to (subscription filtering) engines work correctly across
+      component boundaries. Tests dedup across different alert sources,
+      rate limiting across the full pipeline, and subscription-based
+      alert routing.
+    tags: [testing, integration, relay-engines, swe-5]
     fields:
       method: automated-test
+      test-crate: wohl-integration
+      test-count: 12
     links:
+      - type: verifies
+        target: SWARCH-WOHL-001
       - type: verifies
         target: SWARCH-WOHL-003

@@ -1,0 +1,21 @@
+[package]
+name = "wohl-integration"
+description = "Wohl integration tests — end-to-end pipeline verification"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85.0"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib"]
+
+[dependencies]
+relay-lc.workspace = true
+relay-to.workspace = true
+wohl-leak.workspace = true
+wohl-temp.workspace = true
+wohl-air.workspace = true
+wohl-door.workspace = true
+wohl-power.workspace = true
+wohl-alert.workspace = true

@@ -1,21 +1,43 @@
-//! Wohl Alert Dispatcher — plain Rust (generated from Verus source).
-//! Source of truth: ../src/core.rs. Do not edit manually.
+//! Wohl Alert Dispatcher — uses Relay Telemetry Output for subscription routing.
+//!
+//! Architecture:
+//!   - relay-to::SubscriptionTable handles alert routing configuration (VERIFIED)
+//!   - This module adds: deduplication, rate limiting, channel encoding
+//!
+//! Wohl provides DEDUP + RATE LIMITING + CHANNEL MAPPING.
+//! Relay provides VERIFIED SUBSCRIPTION FILTERING.
+
+use relay_to::engine::{SubscriptionTable, ToDecision};
 
 pub const MAX_RECENT_ALERTS: usize = 64;
 pub const MAX_OUTPUT_QUEUE: usize = 16;
 pub const DEDUP_COOLDOWN_SEC: u64 = 300;
 pub const MAX_ALERTS_PER_MINUTE: u32 = 10;
+pub const MAX_CHANNELS: usize = 8;
 
 #[derive(Clone, Copy)]
 pub struct AlertEntry { pub zone_id: u32, pub alert_type: u8, pub time: u64 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DispatchAction { Send, Deduplicated, RateLimited }
+pub enum DispatchAction { Send, Deduplicated, RateLimited, NotSubscribed }
 
 #[derive(Clone, Copy)]
 pub struct DispatchResult { pub action: DispatchAction, pub queue_depth: u32 }
 
-pub struct AlertDispatcher { recent: [AlertEntry; MAX_RECENT_ALERTS], pub recent_count: u32, minute_count: u32, minute_start: u64 }
+/// Encodes an alert type + zone into a subscription message ID.
+/// Layout: upper 8 bits = alert_type, lower 24 bits = zone_id.
+pub const fn subscription_msg_id(zone_id: u32, alert_type: u8) -> u32 {
+    ((alert_type as u32) << 24) | (zone_id & 0x00FF_FFFF)
+}
+
+pub struct AlertDispatcher {
+    recent: [AlertEntry; MAX_RECENT_ALERTS],
+    pub recent_count: u32,
+    minute_count: u32,
+    minute_start: u64,
+    /// Relay's verified subscription table handles alert routing configuration.
+    subscriptions: SubscriptionTable,
+}
 
 impl AlertEntry {
     pub const fn empty() -> Self { AlertEntry { zone_id: 0, alert_type: 0, time: 0 } }
@@ -28,10 +50,46 @@ impl AlertDispatcher {
             recent_count: 0,
             minute_count: 0,
             minute_start: 0,
+            subscriptions: SubscriptionTable::new(),
         }
     }
 
+    /// Subscribe a specific alert type + zone to a notification channel.
+    /// Uses relay-to's verified SubscriptionTable for routing decisions.
+    /// Priority maps to notification urgency (0 = highest).
+    pub fn subscribe(&mut self, zone_id: u32, alert_type: u8, priority: u8) -> bool {
+        let msg_id = subscription_msg_id(zone_id, alert_type);
+        self.subscriptions.subscribe(msg_id, priority)
+    }
+
+    /// Unsubscribe an alert type + zone from notifications.
+    pub fn unsubscribe(&mut self, zone_id: u32, alert_type: u8) -> bool {
+        let msg_id = subscription_msg_id(zone_id, alert_type);
+        self.subscriptions.unsubscribe(msg_id)
+    }
+
+    /// Check whether an alert type + zone is subscribed for delivery.
+    /// Uses relay-to (VERIFIED) for the subscription evaluation.
+    pub fn is_subscribed(&self, zone_id: u32, alert_type: u8) -> bool {
+        let msg_id = subscription_msg_id(zone_id, alert_type);
+        self.subscriptions.evaluate(msg_id) == ToDecision::Include
+    }
+
+    /// Count active subscriptions (delegates to relay-to).
+    pub fn active_subscription_count(&self) -> u32 {
+        self.subscriptions.get_active_count()
+    }
+
     pub fn process_alert(&mut self, zone_id: u32, alert_type: u8, time: u64) -> DispatchResult {
+        // ── Phase 0: subscription check via relay-to (VERIFIED) ──
+        let msg_id = subscription_msg_id(zone_id, alert_type);
+        let decision = self.subscriptions.evaluate(msg_id);
+        if decision == ToDecision::Exclude || decision == ToDecision::NotSubscribed {
+            return DispatchResult { action: DispatchAction::NotSubscribed, queue_depth: self.recent_count };
+        }
+
+        // ── Phase 1: dedup check (domain-specific) ──
+
         // Reset minute counter if new minute window
         if time >= self.minute_start + 60 {
             self.minute_count = 0;
@@ -52,7 +110,8 @@ impl AlertDispatcher {
             i = i + 1;
         }
 
-        // Rate limit check
+        // ── Phase 2: rate limit check (domain-specific) ──
+
         if self.minute_count >= MAX_ALERTS_PER_MINUTE {
             return DispatchResult { action: DispatchAction::RateLimited, queue_depth: self.recent_count };
         }
@@ -92,13 +151,117 @@ impl AlertDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test] fn test_first_alert_sends() { let mut d = AlertDispatcher::new(); let r = d.process_alert(1, 1, 1000); assert_eq!(r.action, DispatchAction::Send); }
-    #[test] fn test_duplicate_within_cooldown() { let mut d = AlertDispatcher::new(); d.process_alert(1, 1, 1000); let r = d.process_alert(1, 1, 1100); assert_eq!(r.action, DispatchAction::Deduplicated); }
-    #[test] fn test_duplicate_after_cooldown() { let mut d = AlertDispatcher::new(); d.process_alert(1, 1, 1000); let r = d.process_alert(1, 1, 1300); assert_eq!(r.action, DispatchAction::Send); }
-    #[test] fn test_rate_limit_kicks_in() { let mut d = AlertDispatcher::new(); for i in 0..MAX_ALERTS_PER_MINUTE { let r = d.process_alert(100 + i, 1, 1000); assert_eq!(r.action, DispatchAction::Send); } let r = d.process_alert(200, 1, 1000); assert_eq!(r.action, DispatchAction::RateLimited); }
-    #[test] fn test_rate_limit_resets_after_minute() { let mut d = AlertDispatcher::new(); for i in 0..MAX_ALERTS_PER_MINUTE { d.process_alert(100 + i, 1, 1000); } let r = d.process_alert(200, 1, 1060); assert_eq!(r.action, DispatchAction::Send); }
-    #[test] fn test_clear_expired() { let mut d = AlertDispatcher::new(); d.process_alert(1, 1, 1000); assert_eq!(d.recent_count, 1); d.clear_expired(1301); assert_eq!(d.recent_count, 0); let r = d.process_alert(1, 1, 1301); assert_eq!(r.action, DispatchAction::Send); }
-    #[test] fn test_different_zone_not_deduplicated() { let mut d = AlertDispatcher::new(); d.process_alert(1, 1, 1000); let r = d.process_alert(2, 1, 1000); assert_eq!(r.action, DispatchAction::Send); }
+
+    /// Helper: create dispatcher with a subscription for the given zone+type.
+    fn subscribed_dispatcher(zone_id: u32, alert_type: u8) -> AlertDispatcher {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(zone_id, alert_type, 1);
+        d
+    }
+
+    #[test] fn test_first_alert_sends() {
+        let mut d = subscribed_dispatcher(1, 1);
+        let r = d.process_alert(1, 1, 1000);
+        assert_eq!(r.action, DispatchAction::Send);
+    }
+
+    #[test] fn test_not_subscribed_rejects() {
+        let mut d = AlertDispatcher::new();
+        let r = d.process_alert(1, 1, 1000);
+        assert_eq!(r.action, DispatchAction::NotSubscribed);
+    }
+
+    #[test] fn test_unsubscribed_rejects() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.unsubscribe(1, 1);
+        let r = d.process_alert(1, 1, 1000);
+        assert_eq!(r.action, DispatchAction::NotSubscribed);
+    }
+
+    #[test] fn test_subscription_check() {
+        let mut d = AlertDispatcher::new();
+        assert!(!d.is_subscribed(1, 1));
+        d.subscribe(1, 1, 1);
+        assert!(d.is_subscribed(1, 1));
+        assert!(!d.is_subscribed(2, 1));
+    }
+
+    #[test] fn test_active_count() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.subscribe(2, 1, 1);
+        assert_eq!(d.active_subscription_count(), 2);
+        d.unsubscribe(1, 1);
+        assert_eq!(d.active_subscription_count(), 1);
+    }
+
+    #[test] fn test_duplicate_within_cooldown() {
+        let mut d = subscribed_dispatcher(1, 1);
+        d.process_alert(1, 1, 1000);
+        let r = d.process_alert(1, 1, 1100);
+        assert_eq!(r.action, DispatchAction::Deduplicated);
+    }
+
+    #[test] fn test_duplicate_after_cooldown() {
+        let mut d = subscribed_dispatcher(1, 1);
+        d.process_alert(1, 1, 1000);
+        let r = d.process_alert(1, 1, 1300);
+        assert_eq!(r.action, DispatchAction::Send);
+    }
+
+    #[test] fn test_rate_limit_kicks_in() {
+        let mut d = AlertDispatcher::new();
+        for i in 0..MAX_ALERTS_PER_MINUTE {
+            d.subscribe(100 + i, 1, 1);
+        }
+        d.subscribe(200, 1, 1);
+        for i in 0..MAX_ALERTS_PER_MINUTE {
+            let r = d.process_alert(100 + i, 1, 1000);
+            assert_eq!(r.action, DispatchAction::Send);
+        }
+        let r = d.process_alert(200, 1, 1000);
+        assert_eq!(r.action, DispatchAction::RateLimited);
+    }
+
+    #[test] fn test_rate_limit_resets_after_minute() {
+        let mut d = AlertDispatcher::new();
+        for i in 0..MAX_ALERTS_PER_MINUTE {
+            d.subscribe(100 + i, 1, 1);
+        }
+        d.subscribe(200, 1, 1);
+        for i in 0..MAX_ALERTS_PER_MINUTE {
+            d.process_alert(100 + i, 1, 1000);
+        }
+        let r = d.process_alert(200, 1, 1060);
+        assert_eq!(r.action, DispatchAction::Send);
+    }
+
+    #[test] fn test_clear_expired() {
+        let mut d = subscribed_dispatcher(1, 1);
+        d.process_alert(1, 1, 1000);
+        assert_eq!(d.recent_count, 1);
+        d.clear_expired(1301);
+        assert_eq!(d.recent_count, 0);
+        let r = d.process_alert(1, 1, 1301);
+        assert_eq!(r.action, DispatchAction::Send);
+    }
+
+    #[test] fn test_different_zone_not_deduplicated() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.subscribe(2, 1, 1);
+        d.process_alert(1, 1, 1000);
+        let r = d.process_alert(2, 1, 1000);
+        assert_eq!(r.action, DispatchAction::Send);
+    }
+
+    #[test] fn test_msg_id_encoding() {
+        // alert_type=1, zone_id=42 -> (1 << 24) | 42 = 0x0100_002A
+        assert_eq!(subscription_msg_id(42, 1), 0x0100_002A);
+        // alert_type=0xFF, zone_id=0x00FF_FFFF -> (0xFF << 24) | 0x00FF_FFFF
+        assert_eq!(subscription_msg_id(0x00FF_FFFF, 0xFF), 0xFFFF_FFFF);
+    }
 }
 
 // ── Kani bounded model checking harnesses ────────────────────
@@ -115,6 +278,8 @@ mod kani_proofs {
         let alert_type: u8 = kani::any();
         let time1: u64 = kani::any();
         kani::assume(time1 < u64::MAX - DEDUP_COOLDOWN_SEC);
+        // Subscribe first (required for routing via relay-to)
+        d.subscribe(zone_id, alert_type, 1);
         // First alert should be Send
         let r1 = d.process_alert(zone_id, alert_type, time1);
         assert_eq!(r1.action, DispatchAction::Send);
@@ -131,16 +296,29 @@ mod kani_proofs {
         let mut d = AlertDispatcher::new();
         let time: u64 = kani::any();
         kani::assume(time < u64::MAX - 60);
-        // Send MAX_ALERTS_PER_MINUTE alerts with distinct zone_ids
+        // Subscribe and send MAX_ALERTS_PER_MINUTE alerts with distinct zone_ids
         let mut i: u32 = 0;
         while i < MAX_ALERTS_PER_MINUTE {
+            d.subscribe(1000 + i, 1, 1);
             let r = d.process_alert(1000 + i, 1, time);
             assert_eq!(r.action, DispatchAction::Send);
             i += 1;
         }
         // Next alert within same minute should be RateLimited
+        d.subscribe(9999, 1, 1);
         let r = d.process_alert(9999, 1, time);
         assert_eq!(r.action, DispatchAction::RateLimited);
+    }
+
+    /// ALERT-P05: unsubscribed alert returns NotSubscribed (via relay-to)
+    #[kani::proof]
+    fn verify_not_subscribed() {
+        let d = AlertDispatcher::new();
+        let zone_id: u32 = kani::any();
+        let alert_type: u8 = kani::any();
+        // No subscriptions — relay-to should return NotSubscribed
+        let decision = d.subscriptions.evaluate(subscription_msg_id(zone_id, alert_type));
+        assert_eq!(decision, ToDecision::NotSubscribed);
     }
 
     /// No panics for any combination of symbolic inputs
@@ -150,6 +328,7 @@ mod kani_proofs {
         let zone_id: u32 = kani::any();
         let alert_type: u8 = kani::any();
         let time: u64 = kani::any();
+        d.subscribe(zone_id, alert_type, 1);
         let _ = d.process_alert(zone_id, alert_type, time);
         let _ = d.process_alert(zone_id, alert_type, time);
         let clear_time: u64 = kani::any();

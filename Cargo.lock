@@ -16,6 +16,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "relay-to"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen",
+]
+
+[[package]]
 name = "wit-bindgen"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -43,10 +50,27 @@ dependencies = [
 [[package]]
 name = "wohl-alert"
 version = "0.1.0"
+dependencies = [
+ "relay-to",
+]
 
 [[package]]
 name = "wohl-door"
 version = "0.1.0"
+
+[[package]]
+name = "wohl-integration"
+version = "0.1.0"
+dependencies = [
+ "relay-lc",
+ "relay-to",
+ "wohl-air",
+ "wohl-alert",
+ "wohl-door",
+ "wohl-leak",
+ "wohl-power",
+ "wohl-temp",
+]
 
 [[package]]
 name = "wohl-leak"
