@@ -1,0 +1,59 @@
+package pulseengine:wohl-air-quality@0.1.0;
+
+/// Air Quality Monitor — uses verified threshold engine for CO2/PM2.5/VOC.
+///
+/// P3 async: all functions are async fn.
+interface air-quality {
+    /// Type of air quality alert.
+    enum air-alert-type {
+        co2-warning,
+        co2-critical,
+        pm25-warning,
+        pm25-critical,
+        voc-warning,
+        voc-critical,
+    }
+
+    /// Zone configuration for air quality thresholds.
+    record air-config {
+        zone-id: u32,
+        co2-warn: u32,
+        co2-critical: u32,
+        pm25-warn: u32,
+        pm25-critical: u32,
+        voc-warn: u32,
+        voc-critical: u32,
+        enabled: bool,
+    }
+
+    /// An air quality reading from sensors.
+    record air-reading {
+        zone-id: u32,
+        co2-ppm: u32,
+        pm25: u32,
+        voc-index: u32,
+        time: u64,
+    }
+
+    /// An air quality alert with context.
+    record air-alert {
+        zone-id: u32,
+        alert-type: air-alert-type,
+        value: u32,
+        threshold: u32,
+        time: u64,
+    }
+
+    /// Initialize the air quality monitor. Returns error string on failure.
+    init: func() -> result<_, string>;
+
+    /// Register a zone with thresholds. Returns false if table full.
+    register-zone: func(config: air-config) -> bool;
+
+    /// Process an air quality reading. Returns any triggered alerts.
+    process-reading: func(reading: air-reading) -> list<air-alert>;
+}
+
+world wohl-air-quality {
+    export air-quality;
+}

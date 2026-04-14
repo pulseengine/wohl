@@ -1,0 +1,37 @@
+package pulseengine:wohl-door-watch@0.1.0;
+
+/// Door/Window Watch — monitors contact sensors for open-too-long and night alerts.
+///
+/// P3 async: all functions are async fn.
+interface door-watch {
+    /// Type of door alert.
+    enum door-alert-type {
+        open-too-long,
+        opened-at-night,
+    }
+
+    /// A door/window alert with context.
+    record door-alert {
+        contact-id: u32,
+        zone-id: u32,
+        alert-type: door-alert-type,
+        open-duration-sec: u64,
+        time: u64,
+    }
+
+    /// Initialize the door watch. Returns error string on failure.
+    init: func() -> result<_, string>;
+
+    /// Register a contact sensor. Returns false if table full.
+    register-contact: func(contact-id: u32, zone-id: u32, max-open-sec: u32, night-start-hour: u8, night-end-hour: u8) -> bool;
+
+    /// Process a contact sensor event (open/close). Returns any triggered alerts.
+    process-event: func(contact-id: u32, open: bool, time: u64) -> list<door-alert>;
+
+    /// Check all open contacts for timeout violations. Returns any triggered alerts.
+    check-timeouts: func(current-time: u64) -> list<door-alert>;
+}
+
+world wohl-door-watch {
+    export door-watch;
+}

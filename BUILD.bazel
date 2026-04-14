@@ -1,0 +1,118 @@
+load("@rules_wasm_component//rust:defs.bzl", "rust_wasm_component_bindgen")
+load("@rules_wasm_component//wit:defs.bzl", "wit_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# ═══════════════════════════════════════════════════════════════
+# Water Leak Detector
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "wohl_leak_wit",
+    srcs = ["crates/wohl-leak/wit/leak.wit"],
+    package_name = "pulseengine:wohl-leak",
+    world = "wohl-leak",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-leak",
+    srcs = ["crates/wohl-leak/src/wasm_component.rs"],
+    wit = ":wohl_leak_wit",
+    wasi_version = "p3",
+    profiles = ["release"],
+)
+
+# ═══════════════════════════════════════════════════════════════
+# Temperature Monitor
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "wohl_temperature_wit",
+    srcs = ["crates/wohl-temp/wit/temperature.wit"],
+    package_name = "pulseengine:wohl-temperature",
+    world = "wohl-temperature",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-temp",
+    srcs = ["crates/wohl-temp/src/wasm_component.rs"],
+    wit = ":wohl_temperature_wit",
+    wasi_version = "p3",
+    profiles = ["release"],
+)
+
+# ═══════════════════════════════════════════════════════════════
+# Air Quality Monitor
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "wohl_air_quality_wit",
+    srcs = ["crates/wohl-air/wit/air_quality.wit"],
+    package_name = "pulseengine:wohl-air-quality",
+    world = "wohl-air-quality",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-air",
+    srcs = ["crates/wohl-air/src/wasm_component.rs"],
+    wit = ":wohl_air_quality_wit",
+    wasi_version = "p3",
+    profiles = ["release"],
+)
+
+# ═══════════════════════════════════════════════════════════════
+# Door Watch
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "wohl_door_watch_wit",
+    srcs = ["crates/wohl-door/wit/door_watch.wit"],
+    package_name = "pulseengine:wohl-door-watch",
+    world = "wohl-door-watch",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-door",
+    srcs = ["crates/wohl-door/src/wasm_component.rs"],
+    wit = ":wohl_door_watch_wit",
+    wasi_version = "p3",
+    profiles = ["release"],
+)
+
+# ═══════════════════════════════════════════════════════════════
+# Power Meter
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "wohl_power_meter_wit",
+    srcs = ["crates/wohl-power/wit/power.wit"],
+    package_name = "pulseengine:wohl-power-meter",
+    world = "wohl-power-meter",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-power",
+    srcs = ["crates/wohl-power/src/wasm_component.rs"],
+    wit = ":wohl_power_meter_wit",
+    wasi_version = "p3",
+    profiles = ["release"],
+)
+
+# ═══════════════════════════════════════════════════════════════
+# Alert Dispatcher
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "wohl_alert_dispatcher_wit",
+    srcs = ["crates/wohl-alert/wit/alert.wit"],
+    package_name = "pulseengine:wohl-alert-dispatcher",
+    world = "wohl-alert-dispatcher",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-alert",
+    srcs = ["crates/wohl-alert/src/wasm_component.rs"],
+    wit = ":wohl_alert_dispatcher_wit",
+    wasi_version = "p3",
+    profiles = ["release"],
+)

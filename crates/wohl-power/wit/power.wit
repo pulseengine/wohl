@@ -1,0 +1,39 @@
+package pulseengine:wohl-power-meter@0.1.0;
+
+/// Power Meter — uses verified threshold engine for overconsumption,
+/// adds spike detection and idle checking.
+///
+/// P3 async: all functions are async fn.
+interface power {
+    /// Type of power alert.
+    enum power-alert-type {
+        over-consumption,
+        spike,
+        device-left-on,
+    }
+
+    /// A power alert with context.
+    record power-alert {
+        circuit-id: u32,
+        alert-type: power-alert-type,
+        value: u32,
+        threshold: u32,
+        time: u64,
+    }
+
+    /// Initialize the power monitor. Returns error string on failure.
+    init: func() -> result<_, string>;
+
+    /// Register a circuit with thresholds. Returns false if table full.
+    register-circuit: func(circuit-id: u32, max-watts: u32, idle-watts: u32, spike-threshold: u32) -> bool;
+
+    /// Process a power reading. Returns any triggered alerts.
+    process-reading: func(circuit-id: u32, watts: u32, time: u64) -> list<power-alert>;
+
+    /// Check if a circuit is idle (current watts <= idle threshold).
+    check-idle: func(circuit-id: u32, current-watts: u32) -> bool;
+}
+
+world wohl-power-meter {
+    export power;
+}

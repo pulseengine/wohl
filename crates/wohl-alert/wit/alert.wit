@@ -1,0 +1,32 @@
+package pulseengine:wohl-alert-dispatcher@0.1.0;
+
+/// Alert Dispatcher — deduplication, rate-limiting, and dispatch decisions.
+///
+/// P3 async: all functions are async fn.
+interface alert {
+    /// What action was taken for an alert.
+    enum dispatch-action {
+        send,
+        deduplicated,
+        rate-limited,
+    }
+
+    /// Result of processing an alert through the dispatcher.
+    record dispatch-result {
+        action: dispatch-action,
+        queue-depth: u32,
+    }
+
+    /// Initialize the alert dispatcher. Returns error string on failure.
+    init: func() -> result<_, string>;
+
+    /// Process an incoming alert. Returns dispatch decision.
+    process-alert: func(zone-id: u32, alert-type: u8, time: u64) -> dispatch-result;
+
+    /// Clear expired entries from the dedup window.
+    clear-expired: func(current-time: u64);
+}
+
+world wohl-alert-dispatcher {
+    export alert;
+}

@@ -1,0 +1,37 @@
+package pulseengine:wohl-temperature@0.1.0;
+
+/// Temperature Monitor — uses verified threshold engine for freeze/overheat,
+/// adds rate-of-change detection for rapid temperature swings.
+///
+/// P3 async: all functions are async fn.
+interface temperature {
+    /// Type of temperature alert.
+    enum temp-alert-type {
+        freeze,
+        overheat,
+        rapid-drop,
+        rapid-rise,
+    }
+
+    /// A temperature alert with context.
+    record temp-alert {
+        zone-id: u32,
+        alert-type: temp-alert-type,
+        value: s32,
+        threshold: s32,
+        time: u64,
+    }
+
+    /// Initialize the temperature monitor. Returns error string on failure.
+    init: func() -> result<_, string>;
+
+    /// Register a zone with thresholds (centidegrees). Returns false if table full.
+    register-zone: func(zone-id: u32, freeze-threshold: s32, overheat-threshold: s32, rate-threshold: s32) -> bool;
+
+    /// Process a temperature reading. Returns any triggered alerts.
+    process-reading: func(zone-id: u32, value: s32, time: u64) -> list<temp-alert>;
+}
+
+world wohl-temperature {
+    export temperature;
+}

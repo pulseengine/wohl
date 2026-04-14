@@ -1,0 +1,34 @@
+package pulseengine:wohl-leak@0.1.0;
+
+/// Water Leak Detector — stateful monitor for water sensor zones.
+///
+/// SAFETY-CRITICAL: catching a burst pipe 5 minutes earlier
+/// saves thousands in water damage.
+///
+/// P3 async: all functions are async fn — the host can call without blocking.
+interface leak {
+    /// Result of processing a water event.
+    enum leak-action {
+        new-leak,
+        already-wet,
+        cleared,
+        already-dry,
+        unknown,
+    }
+
+    /// Initialize the leak detector. Returns error string on failure.
+    init: func() -> result<_, string>;
+
+    /// Register a zone for monitoring. Returns false if table full.
+    register-zone: func(zone-id: u32) -> bool;
+
+    /// Process a water sensor event. Returns the resulting action.
+    process-event: func(zone-id: u32, wet: bool, timestamp-sec: u64) -> leak-action;
+
+    /// Check if any registered zone is currently wet.
+    any-wet: func() -> bool;
+}
+
+world wohl-leak {
+    export leak;
+}
