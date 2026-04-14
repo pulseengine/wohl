@@ -7,6 +7,7 @@ members = [
     "crates/wohl-door",
     "crates/wohl-power",
     "crates/wohl-alert",
+    "crates/wohl-hub",
     "crates/wohl-integration",
 ]
 
@@ -21,6 +22,11 @@ rust-version = "1.85.0"
 relay-lc = { path = "../relay/crates/relay-lc" }
 relay-sc = { path = "../relay/crates/relay-sc" }
 relay-sch = { path = "../relay/crates/relay-sch" }
+relay-hs = { path = "../relay/crates/relay-hs" }
+relay-ds = { path = "../relay/crates/relay-ds" }
+relay-hk = { path = "../relay/crates/relay-hk" }
+relay-tbl = { path = "../relay/crates/relay-tbl" }
+relay-cs = { path = "../relay/crates/relay-cs" }
 relay-to = { path = "../relay/crates/relay-to" }
 wohl-leak = { path = "crates/wohl-leak" }
 wohl-temp = { path = "crates/wohl-temp" }

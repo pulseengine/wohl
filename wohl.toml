@@ -1,0 +1,38 @@
+[scheduler]
+tick_rate_ms = 1000  # 1Hz
+
+[[zones]]
+id = 1
+name = "kitchen"
+sensors = ["temp", "water", "air"]
+temp_freeze = 0        # centidegrees
+temp_overheat = 4000
+temp_rate = 500
+co2_warn = 1000
+co2_critical = 2000
+
+[[zones]]
+id = 2
+name = "bathroom"
+sensors = ["temp", "water"]
+temp_freeze = 500
+temp_overheat = 3500
+
+[[zones]]
+id = 3
+name = "basement"
+sensors = ["water", "power"]
+power_max_watts = 30000
+power_spike = 10000
+
+[[contacts]]
+id = 1
+zone = 1
+name = "front_door"
+max_open_sec = 300
+night_start = 22
+night_end = 6
+
+[alerts]
+rate_limit_per_minute = 10
+dedup_cooldown_sec = 300
