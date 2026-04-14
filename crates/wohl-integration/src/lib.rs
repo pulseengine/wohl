@@ -417,7 +417,50 @@ mod tests {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // Test 12: Full timeline simulation
+    // Test 12: Thousand-reading stress test across temp + alert pipeline
+    // ══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn thousand_readings_pipeline() {
+        // Set up full pipeline
+        let mut temp = TemperatureMonitor::new();
+        temp.register_zone(TempZoneConfig {
+            zone_id: 1,
+            freeze_threshold: 0,
+            overheat_threshold: 4000,
+            rate_threshold: 500,
+            enabled: true,
+        });
+        let mut alert = AlertDispatcher::new();
+        alert.subscribe(1, 0, 1); // subscribe zone 1, type 0, priority 1
+
+        let mut total_alerts = 0u32;
+        let mut total_dedups = 0u32;
+        let mut _total_rate_limited = 0u32;
+
+        for i in 0..1000u64 {
+            // Alternate between normal and freezing temperatures
+            let value = if i % 100 < 5 { -100 } else { 2000 };
+            let result = temp.process_reading(1, value, i);
+            for _j in 0..result.alert_count {
+                let dispatch = alert.process_alert(1, 0, i);
+                match dispatch.action {
+                    DispatchAction::Send => total_alerts += 1,
+                    DispatchAction::Deduplicated => total_dedups += 1,
+                    DispatchAction::RateLimited => _total_rate_limited += 1,
+                    DispatchAction::NotSubscribed => {},
+                }
+            }
+        }
+
+        // Should have some alerts, some dedups
+        assert!(total_alerts > 0, "Expected some alerts");
+        assert!(total_dedups > 0, "Expected some dedup");
+        // Rate limiting should kick in when burst of freeze alerts happen
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Test 13: Full timeline simulation
     // ══════════════════════════════════════════════════════════════
 
     #[test]

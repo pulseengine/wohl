@@ -264,6 +264,47 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn dedup_always_works(
+            zone_id in 0u32..100,
+            alert_type in 0u8..10,
+            time in 0u64..1000,
+        ) {
+            let mut disp = AlertDispatcher::new();
+            disp.subscribe(zone_id, alert_type, 1);
+            let r1 = disp.process_alert(zone_id, alert_type, time);
+            prop_assert_eq!(r1.action, DispatchAction::Send);
+            // Same alert within cooldown should dedup
+            let r2 = disp.process_alert(zone_id, alert_type, time + 1);
+            prop_assert_eq!(r2.action, DispatchAction::Deduplicated);
+        }
+
+        #[test]
+        fn rate_limit_kicks_in(
+            zone_id in 0u32..10,
+        ) {
+            let mut disp = AlertDispatcher::new();
+            // Subscribe and send MAX_ALERTS_PER_MINUTE different types
+            for t in 0..MAX_ALERTS_PER_MINUTE as u8 + 1 {
+                disp.subscribe(zone_id, t, 1);
+            }
+            for t in 0..MAX_ALERTS_PER_MINUTE as u8 {
+                let r = disp.process_alert(zone_id, t, 100);
+                prop_assert!(r.action == DispatchAction::Send || r.action == DispatchAction::NotSubscribed);
+            }
+            // Next one should be rate limited
+            let r = disp.process_alert(zone_id, MAX_ALERTS_PER_MINUTE as u8, 100);
+            prop_assert_eq!(r.action, DispatchAction::RateLimited);
+        }
+    }
+}
+
 // ── Kani bounded model checking harnesses ────────────────────
 
 #[cfg(kani)]

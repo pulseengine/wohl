@@ -1,0 +1,24 @@
+[package]
+name = "wohl-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+wohl-leak = { path = "../crates/wohl-leak" }
+wohl-temp = { path = "../crates/wohl-temp" }
+relay-lc = { path = "../../relay/crates/relay-lc" }
+
+[workspace]
+
+[[bin]]
+name = "fuzz_leak"
+path = "fuzz_targets/fuzz_leak.rs"
+
+[[bin]]
+name = "fuzz_temp"
+path = "fuzz_targets/fuzz_temp.rs"

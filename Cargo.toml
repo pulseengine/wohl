@@ -28,3 +28,4 @@ wohl-air = { path = "crates/wohl-air" }
 wohl-door = { path = "crates/wohl-door" }
 wohl-power = { path = "crates/wohl-power" }
 wohl-alert = { path = "crates/wohl-alert" }
+proptest = "1"

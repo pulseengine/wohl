@@ -69,6 +69,51 @@ mod tests {
     #[test] fn test_already_dry() { let mut d = LeakDetector::new(); d.register_zone(1); assert_eq!(d.process_event(1, false, 1000), LeakAction::AlreadyDry); }
 }
 
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn wet_always_detects_for_registered_zone(
+            zone_id in 0u32..50,
+            time in 0u64..1_000_000,
+        ) {
+            let mut det = LeakDetector::new();
+            det.register_zone(zone_id);
+            let action = det.process_event(zone_id, true, time);
+            prop_assert!(action == LeakAction::NewLeak || action == LeakAction::AlreadyWet);
+        }
+
+        #[test]
+        fn unregistered_zone_always_unknown(
+            zone_id in 100u32..200,
+            wet in proptest::bool::ANY,
+            time in 0u64..1_000_000,
+        ) {
+            let mut det = LeakDetector::new();
+            // Don't register zone_id
+            let action = det.process_event(zone_id, wet, time);
+            prop_assert_eq!(action, LeakAction::Unknown);
+        }
+
+        #[test]
+        fn wet_then_dry_clears(
+            zone_id in 0u32..30,
+            t1 in 0u64..500_000,
+            t2 in 500_001u64..1_000_000,
+        ) {
+            let mut det = LeakDetector::new();
+            det.register_zone(zone_id);
+            det.process_event(zone_id, true, t1);
+            let action = det.process_event(zone_id, false, t2);
+            prop_assert_eq!(action, LeakAction::Cleared);
+            prop_assert!(!det.any_wet());
+        }
+    }
+}
+
 // ── Kani bounded model checking harnesses ────────────────────
 
 #[cfg(kani)]

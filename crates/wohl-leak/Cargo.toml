@@ -9,3 +9,6 @@ rust-version = "1.85.0"
 [lib]
 path = "plain/src/lib.rs"
 crate-type = ["rlib"]
+
+[dev-dependencies]
+proptest.workspace = true

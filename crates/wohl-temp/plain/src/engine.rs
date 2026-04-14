@@ -275,6 +275,43 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn alert_count_always_bounded(
+            value in -5000i32..10000,
+            freeze in -2000i32..500,
+            overheat in 3000i32..8000,
+            rate in 100i32..2000,
+        ) {
+            let mut m = TemperatureMonitor::new();
+            m.register_zone(ZoneConfig {
+                zone_id: 1, freeze_threshold: freeze,
+                overheat_threshold: overheat, rate_threshold: rate, enabled: true,
+            });
+            let r = m.process_reading(1, value, 100);
+            prop_assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
+        }
+
+        #[test]
+        fn normal_range_no_alerts(
+            value in 1000i32..3000,
+        ) {
+            let mut m = TemperatureMonitor::new();
+            m.register_zone(ZoneConfig {
+                zone_id: 1, freeze_threshold: 0,
+                overheat_threshold: 4000, rate_threshold: 5000, enabled: true,
+            });
+            let r = m.process_reading(1, value, 100);
+            prop_assert_eq!(r.alert_count, 0);
+        }
+    }
+}
+
 // ── Kani bounded model checking harnesses ────────────────────
 
 #[cfg(kani)]
