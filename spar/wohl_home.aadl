@@ -11,16 +11,41 @@ public
   with Wohl_Properties;
 
   system StarterHome
+    features
+      notification_out: out event data port;
   end StarterHome;
 
   system implementation StarterHome.Deployed
     subcomponents
       hub: system Wohl_Nodes::HubNode.RPi;
-      door_front: system Wohl_Nodes::DoorWindowNode.Battery;
-      door_back: system Wohl_Nodes::DoorWindowNode.Battery;
-      window_bedroom: system Wohl_Nodes::DoorWindowNode.Battery;
-      living_room: system Wohl_Nodes::ClimateNode.Battery;
-      kitchen_air: system Wohl_Nodes::AirQualityNode.Mains;
+
+      door_front: system Wohl_Nodes::DoorWindowNode.Battery
+        { Wohl_Properties::Zone_Id => 1;
+          Wohl_Properties::Zone_Name => "front_door";
+          Wohl_Properties::Location => "ground_floor/entry";
+          Wohl_Properties::Role => "door"; };
+
+      door_back: system Wohl_Nodes::DoorWindowNode.Battery
+        { Wohl_Properties::Zone_Id => 2;
+          Wohl_Properties::Zone_Name => "back_door";
+          Wohl_Properties::Location => "ground_floor/utility";
+          Wohl_Properties::Role => "door"; };
+
+      window_bedroom: system Wohl_Nodes::DoorWindowNode.Battery
+        { Wohl_Properties::Zone_Id => 3;
+          Wohl_Properties::Zone_Name => "bedroom_window";
+          Wohl_Properties::Location => "first_floor/bedroom";
+          Wohl_Properties::Role => "window"; };
+
+      living_room: system Wohl_Nodes::ClimateNode.Battery
+        { Wohl_Properties::Zone_Id => 4;
+          Wohl_Properties::Zone_Name => "living_room";
+          Wohl_Properties::Location => "ground_floor/living_room"; };
+
+      kitchen_air: system Wohl_Nodes::AirQualityNode.Mains
+        { Wohl_Properties::Zone_Id => 5;
+          Wohl_Properties::Zone_Name => "kitchen";
+          Wohl_Properties::Location => "ground_floor/kitchen"; };
     connections
       -- Sensor data: node → hub
       s_door_front: port door_front.packet_out -> hub.packet_in;
@@ -42,6 +67,37 @@ public
       a_window_bedroom: port window_bedroom.attest_out -> hub.attest_in;
       a_living_room: port living_room.attest_out -> hub.attest_in;
       a_kitchen_air: port kitchen_air.attest_out -> hub.attest_in;
+
+      -- Notifications leave the home
+      n_out: port hub.notification_out -> notification_out;
   end StarterHome.Deployed;
+
+  -- Alternate deployment using the MiniPC hub variant.
+  system implementation StarterHome.DeployedMiniPC
+    subcomponents
+      hub: system Wohl_Nodes::HubNode.MiniPC;
+      door_front: system Wohl_Nodes::DoorWindowNode.Battery;
+      door_back: system Wohl_Nodes::DoorWindowNode.Battery;
+      window_bedroom: system Wohl_Nodes::DoorWindowNode.Battery;
+      living_room: system Wohl_Nodes::ClimateNode.Battery;
+      kitchen_air: system Wohl_Nodes::AirQualityNode.Mains;
+    connections
+      s_door_front: port door_front.packet_out -> hub.packet_in;
+      s_door_back: port door_back.packet_out -> hub.packet_in;
+      s_window_bedroom: port window_bedroom.packet_out -> hub.packet_in;
+      s_living_room: port living_room.packet_out -> hub.packet_in;
+      s_kitchen_air: port kitchen_air.packet_out -> hub.packet_in;
+      o_door_front: port hub.image_out -> door_front.image_in;
+      o_door_back: port hub.image_out -> door_back.image_in;
+      o_window_bedroom: port hub.image_out -> window_bedroom.image_in;
+      o_living_room: port hub.image_out -> living_room.image_in;
+      o_kitchen_air: port hub.image_out -> kitchen_air.image_in;
+      a_door_front: port door_front.attest_out -> hub.attest_in;
+      a_door_back: port door_back.attest_out -> hub.attest_in;
+      a_window_bedroom: port window_bedroom.attest_out -> hub.attest_in;
+      a_living_room: port living_room.attest_out -> hub.attest_in;
+      a_kitchen_air: port kitchen_air.attest_out -> hub.attest_in;
+      n_out: port hub.notification_out -> notification_out;
+  end StarterHome.DeployedMiniPC;
 
 end Wohl_Home;

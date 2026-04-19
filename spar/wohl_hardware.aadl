@@ -151,6 +151,32 @@ public
       Wohl_Properties::Zephyr_Binding => "brcm,bcm2711";
   end RaspberryPi4;
 
+  processor IntelN100
+    -- Intel N100: 4-core x86-64, up to 3.4 GHz burst, 6 W TDP.
+    -- Used by GMKtec Nucbox, Beelink S12, Minisforum UN100 mini PCs.
+    -- Headroom for local ML (occupancy, anomaly detection) or local LLM.
+    features
+      lan: requires bus access Ethernet_LAN;
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Posix_1003_Highest_Priority_First_Protocol);
+      Clock_Period => 294 ps; -- 3.4 GHz burst
+      Wohl_Properties::Active_Current_uA => 1200000.0; -- ~6 W @ 5 V
+      Wohl_Properties::Zephyr_Binding => "intel,alderlake-n";
+  end IntelN100;
+
+  memory RAM_MiniPC
+    properties
+      Word_Size => 64 bits;
+      Memory_Size => 16 GByte;
+  end RAM_MiniPC;
+
+  memory SSD_NVMe_256G
+    properties
+      Word_Size => 8 bits;
+      Memory_Size => 256 GByte;
+  end SSD_NVMe_256G;
+
   -- ══════════════════════════════════════════════════════════════
   -- Sensor devices (specific parts)
   -- ══════════════════════════════════════════════════════════════

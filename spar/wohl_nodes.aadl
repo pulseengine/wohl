@@ -144,22 +144,65 @@ public
       packet_in: in event data port Wohl_Firmware::SensorPacket;
       image_out: out event data port Wohl_Firmware::FirmwareImage;
       attest_in: in event data port Wohl_Firmware::AttestationReport;
+      notification_out: out event data port;
   end HubNode;
 
+  -- HubNode.RPi — budget/fanless: Raspberry Pi 4/5, Kiln WASM runtime.
   system implementation HubNode.RPi
     subcomponents
       cpu: processor Wohl_Hardware::RaspberryPi4;
       ram: memory Wohl_Hardware::RAM_RaspberryPi;
       rom: memory Wohl_Hardware::SDCard_32G;
+      monitors: process Wohl_Firmware::HubMonitorProcess.Impl;
       ota: process Wohl_Firmware::OTAManagerProcess.Impl;
       lan: bus Wohl_Hardware::Ethernet_LAN;
     connections
       c_lan_bus: bus access lan -> cpu.lan;
+      c_pkt_in: port packet_in -> monitors.packet_in;
+      c_notif_out: port monitors.notification_out -> notification_out;
       c_image_out: port ota.image_out -> image_out;
       c_attest_in: port attest_in -> ota.attest_in;
     properties
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.router;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.water_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.temp_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.air_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.door_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.power_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.dispatcher;
       Actual_Processor_Binding => (reference (cpu)) applies to ota.mgr;
-      Actual_Memory_Binding => (reference (ram)) applies to ota.mgr;
+      Actual_Memory_Binding => (reference (ram)) applies to monitors;
+      Actual_Memory_Binding => (reference (ram)) applies to ota;
   end HubNode.RPi;
+
+  -- HubNode.MiniPC — upgrade path for local ML, larger histories.
+  -- Intel N100 in a GMKtec/Beelink/Minisforum chassis, 16 GB RAM, NVMe.
+  -- Same software, more ceiling.
+  system implementation HubNode.MiniPC
+    subcomponents
+      cpu: processor Wohl_Hardware::IntelN100;
+      ram: memory Wohl_Hardware::RAM_MiniPC;
+      rom: memory Wohl_Hardware::SSD_NVMe_256G;
+      monitors: process Wohl_Firmware::HubMonitorProcess.Impl;
+      ota: process Wohl_Firmware::OTAManagerProcess.Impl;
+      lan: bus Wohl_Hardware::Ethernet_LAN;
+    connections
+      c_lan_bus: bus access lan -> cpu.lan;
+      c_pkt_in: port packet_in -> monitors.packet_in;
+      c_notif_out: port monitors.notification_out -> notification_out;
+      c_image_out: port ota.image_out -> image_out;
+      c_attest_in: port attest_in -> ota.attest_in;
+    properties
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.router;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.water_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.temp_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.air_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.door_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.power_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.dispatcher;
+      Actual_Processor_Binding => (reference (cpu)) applies to ota.mgr;
+      Actual_Memory_Binding => (reference (ram)) applies to monitors;
+      Actual_Memory_Binding => (reference (ram)) applies to ota;
+  end HubNode.MiniPC;
 
 end Wohl_Nodes;

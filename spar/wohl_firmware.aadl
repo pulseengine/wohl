@@ -199,4 +199,143 @@ public
       c_attest: port attest_in -> mgr.attest_in;
   end OTAManagerProcess.Impl;
 
+  -- ══════════════════════════════════════════════════════════════
+  -- Hub-side monitor threads (Verus-verified WASM components in Kiln)
+  -- Simpler hardware-integrated view of the threads modeled at the
+  -- logical level in wohl_system.aadl.
+  -- ══════════════════════════════════════════════════════════════
+
+  thread PacketRouter
+    -- Receives CCSDS packets from the radio, dispatches to monitors
+    -- based on sensor_type field. Backed by wohl-hub packet_to_event.
+    features
+      packet_in: in event data port SensorPacket;
+      water_out: out event data port;
+      temp_out: out event data port;
+      air_out: out event data port;
+      contact_out: out event data port;
+      power_out: out event data port;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 10 ms;
+      Priority => 2;
+      Stack_Size => 2048 Bytes;
+  end PacketRouter;
+
+  thread HubWaterMonitor
+    features
+      water_in: in event data port;
+      alert_out: out event data port;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 5 ms; -- SYSREQ-WOHL-001
+      Priority => 1;
+      Stack_Size => 1024 Bytes;
+  end HubWaterMonitor;
+
+  thread HubTempMonitor
+    features
+      temp_in: in data port;
+      alert_out: out event data port;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 1000 ms;
+      Compute_Execution_Time => 0 ms .. 2 ms;
+      Deadline => 100 ms;
+      Priority => 3;
+      Stack_Size => 1024 Bytes;
+  end HubTempMonitor;
+
+  thread HubAirMonitor
+    features
+      air_in: in data port;
+      alert_out: out event data port;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 5000 ms;
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 500 ms;
+      Priority => 5;
+      Stack_Size => 1024 Bytes;
+  end HubAirMonitor;
+
+  thread HubDoorMonitor
+    features
+      contact_in: in event data port;
+      alert_out: out event data port;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 50 ms;
+      Priority => 4;
+      Stack_Size => 1024 Bytes;
+  end HubDoorMonitor;
+
+  thread HubPowerMonitor
+    features
+      power_in: in data port;
+      alert_out: out event data port;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 10000 ms;
+      Compute_Execution_Time => 0 ms .. 1 ms;
+      Deadline => 1000 ms;
+      Priority => 6;
+      Stack_Size => 1024 Bytes;
+  end HubPowerMonitor;
+
+  thread HubAlertDispatcher
+    -- Dedup + rate-limit + notification delivery.
+    features
+      alert_in: in event data port;
+      notification_out: out event data port;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 5 ms;
+      Deadline => 100 ms;
+      Priority => 2;
+      Stack_Size => 2048 Bytes;
+  end HubAlertDispatcher;
+
+  -- Hub monitor process composes all monitors into one process the
+  -- HubNode system can contain.
+  process HubMonitorProcess
+    features
+      packet_in: in event data port SensorPacket;
+      notification_out: out event data port;
+  end HubMonitorProcess;
+
+  process implementation HubMonitorProcess.Impl
+    subcomponents
+      router: thread PacketRouter;
+      water_mon: thread HubWaterMonitor;
+      temp_mon: thread HubTempMonitor;
+      air_mon: thread HubAirMonitor;
+      door_mon: thread HubDoorMonitor;
+      power_mon: thread HubPowerMonitor;
+      dispatcher: thread HubAlertDispatcher;
+    connections
+      -- Packet in → router
+      c_pkt: port packet_in -> router.packet_in;
+
+      -- Router → monitors
+      c_water: port router.water_out -> water_mon.water_in;
+      c_temp: port router.temp_out -> temp_mon.temp_in;
+      c_air: port router.air_out -> air_mon.air_in;
+      c_contact: port router.contact_out -> door_mon.contact_in;
+      c_power: port router.power_out -> power_mon.power_in;
+
+      -- Monitors → dispatcher
+      c_a_water: port water_mon.alert_out -> dispatcher.alert_in;
+      c_a_temp: port temp_mon.alert_out -> dispatcher.alert_in;
+      c_a_air: port air_mon.alert_out -> dispatcher.alert_in;
+      c_a_door: port door_mon.alert_out -> dispatcher.alert_in;
+      c_a_power: port power_mon.alert_out -> dispatcher.alert_in;
+
+      -- Dispatcher → notifications
+      c_notif: port dispatcher.notification_out -> notification_out;
+  end HubMonitorProcess.Impl;
+
 end Wohl_Firmware;
