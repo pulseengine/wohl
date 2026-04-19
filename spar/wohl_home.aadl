@@ -1,0 +1,38 @@
+-- Wohl deployed home system.
+-- The complete starter layout: 3 door/window sensors, 1 climate node,
+-- 1 air-quality mains node, 1 Raspberry Pi hub. Connected via Thread
+-- mesh (802.15.4) with the hub providing the border router function.
+
+package Wohl_Home
+public
+  with Wohl_Hardware;
+  with Wohl_Nodes;
+  with Wohl_Properties;
+
+  system StarterHome
+  end StarterHome;
+
+  system implementation StarterHome.Deployed
+    subcomponents
+      -- Hub (Raspberry Pi 4 + Kiln WASM)
+      hub: system Wohl_Nodes::HubNode.RPi;
+
+      -- 3 door/window sensors (battery, reed switch)
+      door_front: system Wohl_Nodes::DoorWindowNode.Battery;
+      door_back: system Wohl_Nodes::DoorWindowNode.Battery;
+      window_bedroom: system Wohl_Nodes::DoorWindowNode.Battery;
+
+      -- 1 climate / motion node (battery, SHT30 + BMP280 + PIR)
+      living_room: system Wohl_Nodes::ClimateNode.Battery;
+
+      -- 1 air-quality node (mains, SCD41 + SPS30)
+      kitchen_air: system Wohl_Nodes::AirQualityNode.Mains;
+
+      -- Shared Thread mesh bus linking all battery nodes to the hub
+      thread_mesh: bus Wohl_Hardware::Thread_Mesh;
+
+      -- WiFi/LAN for the mains air node
+      home_lan: bus Wohl_Hardware::Ethernet_LAN;
+  end StarterHome.Deployed;
+
+end Wohl_Home;
