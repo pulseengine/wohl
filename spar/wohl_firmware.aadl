@@ -1,0 +1,202 @@
+-- Wohl node firmware threads.
+-- Each sensor node runs one firmware thread that reads its physical
+-- sensors and emits CCSDS packets over the radio. Plus a bootloader
+-- that receives CFDP image transfers from the hub.
+
+package Wohl_Firmware
+public
+  with Wohl_Hardware;
+  with Wohl_Properties;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Data types carried between threads
+  -- ══════════════════════════════════════════════════════════════
+
+  data SensorPacket
+    -- 14 bytes: CCSDS header (6) + sensor payload (8)
+    properties
+      Data_Size => 14 Bytes;
+  end SensorPacket;
+
+  data FirmwareImage
+    -- Signed firmware image delivered via CFDP.
+    -- Typical size 64-256 KB per node class.
+    properties
+      Data_Size => 256 KByte;
+  end FirmwareImage;
+
+  data AttestationReport
+    -- Signed post-boot firmware hash + version report.
+    properties
+      Data_Size => 96 Bytes; -- 32-byte hash + 32-byte sig + metadata
+  end AttestationReport;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Node firmware threads (what runs on each MCU)
+  -- ══════════════════════════════════════════════════════════════
+
+  thread DoorFirmware
+    -- Reed-switch edge triggers interrupt → encode CCSDS → TX over Thread.
+    -- Deep-sleep the rest of the time. Backed by wohl-door sensor node.
+    features
+      reed_in: in event data port;
+      packet_out: out event data port SensorPacket;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 2 ms;
+      Deadline => 100 ms;
+      Priority => 5;
+      Stack_Size => 2048 Bytes;
+  end DoorFirmware;
+
+  thread ClimateFirmware
+    -- 1 sample/min: wake, read I2C sensors, encode CCSDS, TX, sleep.
+    -- Also reacts to PIR motion edge (sporadic).
+    features
+      temp_rh_in: in data port;
+      pressure_in: in data port;
+      motion_in: in event data port;
+      packet_out: out event data port SensorPacket;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 60000 ms;
+      Compute_Execution_Time => 0 ms .. 10 ms;
+      Deadline => 5000 ms;
+      Priority => 3;
+      Stack_Size => 4096 Bytes;
+  end ClimateFirmware;
+
+  thread AirFirmware
+    -- Mains-powered: continuous sampling of CO2 + PM.
+    -- Emits one CCSDS packet per sensor reading (multiple per minute).
+    features
+      co2_in: in data port;
+      pm_in: in data port;
+      packet_out: out event data port SensorPacket;
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 30000 ms;
+      Compute_Execution_Time => 0 ms .. 20 ms;
+      Deadline => 5000 ms;
+      Priority => 3;
+      Stack_Size => 4096 Bytes;
+  end AirFirmware;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Bootloader / OTA threads
+  -- ══════════════════════════════════════════════════════════════
+
+  thread NodeBootloader
+    -- gale-boot placeholder: verifies signature, swaps A/B slot.
+    -- Runs only on reset and during active OTA receive.
+    features
+      image_in: in event data port FirmwareImage;
+      attest_out: out event data port AttestationReport;
+    properties
+      Dispatch_Protocol => Aperiodic;
+      Compute_Execution_Time => 0 ms .. 2000 ms;
+      Priority => 15; -- highest (runs pre-Gale, not scheduled with others)
+      Stack_Size => 8192 Bytes;
+  end NodeBootloader;
+
+  thread OTAManager
+    -- On the hub: reads update manifests, streams firmware via CFDP,
+    -- tracks per-node version state, handles attestation replies.
+    features
+      manifest_in: in event data port;
+      image_out: out event data port FirmwareImage;
+      attest_in: in event data port AttestationReport;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 100 ms;
+      Deadline => 1000 ms;
+      Priority => 10;
+      Stack_Size => 8192 Bytes;
+  end OTAManager;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Node firmware processes (firmware + bootloader per node class)
+  -- ══════════════════════════════════════════════════════════════
+
+  process DoorFirmwareProcess
+    features
+      reed_in: in event data port;
+      packet_out: out event data port SensorPacket;
+      image_in: in event data port FirmwareImage;
+      attest_out: out event data port AttestationReport;
+  end DoorFirmwareProcess;
+
+  process implementation DoorFirmwareProcess.Impl
+    subcomponents
+      firmware: thread DoorFirmware;
+      bootloader: thread NodeBootloader;
+    connections
+      c_reed: port reed_in -> firmware.reed_in;
+      c_packet: port firmware.packet_out -> packet_out;
+      c_image: port image_in -> bootloader.image_in;
+      c_attest: port bootloader.attest_out -> attest_out;
+  end DoorFirmwareProcess.Impl;
+
+  process ClimateFirmwareProcess
+    features
+      temp_rh_in: in data port;
+      pressure_in: in data port;
+      motion_in: in event data port;
+      packet_out: out event data port SensorPacket;
+      image_in: in event data port FirmwareImage;
+      attest_out: out event data port AttestationReport;
+  end ClimateFirmwareProcess;
+
+  process implementation ClimateFirmwareProcess.Impl
+    subcomponents
+      firmware: thread ClimateFirmware;
+      bootloader: thread NodeBootloader;
+    connections
+      c_temp: port temp_rh_in -> firmware.temp_rh_in;
+      c_pres: port pressure_in -> firmware.pressure_in;
+      c_motion: port motion_in -> firmware.motion_in;
+      c_packet: port firmware.packet_out -> packet_out;
+      c_image: port image_in -> bootloader.image_in;
+      c_attest: port bootloader.attest_out -> attest_out;
+  end ClimateFirmwareProcess.Impl;
+
+  process AirFirmwareProcess
+    features
+      co2_in: in data port;
+      pm_in: in data port;
+      packet_out: out event data port SensorPacket;
+      image_in: in event data port FirmwareImage;
+      attest_out: out event data port AttestationReport;
+  end AirFirmwareProcess;
+
+  process implementation AirFirmwareProcess.Impl
+    subcomponents
+      firmware: thread AirFirmware;
+      bootloader: thread NodeBootloader;
+    connections
+      c_co2: port co2_in -> firmware.co2_in;
+      c_pm: port pm_in -> firmware.pm_in;
+      c_packet: port firmware.packet_out -> packet_out;
+      c_image: port image_in -> bootloader.image_in;
+      c_attest: port bootloader.attest_out -> attest_out;
+  end AirFirmwareProcess.Impl;
+
+  -- Hub-side OTA process (wraps the OTAManager thread so it can be a
+  -- subcomponent of the Hub system).
+  process OTAManagerProcess
+    features
+      manifest_in: in event data port;
+      image_out: out event data port FirmwareImage;
+      attest_in: in event data port AttestationReport;
+  end OTAManagerProcess;
+
+  process implementation OTAManagerProcess.Impl
+    subcomponents
+      mgr: thread OTAManager;
+    connections
+      c_manifest: port manifest_in -> mgr.manifest_in;
+      c_image: port mgr.image_out -> image_out;
+      c_attest: port attest_in -> mgr.attest_in;
+  end OTAManagerProcess.Impl;
+
+end Wohl_Firmware;

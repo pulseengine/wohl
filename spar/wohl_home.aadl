@@ -1,11 +1,12 @@
 -- Wohl deployed home system.
--- The complete starter layout: 3 door/window sensors, 1 climate node,
--- 1 air-quality mains node, 1 Raspberry Pi hub. Connected via Thread
--- mesh (802.15.4) with the hub providing the border router function.
+-- 3 door/window + 1 climate + 1 air-quality + 1 hub, wired through the
+-- Thread mesh. Sensor packets flow node→hub; OTA images flow hub→node;
+-- attestation reports flow node→hub.
 
 package Wohl_Home
 public
   with Wohl_Hardware;
+  with Wohl_Firmware;
   with Wohl_Nodes;
   with Wohl_Properties;
 
@@ -14,25 +15,33 @@ public
 
   system implementation StarterHome.Deployed
     subcomponents
-      -- Hub (Raspberry Pi 4 + Kiln WASM)
       hub: system Wohl_Nodes::HubNode.RPi;
-
-      -- 3 door/window sensors (battery, reed switch)
       door_front: system Wohl_Nodes::DoorWindowNode.Battery;
       door_back: system Wohl_Nodes::DoorWindowNode.Battery;
       window_bedroom: system Wohl_Nodes::DoorWindowNode.Battery;
-
-      -- 1 climate / motion node (battery, SHT30 + BMP280 + PIR)
       living_room: system Wohl_Nodes::ClimateNode.Battery;
-
-      -- 1 air-quality node (mains, SCD41 + SPS30)
       kitchen_air: system Wohl_Nodes::AirQualityNode.Mains;
+    connections
+      -- Sensor data: node → hub
+      s_door_front: port door_front.packet_out -> hub.packet_in;
+      s_door_back: port door_back.packet_out -> hub.packet_in;
+      s_window_bedroom: port window_bedroom.packet_out -> hub.packet_in;
+      s_living_room: port living_room.packet_out -> hub.packet_in;
+      s_kitchen_air: port kitchen_air.packet_out -> hub.packet_in;
 
-      -- Shared Thread mesh bus linking all battery nodes to the hub
-      thread_mesh: bus Wohl_Hardware::Thread_Mesh;
+      -- OTA images: hub → node
+      o_door_front: port hub.image_out -> door_front.image_in;
+      o_door_back: port hub.image_out -> door_back.image_in;
+      o_window_bedroom: port hub.image_out -> window_bedroom.image_in;
+      o_living_room: port hub.image_out -> living_room.image_in;
+      o_kitchen_air: port hub.image_out -> kitchen_air.image_in;
 
-      -- WiFi/LAN for the mains air node
-      home_lan: bus Wohl_Hardware::Ethernet_LAN;
+      -- Attestation: node → hub
+      a_door_front: port door_front.attest_out -> hub.attest_in;
+      a_door_back: port door_back.attest_out -> hub.attest_in;
+      a_window_bedroom: port window_bedroom.attest_out -> hub.attest_in;
+      a_living_room: port living_room.attest_out -> hub.attest_in;
+      a_kitchen_air: port kitchen_air.attest_out -> hub.attest_in;
   end StarterHome.Deployed;
 
 end Wohl_Home;
