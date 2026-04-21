@@ -208,13 +208,15 @@ public
   thread PacketRouter
     -- Receives CCSDS packets from the radio, dispatches to monitors
     -- based on sensor_type field. Backed by wohl-hub packet_to_event.
+    -- Periodic sensors (temp, air, power) route through data ports;
+    -- sporadic (water, contact) through event data ports.
     features
       packet_in: in event data port SensorPacket;
       water_out: out event data port;
-      temp_out: out event data port;
-      air_out: out event data port;
+      temp_out: out data port;
+      air_out: out data port;
       contact_out: out event data port;
-      power_out: out event data port;
+      power_out: out data port;
     properties
       Dispatch_Protocol => Sporadic;
       Compute_Execution_Time => 0 ms .. 1 ms;
