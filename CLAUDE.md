@@ -26,14 +26,16 @@ Each monitor is a stream transformer: `stream<sensor-data> → stream<alert>`.
 ### Build
 
 ```bash
-cargo test                    # Plain Rust tests
-bazel test //:verus           # Verus verification (when available)
+cargo test --workspace        # Plain Rust tests + proptest
+cargo kani -p <crate>         # Kani BMC, e.g. cargo kani -p wohl-leak
+cargo fuzz run <target> -- -max_total_time=60
+rivet validate                # ASPICE artifact traceability
 ```
 
 ### Rules
 
 - All components are no_std, no alloc
-- Verified core logic in `src/core.rs` (Verus-annotated)
-- Plain Rust in `plain/src/core.rs` (verus-strip output)
-- Follow [Verification Guide](https://pulseengine.eu/guides/VERIFICATION-GUIDE.md)
+- Verified core logic in `crates/wohl-*/plain/src/lib.rs` (Kani BMC harnesses on `engine.rs`)
+- Verification floor: Kani BMC + proptest + cargo-fuzz on all 6 components
+- Verus deductive proofs planned for `wohl-alert` dispatcher dedup invariant — see [#7](https://github.com/pulseengine/wohl/issues/7)
 - Use `rivet validate` for artifact YAML files

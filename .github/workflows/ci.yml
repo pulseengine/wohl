@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  lint:
+    name: fmt + clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85.0"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wohl
+      - name: cargo fmt --check (per workspace member)
+        working-directory: wohl
+        # `cargo fmt --all` reaches into local path-dependencies and would
+        # fail on unrelated drift in sibling repos (relay/, rivet/). Run
+        # per-package so the gate stays scoped to this workspace's members.
+        run: |
+          for c in wohl-leak wohl-temp wohl-air wohl-door wohl-power wohl-alert wohl-hub wohl-integration; do
+            echo "::group::cargo fmt -p $c"
+            cargo fmt -p "$c" --check
+            echo "::endgroup::"
+          done
+      - name: cargo clippy
+        working-directory: wohl
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: cargo test (workspace, incl. proptest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wohl
+      - name: cargo test
+        working-directory: wohl
+        run: cargo test --workspace --all-features
+
+  kani:
+    name: Kani BMC (all 6 components)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wohl
+          key: kani
+      - name: Cache Kani install
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-kani
+            ~/.cargo/bin/kani
+            ~/.kani
+          key: kani-${{ runner.os }}-v1
+      - name: Install Kani
+        run: |
+          if ! command -v cargo-kani >/dev/null 2>&1; then
+            cargo install --locked kani-verifier
+          fi
+          cargo kani setup
+      - name: Run Kani on all components
+        working-directory: wohl
+        run: |
+          for c in wohl-leak wohl-temp wohl-air wohl-door wohl-power wohl-alert; do
+            echo "::group::Kani $c"
+            cargo kani -p "$c"
+            echo "::endgroup::"
+          done
+
+  fuzz-smoke:
+    name: cargo-fuzz smoke (60s/target)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wohl
+          key: fuzz
+      - name: Install cargo-fuzz
+        run: cargo install --locked cargo-fuzz
+      - name: Fuzz fuzz_leak
+        working-directory: wohl
+        run: cargo fuzz run fuzz_leak -- -max_total_time=60
+      - name: Fuzz fuzz_temp
+        working-directory: wohl
+        run: cargo fuzz run fuzz_temp -- -max_total_time=60
+
+  rivet-validate:
+    name: rivet validate (ASPICE artifacts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/rivet
+          path: rivet
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rivet
+          key: rivet-cli
+      - name: Install rivet-cli
+        run: cargo install --locked --path rivet/rivet-cli
+      - name: rivet validate
+        working-directory: wohl
+        run: rivet validate
