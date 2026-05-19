@@ -128,7 +128,10 @@ jobs:
           workspaces: wohl
           key: fuzz
       - name: Install cargo-fuzz
-        run: cargo install --locked cargo-fuzz
+        # NOT --locked: cargo-fuzz 0.13.1's lockfile pins rustix 0.36.5 which
+        # uses unstable rustc_attrs that current nightly no longer accepts.
+        # Unlocked resolution picks newer rustix that compiles cleanly.
+        run: cargo install cargo-fuzz
       - name: Fuzz fuzz_leak
         working-directory: wohl
         run: cargo fuzz run fuzz_leak -- -max_total_time=60
