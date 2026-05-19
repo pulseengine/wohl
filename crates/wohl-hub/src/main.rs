@@ -29,7 +29,7 @@ struct HubConfig {
 
 #[allow(
     dead_code,
-    reason = "wired when scheduler thread (spar/wohl_firmware.aadl) lands"
+    reason = "wired when scheduler thread (spar/wohl_system.aadl:207) lands"
 )]
 #[derive(Deserialize, Clone, Debug)]
 struct SchedulerConfig {
