@@ -6,6 +6,16 @@
 //!
 //! Wohl provides DEDUP + RATE LIMITING + CHANNEL MAPPING.
 //! Relay provides VERIFIED SUBSCRIPTION FILTERING.
+//!
+//! # Verification
+//!
+//! - Kani BMC harnesses (bounded): see [`kani_proofs`] below.
+//! - Verus deductive proofs (unbounded): see
+//!   `proofs/verus/alert_dedup.rs` at the repo root.  The Verus file mirrors
+//!   the phase 1 + phase 2 state machine of [`AlertDispatcher::process_alert`]
+//!   into a ghost model and proves the dedup invariant (Issue #7) and the
+//!   rate-limit invariant for all `u64` timestamps.  Run with
+//!   `verus proofs/verus/alert_dedup.rs`.
 
 use relay_to::engine::{SubscriptionTable, ToDecision};
 
