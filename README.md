@@ -39,12 +39,9 @@ for c in wohl-leak wohl-temp wohl-air wohl-door wohl-power wohl-alert; do
   cargo kani -p "$c"
 done
 
-# Cargo-fuzz smoke (60s per target)
+# Cargo-fuzz smoke (60s per target — coverage currently `fuzz_leak`, `fuzz_temp`)
 cargo fuzz run fuzz_leak -- -max_total_time=60
 cargo fuzz run fuzz_temp -- -max_total_time=60
-
-# WASM components (fused with Meld, compiled with Synth)
-bazel build //...
 
 # ASPICE artifact traceability
 rivet validate
@@ -58,16 +55,16 @@ The `relay` and `rivet` repositories must be cloned as siblings of `wohl/` for p
 
 | Track | Status |
 |---|---|
-| Kani BMC (all 6 components) | PASS |
+| Kani BMC (all 6 components) | PASS (20 harnesses) |
 | proptest suites | PASS |
-| cargo-fuzz (`fuzz_leak`, `fuzz_temp`) | smoke |
-| Verus deductive proofs | planned — `wohl-alert` dispatcher dedup invariant |
+| cargo-fuzz | smoke for `fuzz_leak`, `fuzz_temp`; other 4 components tracked in [#8](https://github.com/pulseengine/wohl/issues/8) |
+| Verus deductive proofs | planned — `wohl-alert` dispatcher dedup invariant ([#7](https://github.com/pulseengine/wohl/issues/7)) |
 | AADL system model | active |
-| Rivet ASPICE validation | 0 errors / 20 warnings |
+| Rivet ASPICE validation | PASS, 5 warnings |
 
 ## License
 
-Apache-2.0. SPDX metadata is set in each crate's `Cargo.toml`; a root `LICENSE` file is pending.
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the full text.
 
 ## Links
 
