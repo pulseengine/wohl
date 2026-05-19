@@ -18,6 +18,9 @@ license = "Apache-2.0"
 repository = "https://github.com/pulseengine/wohl"
 rust-version = "1.85.0"
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+
 [workspace.dependencies]
 relay-lc = { path = "../relay/crates/relay-lc" }
 relay-sc = { path = "../relay/crates/relay-sc" }

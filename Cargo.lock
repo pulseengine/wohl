@@ -347,8 +347,13 @@ dependencies = [
 name = "relay-lc"
 version = "0.1.0"
 dependencies = [
+ "relay-primitives",
  "wit-bindgen 0.41.0",
 ]
+
+[[package]]
+name = "relay-primitives"
+version = "0.1.0"
 
 [[package]]
 name = "relay-sch"

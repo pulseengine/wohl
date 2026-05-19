@@ -23,7 +23,10 @@ pub struct ContactState {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum DoorAlertType { OpenTooLong, OpenedAtNight }
+pub enum DoorAlertType {
+    OpenTooLong,
+    OpenedAtNight,
+}
 
 #[derive(Clone, Copy)]
 pub struct DoorAlert {
@@ -48,25 +51,52 @@ pub struct DoorWatch {
 
 impl ContactConfig {
     pub const fn empty() -> Self {
-        ContactConfig { contact_id: 0, zone_id: 0, max_open_sec: 0, night_start_hour: 0, night_end_hour: 0, enabled: false }
+        ContactConfig {
+            contact_id: 0,
+            zone_id: 0,
+            max_open_sec: 0,
+            night_start_hour: 0,
+            night_end_hour: 0,
+            enabled: false,
+        }
     }
 }
 
 impl ContactState {
     pub const fn empty() -> Self {
-        ContactState { contact_id: 0, open: false, opened_at: 0, active: false }
+        ContactState {
+            contact_id: 0,
+            open: false,
+            opened_at: 0,
+            active: false,
+        }
     }
 }
 
 impl DoorAlert {
     pub const fn empty() -> Self {
-        DoorAlert { contact_id: 0, zone_id: 0, alert_type: DoorAlertType::OpenTooLong, open_duration_sec: 0, time: 0 }
+        DoorAlert {
+            contact_id: 0,
+            zone_id: 0,
+            alert_type: DoorAlertType::OpenTooLong,
+            open_duration_sec: 0,
+            time: 0,
+        }
     }
 }
 
 impl DoorResult {
     pub const fn empty() -> Self {
-        DoorResult { alerts: [DoorAlert::empty(); MAX_ALERTS_PER_CHECK], alert_count: 0 }
+        DoorResult {
+            alerts: [DoorAlert::empty(); MAX_ALERTS_PER_CHECK],
+            alert_count: 0,
+        }
+    }
+}
+
+impl Default for DoorWatch {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -80,7 +110,9 @@ impl DoorWatch {
     }
 
     pub fn register_contact(&mut self, config: ContactConfig) -> bool {
-        if self.contact_count as usize >= MAX_CONTACTS { return false; }
+        if self.contact_count as usize >= MAX_CONTACTS {
+            return false;
+        }
         let idx = self.contact_count as usize;
         self.configs[idx] = config;
         self.states[idx] = ContactState {
@@ -120,17 +152,16 @@ impl DoorWatch {
                         hour_of_day,
                         self.configs[idx].night_start_hour,
                         self.configs[idx].night_end_hour,
-                    ) {
-                        if (res.alert_count as usize) < MAX_ALERTS_PER_CHECK {
-                            res.alerts[res.alert_count as usize] = DoorAlert {
-                                contact_id,
-                                zone_id: self.configs[idx].zone_id,
-                                alert_type: DoorAlertType::OpenedAtNight,
-                                open_duration_sec: 0,
-                                time,
-                            };
-                            res.alert_count += 1;
-                        }
+                    ) && (res.alert_count as usize) < MAX_ALERTS_PER_CHECK
+                    {
+                        res.alerts[res.alert_count as usize] = DoorAlert {
+                            contact_id,
+                            zone_id: self.configs[idx].zone_id,
+                            alert_type: DoorAlertType::OpenedAtNight,
+                            open_duration_sec: 0,
+                            time,
+                        };
+                        res.alert_count += 1;
                     }
                 } else {
                     self.states[idx].open = false;
@@ -150,24 +181,21 @@ impl DoorWatch {
         let mut i: u32 = 0;
         while i < count {
             let idx = i as usize;
-            if self.states[idx].active
-                && self.configs[idx].enabled
-                && self.states[idx].open
-            {
+            if self.states[idx].active && self.configs[idx].enabled && self.states[idx].open {
                 let opened_at = self.states[idx].opened_at;
                 if current_time >= opened_at {
                     let duration = current_time - opened_at;
-                    if duration > self.configs[idx].max_open_sec as u64 {
-                        if (res.alert_count as usize) < MAX_ALERTS_PER_CHECK {
-                            res.alerts[res.alert_count as usize] = DoorAlert {
-                                contact_id: self.configs[idx].contact_id,
-                                zone_id: self.configs[idx].zone_id,
-                                alert_type: DoorAlertType::OpenTooLong,
-                                open_duration_sec: duration,
-                                time: current_time,
-                            };
-                            res.alert_count += 1;
-                        }
+                    if duration > self.configs[idx].max_open_sec as u64
+                        && (res.alert_count as usize) < MAX_ALERTS_PER_CHECK
+                    {
+                        res.alerts[res.alert_count as usize] = DoorAlert {
+                            contact_id: self.configs[idx].contact_id,
+                            zone_id: self.configs[idx].zone_id,
+                            alert_type: DoorAlertType::OpenTooLong,
+                            open_duration_sec: duration,
+                            time: current_time,
+                        };
+                        res.alert_count += 1;
                     }
                 }
             }
@@ -183,15 +211,65 @@ mod tests {
     use super::*;
 
     fn make_config(contact_id: u32, zone_id: u32) -> ContactConfig {
-        ContactConfig { contact_id, zone_id, max_open_sec: 300, night_start_hour: 22, night_end_hour: 6, enabled: true }
+        ContactConfig {
+            contact_id,
+            zone_id,
+            max_open_sec: 300,
+            night_start_hour: 22,
+            night_end_hour: 6,
+            enabled: true,
+        }
     }
 
-    #[test] fn test_open_close() { let mut w = DoorWatch::new(); w.register_contact(make_config(1, 10)); let r = w.process_event(1, true, 43200); assert_eq!(r.alert_count, 0); let r = w.process_event(1, false, 43260); assert_eq!(r.alert_count, 0); }
-    #[test] fn test_open_too_long() { let mut w = DoorWatch::new(); w.register_contact(make_config(1, 10)); w.process_event(1, true, 43200); let r = w.check_timeouts(43200 + 400); assert_eq!(r.alert_count, 1); assert_eq!(r.alerts[0].alert_type, DoorAlertType::OpenTooLong); }
-    #[test] fn test_opened_at_night() { let mut w = DoorWatch::new(); w.register_contact(make_config(1, 10)); let r = w.process_event(1, true, 82800); assert_eq!(r.alert_count, 1); assert_eq!(r.alerts[0].alert_type, DoorAlertType::OpenedAtNight); }
-    #[test] fn test_normal_day() { let mut w = DoorWatch::new(); w.register_contact(make_config(1, 10)); let r = w.process_event(1, true, 50400); assert_eq!(r.alert_count, 0); }
-    #[test] fn test_unknown_contact() { let mut w = DoorWatch::new(); let r = w.process_event(99, true, 1000); assert_eq!(r.alert_count, 0); }
-    #[test] fn test_multiple_contacts() { let mut w = DoorWatch::new(); w.register_contact(make_config(1, 10)); w.register_contact(make_config(2, 20)); w.process_event(1, true, 43200); w.process_event(2, true, 43200); let r = w.check_timeouts(43200 + 400); assert_eq!(r.alert_count, 2); }
+    #[test]
+    fn test_open_close() {
+        let mut w = DoorWatch::new();
+        w.register_contact(make_config(1, 10));
+        let r = w.process_event(1, true, 43200);
+        assert_eq!(r.alert_count, 0);
+        let r = w.process_event(1, false, 43260);
+        assert_eq!(r.alert_count, 0);
+    }
+    #[test]
+    fn test_open_too_long() {
+        let mut w = DoorWatch::new();
+        w.register_contact(make_config(1, 10));
+        w.process_event(1, true, 43200);
+        let r = w.check_timeouts(43200 + 400);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].alert_type, DoorAlertType::OpenTooLong);
+    }
+    #[test]
+    fn test_opened_at_night() {
+        let mut w = DoorWatch::new();
+        w.register_contact(make_config(1, 10));
+        let r = w.process_event(1, true, 82800);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].alert_type, DoorAlertType::OpenedAtNight);
+    }
+    #[test]
+    fn test_normal_day() {
+        let mut w = DoorWatch::new();
+        w.register_contact(make_config(1, 10));
+        let r = w.process_event(1, true, 50400);
+        assert_eq!(r.alert_count, 0);
+    }
+    #[test]
+    fn test_unknown_contact() {
+        let mut w = DoorWatch::new();
+        let r = w.process_event(99, true, 1000);
+        assert_eq!(r.alert_count, 0);
+    }
+    #[test]
+    fn test_multiple_contacts() {
+        let mut w = DoorWatch::new();
+        w.register_contact(make_config(1, 10));
+        w.register_contact(make_config(2, 20));
+        w.process_event(1, true, 43200);
+        w.process_event(2, true, 43200);
+        let r = w.check_timeouts(43200 + 400);
+        assert_eq!(r.alert_count, 2);
+    }
 }
 
 // ── Kani bounded model checking harnesses ────────────────────

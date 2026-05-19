@@ -4,9 +4,7 @@
 //!   - relay-lc::WatchpointTable handles CO2/PM2.5/VOC thresholds (VERIFIED)
 //!   - This module adds: domain type translation, multi-metric mapping
 
-use relay_lc::engine::{
-    ComparisonOp, SensorReading, Watchpoint, WatchpointTable,
-};
+use relay_lc::engine::{ComparisonOp, SensorReading, Watchpoint, WatchpointTable};
 
 pub const MAX_ZONES: usize = 16;
 pub const MAX_ALERTS_PER_READING: usize = 6;
@@ -33,7 +31,14 @@ pub struct AirReading {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AirAlertType { Co2Warning, Co2Critical, Pm25Warning, Pm25Critical, VocWarning, VocCritical }
+pub enum AirAlertType {
+    Co2Warning,
+    Co2Critical,
+    Pm25Warning,
+    Pm25Critical,
+    VocWarning,
+    VocCritical,
+}
 
 #[derive(Clone, Copy)]
 pub struct AirAlert {
@@ -51,16 +56,25 @@ pub struct AirResult {
 
 impl AirAlert {
     pub const fn empty() -> Self {
-        AirAlert { zone_id: 0, alert_type: AirAlertType::Co2Warning, value: 0, threshold: 0, time: 0 }
+        AirAlert {
+            zone_id: 0,
+            alert_type: AirAlertType::Co2Warning,
+            value: 0,
+            threshold: 0,
+            time: 0,
+        }
     }
 }
 
 // Watchpoint ID encoding: zone_id * 6 + metric_offset
 // 0=co2_warn, 1=co2_critical, 2=pm25_warn, 3=pm25_critical, 4=voc_warn, 5=voc_critical
 const ALERT_TYPES: [AirAlertType; 6] = [
-    AirAlertType::Co2Warning, AirAlertType::Co2Critical,
-    AirAlertType::Pm25Warning, AirAlertType::Pm25Critical,
-    AirAlertType::VocWarning, AirAlertType::VocCritical,
+    AirAlertType::Co2Warning,
+    AirAlertType::Co2Critical,
+    AirAlertType::Pm25Warning,
+    AirAlertType::Pm25Critical,
+    AirAlertType::VocWarning,
+    AirAlertType::VocCritical,
 ];
 
 pub struct AirMonitor {
@@ -70,31 +84,54 @@ pub struct AirMonitor {
 
 impl AirConfig {
     pub const fn empty() -> Self {
-        AirConfig { zone_id: 0, co2_warn: 0, co2_critical: 0, pm25_warn: 0, pm25_critical: 0, voc_warn: 0, voc_critical: 0, enabled: false }
+        AirConfig {
+            zone_id: 0,
+            co2_warn: 0,
+            co2_critical: 0,
+            pm25_warn: 0,
+            pm25_critical: 0,
+            voc_warn: 0,
+            voc_critical: 0,
+            enabled: false,
+        }
+    }
+}
+
+impl Default for AirMonitor {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl AirMonitor {
     pub fn new() -> Self {
-        AirMonitor { watchpoints: WatchpointTable::new(), zone_count: 0 }
+        AirMonitor {
+            watchpoints: WatchpointTable::new(),
+            zone_count: 0,
+        }
     }
 
     /// Register a zone. Creates 6 relay-lc watchpoints (warn+critical for each metric).
     pub fn register_zone(&mut self, config: AirConfig) -> bool {
-        if self.zone_count as usize >= MAX_ZONES { return false; }
+        if self.zone_count as usize >= MAX_ZONES {
+            return false;
+        }
 
         let base = config.zone_id * 6;
         let thresholds = [
-            config.co2_warn, config.co2_critical,
-            config.pm25_warn, config.pm25_critical,
-            config.voc_warn, config.voc_critical,
+            config.co2_warn,
+            config.co2_critical,
+            config.pm25_warn,
+            config.pm25_critical,
+            config.voc_warn,
+            config.voc_critical,
         ];
 
-        for i in 0..6 {
+        for (i, &threshold) in thresholds.iter().enumerate() {
             self.watchpoints.add_watchpoint(Watchpoint {
                 sensor_id: base + i as u32,
                 op: ComparisonOp::GreaterOrEqual,
-                threshold: thresholds[i] as i64,
+                threshold: threshold as i64,
                 enabled: config.enabled,
                 persistence: 1,
                 current_count: 0,
@@ -107,12 +144,24 @@ impl AirMonitor {
 
     /// Process an air quality reading. All threshold checks go through relay-lc.
     pub fn process_reading(&mut self, reading: AirReading) -> AirResult {
-        let mut res = AirResult { alerts: [AirAlert::empty(); MAX_ALERTS_PER_READING], alert_count: 0 };
+        let mut res = AirResult {
+            alerts: [AirAlert::empty(); MAX_ALERTS_PER_READING],
+            alert_count: 0,
+        };
         let base = reading.zone_id * 6;
-        let values = [reading.co2_ppm, reading.co2_ppm, reading.pm25, reading.pm25, reading.voc_index, reading.voc_index];
+        let values = [
+            reading.co2_ppm,
+            reading.co2_ppm,
+            reading.pm25,
+            reading.pm25,
+            reading.voc_index,
+            reading.voc_index,
+        ];
 
         for i in 0..6 {
-            if res.alert_count as usize >= MAX_ALERTS_PER_READING { break; }
+            if res.alert_count as usize >= MAX_ALERTS_PER_READING {
+                break;
+            }
             let result = self.watchpoints.evaluate(SensorReading {
                 sensor_id: base + i as u32,
                 value: values[i] as i64,
@@ -138,50 +187,112 @@ mod tests {
     use super::*;
 
     fn make_config(zone_id: u32) -> AirConfig {
-        AirConfig { zone_id, co2_warn: 1000, co2_critical: 2000, pm25_warn: 250, pm25_critical: 500, voc_warn: 200, voc_critical: 400, enabled: true }
+        AirConfig {
+            zone_id,
+            co2_warn: 1000,
+            co2_critical: 2000,
+            pm25_warn: 250,
+            pm25_critical: 500,
+            voc_warn: 200,
+            voc_critical: 400,
+            enabled: true,
+        }
     }
 
     #[test]
-    fn test_empty() { let mut m = AirMonitor::new(); let r = m.process_reading(AirReading { zone_id: 1, co2_ppm: 400, pm25: 50, voc_index: 30, time: 100 }); assert_eq!(r.alert_count, 0); }
+    fn test_empty() {
+        let mut m = AirMonitor::new();
+        let r = m.process_reading(AirReading {
+            zone_id: 1,
+            co2_ppm: 400,
+            pm25: 50,
+            voc_index: 30,
+            time: 100,
+        });
+        assert_eq!(r.alert_count, 0);
+    }
 
     #[test]
     fn test_co2_warning() {
-        let mut m = AirMonitor::new(); m.register_zone(make_config(1));
-        let r = m.process_reading(AirReading { zone_id: 1, co2_ppm: 1200, pm25: 50, voc_index: 30, time: 100 });
+        let mut m = AirMonitor::new();
+        m.register_zone(make_config(1));
+        let r = m.process_reading(AirReading {
+            zone_id: 1,
+            co2_ppm: 1200,
+            pm25: 50,
+            voc_index: 30,
+            time: 100,
+        });
         assert!(r.alert_count >= 1);
         assert_eq!(r.alerts[0].alert_type, AirAlertType::Co2Warning);
     }
 
     #[test]
     fn test_co2_critical() {
-        let mut m = AirMonitor::new(); m.register_zone(make_config(1));
-        let r = m.process_reading(AirReading { zone_id: 1, co2_ppm: 2500, pm25: 50, voc_index: 30, time: 100 });
+        let mut m = AirMonitor::new();
+        m.register_zone(make_config(1));
+        let r = m.process_reading(AirReading {
+            zone_id: 1,
+            co2_ppm: 2500,
+            pm25: 50,
+            voc_index: 30,
+            time: 100,
+        });
         // Should trigger both co2_warn AND co2_critical
         assert!(r.alert_count >= 2);
     }
 
     #[test]
     fn test_pm25_alert() {
-        let mut m = AirMonitor::new(); m.register_zone(make_config(1));
-        let r = m.process_reading(AirReading { zone_id: 1, co2_ppm: 400, pm25: 300, voc_index: 30, time: 100 });
+        let mut m = AirMonitor::new();
+        m.register_zone(make_config(1));
+        let r = m.process_reading(AirReading {
+            zone_id: 1,
+            co2_ppm: 400,
+            pm25: 300,
+            voc_index: 30,
+            time: 100,
+        });
         let mut found = false;
-        for j in 0..r.alert_count as usize { if r.alerts[j].alert_type == AirAlertType::Pm25Warning { found = true; } }
+        for j in 0..r.alert_count as usize {
+            if r.alerts[j].alert_type == AirAlertType::Pm25Warning {
+                found = true;
+            }
+        }
         assert!(found);
     }
 
     #[test]
     fn test_voc_alert() {
-        let mut m = AirMonitor::new(); m.register_zone(make_config(1));
-        let r = m.process_reading(AirReading { zone_id: 1, co2_ppm: 400, pm25: 50, voc_index: 250, time: 100 });
+        let mut m = AirMonitor::new();
+        m.register_zone(make_config(1));
+        let r = m.process_reading(AirReading {
+            zone_id: 1,
+            co2_ppm: 400,
+            pm25: 50,
+            voc_index: 250,
+            time: 100,
+        });
         let mut found = false;
-        for j in 0..r.alert_count as usize { if r.alerts[j].alert_type == AirAlertType::VocWarning { found = true; } }
+        for j in 0..r.alert_count as usize {
+            if r.alerts[j].alert_type == AirAlertType::VocWarning {
+                found = true;
+            }
+        }
         assert!(found);
     }
 
     #[test]
     fn test_normal_no_alert() {
-        let mut m = AirMonitor::new(); m.register_zone(make_config(1));
-        let r = m.process_reading(AirReading { zone_id: 1, co2_ppm: 400, pm25: 50, voc_index: 30, time: 100 });
+        let mut m = AirMonitor::new();
+        m.register_zone(make_config(1));
+        let r = m.process_reading(AirReading {
+            zone_id: 1,
+            co2_ppm: 400,
+            pm25: 50,
+            voc_index: 30,
+            time: 100,
+        });
         assert_eq!(r.alert_count, 0);
     }
 }
@@ -243,7 +354,11 @@ mod kani_proofs {
         // All values strictly below their warn thresholds
         kani::assume(co2 < co2_warn && pm25 < pm25_warn && voc < voc_warn);
         let r = m.process_reading(AirReading {
-            zone_id: 1, co2_ppm: co2, pm25, voc_index: voc, time: 100,
+            zone_id: 1,
+            co2_ppm: co2,
+            pm25,
+            voc_index: voc,
+            time: 100,
         });
         assert_eq!(r.alert_count, 0);
     }
