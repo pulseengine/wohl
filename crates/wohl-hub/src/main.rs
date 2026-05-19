@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 
 // ── Configuration types ────────────────────────────────────────
 
-#[allow(dead_code)] // TOML schema: fields are public config surface; some not yet wired.
+#[allow(
+    dead_code,
+    reason = "TOML schema; `scheduler` wired when firmware-AADL scheduler thread lands, `alerts` wired by Track D (wohl-alert Verus dedup)"
+)]
 #[derive(Deserialize, Clone, Debug)]
 struct HubConfig {
     scheduler: Option<SchedulerConfig>,
@@ -24,13 +27,19 @@ struct HubConfig {
     alerts: Option<AlertConfig>,
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "wired when scheduler thread (spar/wohl_firmware.aadl) lands"
+)]
 #[derive(Deserialize, Clone, Debug)]
 struct SchedulerConfig {
     tick_rate_ms: Option<u32>,
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "TOML schema; `name` is for CLI display, remaining fields are mostly already consumed"
+)]
 #[derive(Deserialize, Clone, Debug)]
 struct ZoneConfig {
     id: u32,
@@ -46,7 +55,7 @@ struct ZoneConfig {
     power_spike: Option<u32>,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "TOML schema; `name` is for CLI display")]
 #[derive(Deserialize, Clone, Debug)]
 struct ContactConfigToml {
     id: u32,
@@ -57,7 +66,10 @@ struct ContactConfigToml {
     night_end: Option<u8>,
 }
 
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "Track D: rate_limit_per_minute and dedup_cooldown_sec will be applied to AlertDispatcher when the Verus dedup invariant work lands"
+)]
 #[derive(Deserialize, Clone, Debug)]
 struct AlertConfig {
     rate_limit_per_minute: Option<u32>,
@@ -126,7 +138,10 @@ const ALERT_DOOR_OPEN_TOO_LONG: u8 = 12;
 const ALERT_DOOR_NIGHT: u8 = 13;
 const ALERT_OVERCONSUMPTION: u8 = 14;
 const ALERT_POWER_SPIKE: u8 = 15;
-#[allow(dead_code)] // reserved alert ID for upcoming health-monitor work
+#[allow(
+    dead_code,
+    reason = "reserved alert ID slot for upcoming health-monitor work; deleting would collapse the audit-trail numbering"
+)]
 const ALERT_HEALTH_MISS: u8 = 16;
 
 // ── Monitor app IDs for health tracking ────────────────────────
