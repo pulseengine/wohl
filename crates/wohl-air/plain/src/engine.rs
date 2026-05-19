@@ -117,7 +117,7 @@ impl AirMonitor {
             return false;
         }
 
-        let base = config.zone_id * 6;
+        let base = config.zone_id.saturating_mul(6);
         let thresholds = [
             config.co2_warn,
             config.co2_critical,
@@ -148,7 +148,7 @@ impl AirMonitor {
             alerts: [AirAlert::empty(); MAX_ALERTS_PER_READING],
             alert_count: 0,
         };
-        let base = reading.zone_id * 6;
+        let base = reading.zone_id.saturating_mul(6);
         let values = [
             reading.co2_ppm,
             reading.co2_ppm,

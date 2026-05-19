@@ -102,11 +102,14 @@ impl TempAlert {
 // Watchpoint ID encoding: zone_id * 2 + offset
 // offset 0 = freeze watchpoint (LessOrEqual)
 // offset 1 = overheat watchpoint (GreaterOrEqual)
+// Uses saturating_mul/add so adversarial u32 zone_ids cannot panic on overflow.
+// Real zone_ids are bounded by MAX_ZONES (32), so saturation only affects
+// pathological inputs and never collides in practice.
 fn freeze_wp_id(zone_id: u32) -> u32 {
-    zone_id * 2
+    zone_id.saturating_mul(2)
 }
 fn overheat_wp_id(zone_id: u32) -> u32 {
-    zone_id * 2 + 1
+    zone_id.saturating_mul(2).saturating_add(1)
 }
 
 impl Default for TemperatureMonitor {
