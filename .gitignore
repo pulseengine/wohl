@@ -14,3 +14,9 @@ bazel-*
 # OS
 .DS_Store
 Thumbs.db
+
+# Verus produces a binary next to each input file when invoked as
+# `verus proofs/verus/<name>.rs` (default `--compile` behaviour).
+/alert_dedup
+/proofs/verus/alert_dedup
+
