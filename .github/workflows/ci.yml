@@ -32,9 +32,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: wohl
-      - name: cargo fmt --check
+      - name: cargo fmt --check (per workspace member)
         working-directory: wohl
-        run: cargo fmt --all --check
+        # `cargo fmt --all` reaches into local path-dependencies and would
+        # fail on unrelated drift in sibling repos (relay/, rivet/). Run
+        # per-package so the gate stays scoped to this workspace's members.
+        run: |
+          for c in wohl-leak wohl-temp wohl-air wohl-door wohl-power wohl-alert wohl-hub wohl-integration; do
+            echo "::group::cargo fmt -p $c"
+            cargo fmt -p "$c" --check
+            echo "::endgroup::"
+          done
       - name: cargo clippy
         working-directory: wohl
         run: cargo clippy --workspace --all-targets -- -D warnings
