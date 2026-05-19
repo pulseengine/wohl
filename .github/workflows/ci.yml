@@ -79,9 +79,9 @@ jobs:
         with:
           repository: pulseengine/relay
           path: relay
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.85.0"
+      # Kani-verifier (the installer) needs newer Rust than our MSRV.
+      # Kani itself uses an internal nightly for the proofs.
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: wohl
@@ -128,7 +128,10 @@ jobs:
           workspaces: wohl
           key: fuzz
       - name: Install cargo-fuzz
-        run: cargo install --locked cargo-fuzz
+        # NOT --locked: cargo-fuzz 0.13.1's lockfile pins rustix 0.36.5 which
+        # uses unstable rustc_attrs that current nightly no longer accepts.
+        # Unlocked resolution picks newer rustix that compiles cleanly.
+        run: cargo install cargo-fuzz
       - name: Fuzz fuzz_leak
         working-directory: wohl
         run: cargo fuzz run fuzz_leak -- -max_total_time=60
@@ -147,9 +150,8 @@ jobs:
         with:
           repository: pulseengine/rivet
           path: rivet
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.85.0"
+      # rivet-cli's deps need Rust 1.89+; we don't care about MSRV for tooling.
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rivet
