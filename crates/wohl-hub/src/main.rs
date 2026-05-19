@@ -13,6 +13,10 @@ use serde::{Deserialize, Serialize};
 
 // ── Configuration types ────────────────────────────────────────
 
+#[allow(
+    dead_code,
+    reason = "TOML schema; `scheduler` wired when firmware-AADL scheduler thread lands, `alerts` wired by Track D (wohl-alert Verus dedup)"
+)]
 #[derive(Deserialize, Clone, Debug)]
 struct HubConfig {
     scheduler: Option<SchedulerConfig>,
@@ -23,11 +27,19 @@ struct HubConfig {
     alerts: Option<AlertConfig>,
 }
 
+#[allow(
+    dead_code,
+    reason = "wired when scheduler thread (spar/wohl_system.aadl:207) lands"
+)]
 #[derive(Deserialize, Clone, Debug)]
 struct SchedulerConfig {
     tick_rate_ms: Option<u32>,
 }
 
+#[allow(
+    dead_code,
+    reason = "TOML schema; `name` is for CLI display, remaining fields are mostly already consumed"
+)]
 #[derive(Deserialize, Clone, Debug)]
 struct ZoneConfig {
     id: u32,
@@ -43,6 +55,7 @@ struct ZoneConfig {
     power_spike: Option<u32>,
 }
 
+#[allow(dead_code, reason = "TOML schema; `name` is for CLI display")]
 #[derive(Deserialize, Clone, Debug)]
 struct ContactConfigToml {
     id: u32,
@@ -53,6 +66,10 @@ struct ContactConfigToml {
     night_end: Option<u8>,
 }
 
+#[allow(
+    dead_code,
+    reason = "Track D: rate_limit_per_minute and dedup_cooldown_sec will be applied to AlertDispatcher when the Verus dedup invariant work lands"
+)]
 #[derive(Deserialize, Clone, Debug)]
 struct AlertConfig {
     rate_limit_per_minute: Option<u32>,
@@ -69,7 +86,13 @@ enum SensorEvent {
     #[serde(rename = "water")]
     Water { zone: u32, wet: bool, time: u64 },
     #[serde(rename = "air")]
-    Air { zone: u32, co2: u32, pm25: Option<u32>, voc: Option<u32>, time: u64 },
+    Air {
+        zone: u32,
+        co2: u32,
+        pm25: Option<u32>,
+        voc: Option<u32>,
+        time: u64,
+    },
     #[serde(rename = "contact")]
     Contact { id: u32, open: bool, time: u64 },
     #[serde(rename = "power")]
@@ -115,6 +138,10 @@ const ALERT_DOOR_OPEN_TOO_LONG: u8 = 12;
 const ALERT_DOOR_NIGHT: u8 = 13;
 const ALERT_OVERCONSUMPTION: u8 = 14;
 const ALERT_POWER_SPIKE: u8 = 15;
+#[allow(
+    dead_code,
+    reason = "reserved alert ID slot for upcoming health-monitor work; deleting would collapse the audit-trail numbering"
+)]
 const ALERT_HEALTH_MISS: u8 = 16;
 
 // ── Monitor app IDs for health tracking ────────────────────────
@@ -258,23 +285,29 @@ impl WohlHub {
 
             // Track contact -> zone mapping
             if (self.contact_zone_count as usize) < self.contact_zones.len() {
-                self.contact_zones[self.contact_zone_count as usize] =
-                    (contact.id, contact.zone);
+                self.contact_zones[self.contact_zone_count as usize] = (contact.id, contact.zone);
                 self.contact_zone_count += 1;
             }
 
             // Subscribe door alert types for the contact's zone
-            self.alert.subscribe(contact.zone, ALERT_DOOR_OPEN_TOO_LONG, 1);
+            self.alert
+                .subscribe(contact.zone, ALERT_DOOR_OPEN_TOO_LONG, 1);
             self.alert.subscribe(contact.zone, ALERT_DOOR_NIGHT, 1);
         }
 
         // Register health monitors for each app
-        self.health.register_app(APP_TEMP, 3, relay_hs::engine::HsAction::Event);
-        self.health.register_app(APP_LEAK, 3, relay_hs::engine::HsAction::Event);
-        self.health.register_app(APP_AIR, 3, relay_hs::engine::HsAction::Event);
-        self.health.register_app(APP_DOOR, 3, relay_hs::engine::HsAction::Event);
-        self.health.register_app(APP_POWER, 3, relay_hs::engine::HsAction::Event);
-        self.health.register_app(APP_SCHEDULER, 3, relay_hs::engine::HsAction::Event);
+        self.health
+            .register_app(APP_TEMP, 3, relay_hs::engine::HsAction::Event);
+        self.health
+            .register_app(APP_LEAK, 3, relay_hs::engine::HsAction::Event);
+        self.health
+            .register_app(APP_AIR, 3, relay_hs::engine::HsAction::Event);
+        self.health
+            .register_app(APP_DOOR, 3, relay_hs::engine::HsAction::Event);
+        self.health
+            .register_app(APP_POWER, 3, relay_hs::engine::HsAction::Event);
+        self.health
+            .register_app(APP_SCHEDULER, 3, relay_hs::engine::HsAction::Event);
 
         // Set up scheduler slot: minor_frame=0, major_frame=0 (every tick)
         // Channel 1 = health check, Channel 2 = door timeout check
@@ -309,15 +342,6 @@ impl WohlHub {
         self.checksummer.register_region(1, config_crc);
     }
 
-    fn contact_zone(&self, contact_id: u32) -> u32 {
-        for i in 0..self.contact_zone_count as usize {
-            if self.contact_zones[i].0 == contact_id {
-                return self.contact_zones[i].1;
-            }
-        }
-        0
-    }
-
     fn try_dispatch(&mut self, zone_id: u32, alert_type: u8, time: u64) -> bool {
         let result = self.alert.process_alert(zone_id, alert_type, time);
         result.action == wohl_alert::engine::DispatchAction::Send
@@ -329,7 +353,8 @@ impl WohlHub {
         match event {
             SensorEvent::Temp { zone, value, time } => {
                 self.monitor_counters[0] += 1;
-                self.health.update_counter(APP_TEMP, self.monitor_counters[0]);
+                self.health
+                    .update_counter(APP_TEMP, self.monitor_counters[0]);
 
                 let result = self.temp.process_reading(zone, value, time);
                 for i in 0..result.alert_count as usize {
@@ -337,8 +362,12 @@ impl WohlHub {
                     let (alert_name, alert_code) = match a.alert_type {
                         wohl_temp::engine::TempAlertType::Freeze => ("freeze", ALERT_FREEZE),
                         wohl_temp::engine::TempAlertType::Overheat => ("overheat", ALERT_OVERHEAT),
-                        wohl_temp::engine::TempAlertType::RapidDrop => ("rapid_drop", ALERT_RAPID_DROP),
-                        wohl_temp::engine::TempAlertType::RapidRise => ("rapid_rise", ALERT_RAPID_RISE),
+                        wohl_temp::engine::TempAlertType::RapidDrop => {
+                            ("rapid_drop", ALERT_RAPID_DROP)
+                        }
+                        wohl_temp::engine::TempAlertType::RapidRise => {
+                            ("rapid_rise", ALERT_RAPID_RISE)
+                        }
                     };
                     if self.try_dispatch(zone, alert_code, time) {
                         alerts.push(AlertOutput {
@@ -357,28 +386,36 @@ impl WohlHub {
 
             SensorEvent::Water { zone, wet, time } => {
                 self.monitor_counters[1] += 1;
-                self.health.update_counter(APP_LEAK, self.monitor_counters[1]);
+                self.health
+                    .update_counter(APP_LEAK, self.monitor_counters[1]);
 
                 let action = self.leak.process_event(zone, wet, time);
-                if action == wohl_leak::engine::LeakAction::NewLeak {
-                    if self.try_dispatch(zone, ALERT_WATER_LEAK, time) {
-                        alerts.push(AlertOutput {
-                            alert: "water_leak".to_string(),
-                            zone: Some(zone),
-                            circuit: None,
-                            contact: None,
-                            value: None,
-                            threshold: None,
-                            duration: None,
-                            time,
-                        });
-                    }
+                if action == wohl_leak::engine::LeakAction::NewLeak
+                    && self.try_dispatch(zone, ALERT_WATER_LEAK, time)
+                {
+                    alerts.push(AlertOutput {
+                        alert: "water_leak".to_string(),
+                        zone: Some(zone),
+                        circuit: None,
+                        contact: None,
+                        value: None,
+                        threshold: None,
+                        duration: None,
+                        time,
+                    });
                 }
             }
 
-            SensorEvent::Air { zone, co2, pm25, voc, time } => {
+            SensorEvent::Air {
+                zone,
+                co2,
+                pm25,
+                voc,
+                time,
+            } => {
                 self.monitor_counters[2] += 1;
-                self.health.update_counter(APP_AIR, self.monitor_counters[2]);
+                self.health
+                    .update_counter(APP_AIR, self.monitor_counters[2]);
 
                 let reading = wohl_air::engine::AirReading {
                     zone_id: zone,
@@ -391,12 +428,24 @@ impl WohlHub {
                 for i in 0..result.alert_count as usize {
                     let a = &result.alerts[i];
                     let (alert_name, alert_code) = match a.alert_type {
-                        wohl_air::engine::AirAlertType::Co2Warning => ("co2_warning", ALERT_CO2_WARNING),
-                        wohl_air::engine::AirAlertType::Co2Critical => ("co2_critical", ALERT_CO2_CRITICAL),
-                        wohl_air::engine::AirAlertType::Pm25Warning => ("pm25_warning", ALERT_PM25_WARNING),
-                        wohl_air::engine::AirAlertType::Pm25Critical => ("pm25_critical", ALERT_PM25_CRITICAL),
-                        wohl_air::engine::AirAlertType::VocWarning => ("voc_warning", ALERT_VOC_WARNING),
-                        wohl_air::engine::AirAlertType::VocCritical => ("voc_critical", ALERT_VOC_CRITICAL),
+                        wohl_air::engine::AirAlertType::Co2Warning => {
+                            ("co2_warning", ALERT_CO2_WARNING)
+                        }
+                        wohl_air::engine::AirAlertType::Co2Critical => {
+                            ("co2_critical", ALERT_CO2_CRITICAL)
+                        }
+                        wohl_air::engine::AirAlertType::Pm25Warning => {
+                            ("pm25_warning", ALERT_PM25_WARNING)
+                        }
+                        wohl_air::engine::AirAlertType::Pm25Critical => {
+                            ("pm25_critical", ALERT_PM25_CRITICAL)
+                        }
+                        wohl_air::engine::AirAlertType::VocWarning => {
+                            ("voc_warning", ALERT_VOC_WARNING)
+                        }
+                        wohl_air::engine::AirAlertType::VocCritical => {
+                            ("voc_critical", ALERT_VOC_CRITICAL)
+                        }
                     };
                     if self.try_dispatch(zone, alert_code, time) {
                         alerts.push(AlertOutput {
@@ -415,7 +464,8 @@ impl WohlHub {
 
             SensorEvent::Contact { id, open, time } => {
                 self.monitor_counters[3] += 1;
-                self.health.update_counter(APP_DOOR, self.monitor_counters[3]);
+                self.health
+                    .update_counter(APP_DOOR, self.monitor_counters[3]);
 
                 let result = self.door.process_event(id, open, time);
                 for i in 0..result.alert_count as usize {
@@ -444,9 +494,14 @@ impl WohlHub {
                 }
             }
 
-            SensorEvent::Power { circuit, watts, time } => {
+            SensorEvent::Power {
+                circuit,
+                watts,
+                time,
+            } => {
                 self.monitor_counters[4] += 1;
-                self.health.update_counter(APP_POWER, self.monitor_counters[4]);
+                self.health
+                    .update_counter(APP_POWER, self.monitor_counters[4]);
 
                 let result = self.power.process_reading(circuit, watts, time);
                 for i in 0..result.alert_count as usize {
@@ -480,7 +535,8 @@ impl WohlHub {
 
             SensorEvent::Tick { time } => {
                 self.monitor_counters[5] += 1;
-                self.health.update_counter(APP_SCHEDULER, self.monitor_counters[5]);
+                self.health
+                    .update_counter(APP_SCHEDULER, self.monitor_counters[5]);
                 self.last_tick = time;
 
                 // Compute minor frame from time (wrapping tick counter)
@@ -515,11 +571,7 @@ impl WohlHub {
                             for j in 0..door_result.alert_count as usize {
                                 let da = &door_result.alerts[j];
                                 let zone = da.zone_id;
-                                if self.try_dispatch(
-                                    zone,
-                                    ALERT_DOOR_OPEN_TOO_LONG,
-                                    time,
-                                ) {
+                                if self.try_dispatch(zone, ALERT_DOOR_OPEN_TOO_LONG, time) {
                                     alerts.push(AlertOutput {
                                         alert: "door_open_too_long".to_string(),
                                         zone: Some(zone),
@@ -627,6 +679,7 @@ fn default_config() -> HubConfig {
     }
 }
 
+#[cfg(test)]
 fn config_from_str(s: &str) -> Result<HubConfig, toml::de::Error> {
     toml::from_str(s)
 }
@@ -977,10 +1030,7 @@ dedup_cooldown_sec = 60
             time: 1004,
         };
         let alerts = hub.process_event(event);
-        assert!(
-            alerts.is_empty(),
-            "normal power should produce no alert"
-        );
+        assert!(alerts.is_empty(), "normal power should produce no alert");
     }
 
     #[test]
@@ -1007,9 +1057,7 @@ dedup_cooldown_sec = 60
         // Actually: minor = (time / 1000) % 60. For minor=0, time must be
         // a multiple of 60000. Use time=360000: (360000/1000)%60 = 360%60 = 0.
         // Duration since door open: 360000 - 43200 = 316800 > 300 (the max_open_sec).
-        let alerts = hub.process_event(SensorEvent::Tick {
-            time: 360000,
-        });
+        let alerts = hub.process_event(SensorEvent::Tick { time: 360000 });
 
         // The tick drives scheduler, which checks door timeouts
         let door_alerts: Vec<_> = alerts
@@ -1128,10 +1176,7 @@ dedup_cooldown_sec = 60
         let alerts = hub.process_event(SensorEvent::Tick { time: 1000 });
 
         // Health check should not produce alerts since monitors are active
-        let health_alerts: Vec<_> = alerts
-            .iter()
-            .filter(|a| a.alert == "health_miss")
-            .collect();
+        let health_alerts: Vec<_> = alerts.iter().filter(|a| a.alert == "health_miss").collect();
         // Some monitors (air, power, door) were not exercised,
         // but they start at 0/0 so first check increments miss counter.
         // With max_miss=3 they should not alert on first check.
@@ -1191,26 +1236,63 @@ dedup_cooldown_sec = 60
     fn test_sensor_event_parsing() {
         let temp: SensorEvent =
             serde_json::from_str(r#"{"type":"temp","zone":1,"value":2150,"time":1000}"#).unwrap();
-        assert!(matches!(temp, SensorEvent::Temp { zone: 1, value: 2150, time: 1000 }));
+        assert!(matches!(
+            temp,
+            SensorEvent::Temp {
+                zone: 1,
+                value: 2150,
+                time: 1000
+            }
+        ));
 
         let water: SensorEvent =
             serde_json::from_str(r#"{"type":"water","zone":2,"wet":true,"time":1001}"#).unwrap();
-        assert!(matches!(water, SensorEvent::Water { zone: 2, wet: true, time: 1001 }));
+        assert!(matches!(
+            water,
+            SensorEvent::Water {
+                zone: 2,
+                wet: true,
+                time: 1001
+            }
+        ));
 
-        let air: SensorEvent =
-            serde_json::from_str(r#"{"type":"air","zone":1,"co2":1200,"pm25":50,"voc":30,"time":1002}"#).unwrap();
-        assert!(matches!(air, SensorEvent::Air { zone: 1, co2: 1200, .. }));
+        let air: SensorEvent = serde_json::from_str(
+            r#"{"type":"air","zone":1,"co2":1200,"pm25":50,"voc":30,"time":1002}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            air,
+            SensorEvent::Air {
+                zone: 1,
+                co2: 1200,
+                ..
+            }
+        ));
 
         let contact: SensorEvent =
             serde_json::from_str(r#"{"type":"contact","id":1,"open":true,"time":1003}"#).unwrap();
-        assert!(matches!(contact, SensorEvent::Contact { id: 1, open: true, time: 1003 }));
+        assert!(matches!(
+            contact,
+            SensorEvent::Contact {
+                id: 1,
+                open: true,
+                time: 1003
+            }
+        ));
 
         let power: SensorEvent =
-            serde_json::from_str(r#"{"type":"power","circuit":1,"watts":1500,"time":1004}"#).unwrap();
-        assert!(matches!(power, SensorEvent::Power { circuit: 1, watts: 1500, time: 1004 }));
+            serde_json::from_str(r#"{"type":"power","circuit":1,"watts":1500,"time":1004}"#)
+                .unwrap();
+        assert!(matches!(
+            power,
+            SensorEvent::Power {
+                circuit: 1,
+                watts: 1500,
+                time: 1004
+            }
+        ));
 
-        let tick: SensorEvent =
-            serde_json::from_str(r#"{"type":"tick","time":2000}"#).unwrap();
+        let tick: SensorEvent = serde_json::from_str(r#"{"type":"tick","time":2000}"#).unwrap();
         assert!(matches!(tick, SensorEvent::Tick { time: 2000 }));
     }
 
@@ -1225,7 +1307,14 @@ dedup_cooldown_sec = 60
             value: -100,
         };
         let ev = packet_to_event(&pkt, 500).unwrap();
-        assert!(matches!(ev, SensorEvent::Temp { zone: 1, value: -100, time: 500 }));
+        assert!(matches!(
+            ev,
+            SensorEvent::Temp {
+                zone: 1,
+                value: -100,
+                time: 500
+            }
+        ));
     }
 
     #[test]
@@ -1239,7 +1328,14 @@ dedup_cooldown_sec = 60
             value: 1,
         };
         let ev = packet_to_event(&pkt, 900).unwrap();
-        assert!(matches!(ev, SensorEvent::Water { zone: 2, wet: true, time: 900 }));
+        assert!(matches!(
+            ev,
+            SensorEvent::Water {
+                zone: 2,
+                wet: true,
+                time: 900
+            }
+        ));
     }
 
     #[test]
@@ -1253,7 +1349,14 @@ dedup_cooldown_sec = 60
             value: 1,
         };
         let ev = packet_to_event(&pkt, 0).unwrap();
-        assert!(matches!(ev, SensorEvent::Contact { id: 42, open: true, .. }));
+        assert!(matches!(
+            ev,
+            SensorEvent::Contact {
+                id: 42,
+                open: true,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -1267,7 +1370,14 @@ dedup_cooldown_sec = 60
             value: 15230, // 1523.0W × 10
         };
         let ev = packet_to_event(&pkt, 0).unwrap();
-        assert!(matches!(ev, SensorEvent::Power { circuit: 3, watts: 1523, .. }));
+        assert!(matches!(
+            ev,
+            SensorEvent::Power {
+                circuit: 3,
+                watts: 1523,
+                ..
+            }
+        ));
     }
 
     #[test]

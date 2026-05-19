@@ -19,3 +19,6 @@ wohl-air.workspace = true
 wohl-door.workspace = true
 wohl-power.workspace = true
 wohl-alert.workspace = true
+
+[lints]
+workspace = true

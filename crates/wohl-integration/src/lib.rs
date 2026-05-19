@@ -5,12 +5,12 @@
 
 #[cfg(test)]
 mod tests {
-    use wohl_temp::engine::{TemperatureMonitor, ZoneConfig as TempZoneConfig, TempAlertType};
-    use wohl_leak::engine::{LeakDetector, LeakAction};
-    use wohl_air::engine::{AirMonitor, AirConfig, AirReading, AirAlertType};
-    use wohl_door::engine::{DoorWatch, ContactConfig, DoorAlertType};
-    use wohl_power::engine::{PowerMonitor, CircuitConfig, PowerAlertType};
+    use wohl_air::engine::{AirAlertType, AirConfig, AirMonitor, AirReading};
     use wohl_alert::engine::{AlertDispatcher, DispatchAction};
+    use wohl_door::engine::{ContactConfig, DoorAlertType, DoorWatch};
+    use wohl_leak::engine::{LeakAction, LeakDetector};
+    use wohl_power::engine::{CircuitConfig, PowerAlertType, PowerMonitor};
+    use wohl_temp::engine::{TempAlertType, TemperatureMonitor, ZoneConfig as TempZoneConfig};
 
     // ── Alert type encoding constants ──
     // These map component alert types to u8 values for the dispatcher.
@@ -43,9 +43,9 @@ mod tests {
             let mut temp = TemperatureMonitor::new();
             temp.register_zone(TempZoneConfig {
                 zone_id: 1,
-                freeze_threshold: 0,        // 0.00 C
-                overheat_threshold: 4000,    // 40.00 C
-                rate_threshold: 500,         // 5.00 C/reading
+                freeze_threshold: 0,      // 0.00 C
+                overheat_threshold: 4000, // 40.00 C
+                rate_threshold: 500,      // 5.00 C/reading
                 enabled: true,
             });
 
@@ -87,16 +87,32 @@ mod tests {
             let mut dispatcher = AlertDispatcher::new();
             // Subscribe all alert types for zone 1 and zone 2
             for &at in &[
-                ALERT_FREEZE, ALERT_OVERHEAT, ALERT_RAPID_DROP, ALERT_RAPID_RISE,
-                ALERT_LEAK, ALERT_CO2_WARN, ALERT_CO2_CRIT, ALERT_PM25_WARN,
-                ALERT_VOC_WARN, ALERT_DOOR_NIGHT, ALERT_DOOR_LONG,
-                ALERT_POWER_OVER, ALERT_POWER_SPIKE,
+                ALERT_FREEZE,
+                ALERT_OVERHEAT,
+                ALERT_RAPID_DROP,
+                ALERT_RAPID_RISE,
+                ALERT_LEAK,
+                ALERT_CO2_WARN,
+                ALERT_CO2_CRIT,
+                ALERT_PM25_WARN,
+                ALERT_VOC_WARN,
+                ALERT_DOOR_NIGHT,
+                ALERT_DOOR_LONG,
+                ALERT_POWER_OVER,
+                ALERT_POWER_SPIKE,
             ] {
                 dispatcher.subscribe(1, at, 1);
                 dispatcher.subscribe(2, at, 1);
             }
 
-            Pipeline { temp, leak, air, door, power, dispatcher }
+            Pipeline {
+                temp,
+                leak,
+                air,
+                door,
+                power,
+                dispatcher,
+            }
         }
     }
 
@@ -118,7 +134,11 @@ mod tests {
 
         // Normal air quality
         let air_result = p.air.process_reading(AirReading {
-            zone_id: 1, co2_ppm: 400, pm25: 50, voc_index: 30, time: 1000,
+            zone_id: 1,
+            co2_ppm: 400,
+            pm25: 50,
+            voc_index: 30,
+            time: 1000,
         });
         assert_eq!(air_result.alert_count, 0);
 
@@ -190,7 +210,11 @@ mod tests {
 
         // High CO2 (1200 ppm, above 1000 warn threshold)
         let air_result = p.air.process_reading(AirReading {
-            zone_id: 1, co2_ppm: 1200, pm25: 50, voc_index: 30, time: 2000,
+            zone_id: 1,
+            co2_ppm: 1200,
+            pm25: 50,
+            voc_index: 30,
+            time: 2000,
         });
         assert!(air_result.alert_count >= 1);
         assert_eq!(air_result.alerts[0].alert_type, AirAlertType::Co2Warning);
@@ -226,8 +250,13 @@ mod tests {
 
         for (zone, atype) in alert_combos.iter() {
             let r = p.dispatcher.process_alert(*zone, *atype, base_time);
-            assert_eq!(r.action, DispatchAction::Send,
-                "alert ({}, {}) should have been sent", zone, atype);
+            assert_eq!(
+                r.action,
+                DispatchAction::Send,
+                "alert ({}, {}) should have been sent",
+                zone,
+                atype
+            );
         }
 
         // 11th alert in same minute -> rate limited
@@ -235,7 +264,9 @@ mod tests {
         assert_eq!(r.action, DispatchAction::RateLimited);
 
         // After the minute window resets, alerts flow again
-        let r = p.dispatcher.process_alert(1, ALERT_POWER_OVER, base_time + 61);
+        let r = p
+            .dispatcher
+            .process_alert(1, ALERT_POWER_OVER, base_time + 61);
         assert_eq!(r.action, DispatchAction::Send);
     }
 
@@ -251,7 +282,10 @@ mod tests {
         // 23:00 = 82800 seconds from midnight
         let door_result = p.door.process_event(1, true, 82800);
         assert_eq!(door_result.alert_count, 1);
-        assert_eq!(door_result.alerts[0].alert_type, DoorAlertType::OpenedAtNight);
+        assert_eq!(
+            door_result.alerts[0].alert_type,
+            DoorAlertType::OpenedAtNight
+        );
 
         // Route through dispatcher
         let dispatch = p.dispatcher.process_alert(
@@ -285,8 +319,11 @@ mod tests {
         // Overheat still subscribed — use a fresh monitor to avoid rate-of-change
         let mut temp2 = TemperatureMonitor::new();
         temp2.register_zone(TempZoneConfig {
-            zone_id: 1, freeze_threshold: 0, overheat_threshold: 4000,
-            rate_threshold: 500, enabled: true,
+            zone_id: 1,
+            freeze_threshold: 0,
+            overheat_threshold: 4000,
+            rate_threshold: 500,
+            enabled: true,
         });
         let temp_result2 = temp2.process_reading(1, 4500, 3100);
         assert!(temp_result2.alert_count >= 1);
@@ -314,7 +351,11 @@ mod tests {
 
         // High CO2
         let air_r = p.air.process_reading(AirReading {
-            zone_id: 1, co2_ppm: 2500, pm25: 50, voc_index: 30, time,
+            zone_id: 1,
+            co2_ppm: 2500,
+            pm25: 50,
+            voc_index: 30,
+            time,
         });
         assert!(air_r.alert_count >= 1);
 
@@ -408,11 +449,9 @@ mod tests {
         assert_eq!(timeout_r.alerts[0].alert_type, DoorAlertType::OpenTooLong);
 
         // Route through dispatcher
-        let dispatch = p.dispatcher.process_alert(
-            timeout_r.alerts[0].zone_id,
-            ALERT_DOOR_LONG,
-            43200 + 400,
-        );
+        let dispatch =
+            p.dispatcher
+                .process_alert(timeout_r.alerts[0].zone_id, ALERT_DOOR_LONG, 43200 + 400);
         assert_eq!(dispatch.action, DispatchAction::Send);
     }
 
@@ -448,7 +487,7 @@ mod tests {
                     DispatchAction::Send => total_alerts += 1,
                     DispatchAction::Deduplicated => total_dedups += 1,
                     DispatchAction::RateLimited => _total_rate_limited += 1,
-                    DispatchAction::NotSubscribed => {},
+                    DispatchAction::NotSubscribed => {}
                 }
             }
         }
@@ -499,7 +538,11 @@ mod tests {
 
         // t=1300: CO2 rises
         let r = p.air.process_reading(AirReading {
-            zone_id: 1, co2_ppm: 1500, pm25: 50, voc_index: 30, time: 1300,
+            zone_id: 1,
+            co2_ppm: 1500,
+            pm25: 50,
+            voc_index: 30,
+            time: 1300,
         });
         assert!(r.alert_count >= 1);
         let d = p.dispatcher.process_alert(1, ALERT_CO2_WARN, 1300);

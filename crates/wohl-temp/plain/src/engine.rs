@@ -7,9 +7,7 @@
 //! Wohl provides CONFIGURATION + DOMAIN GLUE.
 //! Relay provides VERIFIED THRESHOLD ENGINE.
 
-use relay_lc::engine::{
-    ComparisonOp, SensorReading, Watchpoint, WatchpointTable,
-};
+use relay_lc::engine::{ComparisonOp, SensorReading, Watchpoint, WatchpointTable};
 
 pub const MAX_ZONES: usize = 32;
 pub const MAX_ALERTS_PER_READING: usize = 4;
@@ -18,9 +16,9 @@ pub const MAX_ALERTS_PER_READING: usize = 4;
 #[derive(Clone, Copy)]
 pub struct ZoneConfig {
     pub zone_id: u32,
-    pub freeze_threshold: i32,    // centidegrees (e.g., 0 = 0.00°C)
-    pub overheat_threshold: i32,  // centidegrees (e.g., 4000 = 40.00°C)
-    pub rate_threshold: i32,      // max change per reading in centidegrees
+    pub freeze_threshold: i32,   // centidegrees (e.g., 0 = 0.00°C)
+    pub overheat_threshold: i32, // centidegrees (e.g., 4000 = 40.00°C)
+    pub rate_threshold: i32,     // max change per reading in centidegrees
     pub enabled: bool,
 }
 
@@ -34,7 +32,12 @@ pub struct ZoneState {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum TempAlertType { Freeze, Overheat, RapidDrop, RapidRise }
+pub enum TempAlertType {
+    Freeze,
+    Overheat,
+    RapidDrop,
+    RapidRise,
+}
 
 #[derive(Clone, Copy)]
 pub struct TempAlert {
@@ -63,27 +66,54 @@ pub struct TemperatureMonitor {
 
 impl ZoneConfig {
     pub const fn empty() -> Self {
-        ZoneConfig { zone_id: 0, freeze_threshold: 0, overheat_threshold: 0, rate_threshold: 0, enabled: false }
+        ZoneConfig {
+            zone_id: 0,
+            freeze_threshold: 0,
+            overheat_threshold: 0,
+            rate_threshold: 0,
+            enabled: false,
+        }
     }
 }
 
 impl ZoneState {
     pub const fn empty() -> Self {
-        ZoneState { zone_id: 0, last_value: 0, last_time: 0, active: false }
+        ZoneState {
+            zone_id: 0,
+            last_value: 0,
+            last_time: 0,
+            active: false,
+        }
     }
 }
 
 impl TempAlert {
     pub const fn empty() -> Self {
-        TempAlert { zone_id: 0, alert_type: TempAlertType::Freeze, value: 0, threshold: 0, time: 0 }
+        TempAlert {
+            zone_id: 0,
+            alert_type: TempAlertType::Freeze,
+            value: 0,
+            threshold: 0,
+            time: 0,
+        }
     }
 }
 
 // Watchpoint ID encoding: zone_id * 2 + offset
 // offset 0 = freeze watchpoint (LessOrEqual)
 // offset 1 = overheat watchpoint (GreaterOrEqual)
-fn freeze_wp_id(zone_id: u32) -> u32 { zone_id * 2 }
-fn overheat_wp_id(zone_id: u32) -> u32 { zone_id * 2 + 1 }
+fn freeze_wp_id(zone_id: u32) -> u32 {
+    zone_id * 2
+}
+fn overheat_wp_id(zone_id: u32) -> u32 {
+    zone_id * 2 + 1
+}
+
+impl Default for TemperatureMonitor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl TemperatureMonitor {
     pub fn new() -> Self {
@@ -97,12 +127,17 @@ impl TemperatureMonitor {
 
     /// Register a zone. Creates relay-lc watchpoints for freeze and overheat.
     pub fn register_zone(&mut self, config: ZoneConfig) -> bool {
-        if self.zone_count as usize >= MAX_ZONES { return false; }
+        if self.zone_count as usize >= MAX_ZONES {
+            return false;
+        }
 
         let idx = self.zone_count as usize;
         self.configs[idx] = config;
         self.states[idx] = ZoneState {
-            zone_id: config.zone_id, last_value: 0, last_time: 0, active: true,
+            zone_id: config.zone_id,
+            last_value: 0,
+            last_time: 0,
+            active: true,
         };
 
         // Create relay-lc watchpoints — VERIFIED threshold evaluation
@@ -123,7 +158,7 @@ impl TemperatureMonitor {
             current_count: 0,
         });
 
-        self.zone_count = self.zone_count + 1;
+        self.zone_count += 1;
         true
     }
 
@@ -143,10 +178,14 @@ impl TemperatureMonitor {
             sensor_id: freeze_wp_id(zone_id),
             value: value as i64,
         });
-        if freeze_result.violation_count > 0 && (res.alert_count as usize) < MAX_ALERTS_PER_READING {
+        if freeze_result.violation_count > 0 && (res.alert_count as usize) < MAX_ALERTS_PER_READING
+        {
             res.alerts[res.alert_count as usize] = TempAlert {
-                zone_id, alert_type: TempAlertType::Freeze, value,
-                threshold: freeze_result.violations[0].threshold as i32, time,
+                zone_id,
+                alert_type: TempAlertType::Freeze,
+                value,
+                threshold: freeze_result.violations[0].threshold as i32,
+                time,
             };
             res.alert_count += 1;
         }
@@ -156,10 +195,15 @@ impl TemperatureMonitor {
             sensor_id: overheat_wp_id(zone_id),
             value: value as i64,
         });
-        if overheat_result.violation_count > 0 && (res.alert_count as usize) < MAX_ALERTS_PER_READING {
+        if overheat_result.violation_count > 0
+            && (res.alert_count as usize) < MAX_ALERTS_PER_READING
+        {
             res.alerts[res.alert_count as usize] = TempAlert {
-                zone_id, alert_type: TempAlertType::Overheat, value,
-                threshold: overheat_result.violations[0].threshold as i32, time,
+                zone_id,
+                alert_type: TempAlertType::Overheat,
+                value,
+                threshold: overheat_result.violations[0].threshold as i32,
+                time,
             };
             res.alert_count += 1;
         }
@@ -170,21 +214,36 @@ impl TemperatureMonitor {
         let mut i: u32 = 0;
         while i < count {
             let idx = i as usize;
-            if self.states[idx].active && self.configs[idx].zone_id == zone_id && self.configs[idx].enabled {
+            if self.states[idx].active
+                && self.configs[idx].zone_id == zone_id
+                && self.configs[idx].enabled
+            {
                 if self.states[idx].last_time > 0 {
                     let last = self.states[idx].last_value;
                     let rate_thr = self.configs[idx].rate_threshold;
 
-                    if last.saturating_sub(value) > rate_thr && (res.alert_count as usize) < MAX_ALERTS_PER_READING {
+                    if last.saturating_sub(value) > rate_thr
+                        && (res.alert_count as usize) < MAX_ALERTS_PER_READING
+                    {
                         res.alerts[res.alert_count as usize] = TempAlert {
-                            zone_id, alert_type: TempAlertType::RapidDrop, value, threshold: rate_thr, time,
+                            zone_id,
+                            alert_type: TempAlertType::RapidDrop,
+                            value,
+                            threshold: rate_thr,
+                            time,
                         };
                         res.alert_count += 1;
                     }
 
-                    if value.saturating_sub(last) > rate_thr && (res.alert_count as usize) < MAX_ALERTS_PER_READING {
+                    if value.saturating_sub(last) > rate_thr
+                        && (res.alert_count as usize) < MAX_ALERTS_PER_READING
+                    {
                         res.alerts[res.alert_count as usize] = TempAlert {
-                            zone_id, alert_type: TempAlertType::RapidRise, value, threshold: rate_thr, time,
+                            zone_id,
+                            alert_type: TempAlertType::RapidRise,
+                            value,
+                            threshold: rate_thr,
+                            time,
                         };
                         res.alert_count += 1;
                     }
@@ -206,7 +265,13 @@ mod tests {
     use super::*;
 
     fn make_config(zone_id: u32) -> ZoneConfig {
-        ZoneConfig { zone_id, freeze_threshold: 0, overheat_threshold: 4000, rate_threshold: 500, enabled: true }
+        ZoneConfig {
+            zone_id,
+            freeze_threshold: 0,
+            overheat_threshold: 4000,
+            rate_threshold: 500,
+            enabled: true,
+        }
     }
 
     #[test]
@@ -250,7 +315,12 @@ mod tests {
         let r = m.process_reading(1, 1500, 200);
         let mut found = false;
         let mut j = 0u32;
-        while j < r.alert_count { if r.alerts[j as usize].alert_type == TempAlertType::RapidDrop { found = true; } j += 1; }
+        while j < r.alert_count {
+            if r.alerts[j as usize].alert_type == TempAlertType::RapidDrop {
+                found = true;
+            }
+            j += 1;
+        }
         assert!(found);
     }
 
@@ -262,7 +332,12 @@ mod tests {
         let r = m.process_reading(1, 2500, 200);
         let mut found = false;
         let mut j = 0u32;
-        while j < r.alert_count { if r.alerts[j as usize].alert_type == TempAlertType::RapidRise { found = true; } j += 1; }
+        while j < r.alert_count {
+            if r.alerts[j as usize].alert_type == TempAlertType::RapidRise {
+                found = true;
+            }
+            j += 1;
+        }
         assert!(found);
     }
 
