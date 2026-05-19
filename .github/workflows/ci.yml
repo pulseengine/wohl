@@ -79,9 +79,9 @@ jobs:
         with:
           repository: pulseengine/relay
           path: relay
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.85.0"
+      # Kani-verifier (the installer) needs newer Rust than our MSRV.
+      # Kani itself uses an internal nightly for the proofs.
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: wohl
@@ -147,9 +147,8 @@ jobs:
         with:
           repository: pulseengine/rivet
           path: rivet
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.85.0"
+      # rivet-cli's deps need Rust 1.89+; we don't care about MSRV for tooling.
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: rivet

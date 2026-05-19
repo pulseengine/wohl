@@ -75,19 +75,16 @@ impl LeakDetector {
                 if wet {
                     if was_wet {
                         return LeakAction::AlreadyWet;
-                    } else {
-                        self.zones[idx].wet = true;
-                        self.zones[idx].detected_at = timestamp_sec;
-                        return LeakAction::NewLeak;
                     }
-                } else {
-                    if was_wet {
-                        self.zones[idx].wet = false;
-                        return LeakAction::Cleared;
-                    } else {
-                        return LeakAction::AlreadyDry;
-                    }
+                    self.zones[idx].wet = true;
+                    self.zones[idx].detected_at = timestamp_sec;
+                    return LeakAction::NewLeak;
                 }
+                if was_wet {
+                    self.zones[idx].wet = false;
+                    return LeakAction::Cleared;
+                }
+                return LeakAction::AlreadyDry;
             }
             i += 1;
         }
