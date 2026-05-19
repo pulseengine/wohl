@@ -1,0 +1,23 @@
+# Cargo config for `wohl-fw-door`.
+#
+# This only takes effect when cargo is invoked from inside this crate
+# directory (Cargo searches upward for `.cargo/config.toml` per the
+# canonical Cargo behaviour). When the crate is built from the parent
+# workspace via `cargo build -p wohl-fw-door --target thumbv6m-none-eabi`,
+# the parent workspace's config (if any) wins and the user must pass
+# `--target` explicitly — which is exactly what the verification step
+# in the task description does.
+
+[build]
+# Default target so a bare `cargo build` inside the crate produces a
+# flashable ELF. Override with `--target` when you want to run host
+# tests: `cargo test --target aarch64-apple-darwin`.
+target = "thumbv6m-none-eabi"
+
+[target.thumbv6m-none-eabi]
+# `cortex-m-rt` ships its own `link.x` that includes our `memory.x`
+# from OUT_DIR (see build.rs). The `-T` flags follow the canonical
+# `cortex-m-quickstart` layout.
+rustflags = [
+  "-C", "link-arg=-Tlink.x",
+]
