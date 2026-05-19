@@ -1,0 +1,17 @@
+[package]
+name = "wohl-ota"
+description = "Wohl OTA Core — verified dual-bank firmware update state machine"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85.0"
+
+[lib]
+path = "plain/src/lib.rs"
+crate-type = ["rlib"]
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
