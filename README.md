@@ -47,7 +47,7 @@ cargo fuzz run fuzz_temp -- -max_total_time=60
 rivet validate
 ```
 
-Rust toolchain: `1.85.0` (workspace `rust-version`, edition 2024).
+Toolchain: see `rust-version` in workspace `Cargo.toml`.
 
 The `relay` and `rivet` repositories must be cloned as siblings of `wohl/` for path-dependencies to resolve.
 
@@ -55,12 +55,12 @@ The `relay` and `rivet` repositories must be cloned as siblings of `wohl/` for p
 
 | Track | Status |
 |---|---|
-| Kani BMC (all 6 components) | PASS (20 harnesses) |
-| proptest suites | PASS |
-| cargo-fuzz | smoke for `fuzz_leak`, `fuzz_temp`; other 4 components tracked in [#8](https://github.com/pulseengine/wohl/issues/8) |
-| Verus deductive proofs | planned — `wohl-alert` dispatcher dedup invariant ([#7](https://github.com/pulseengine/wohl/issues/7)) |
-| AADL system model | active |
-| Rivet ASPICE validation | PASS, 5 warnings |
+| Kani BMC (all components) | gated by CI |
+| proptest suites | gated by CI |
+| cargo-fuzz | smoke gated by CI; coverage expansion tracked via issues |
+| Verus deductive proofs | planned for `wohl-alert` dispatcher dedup invariant |
+| AADL system model | active in `spar/` |
+| Rivet ASPICE validation | gated by CI |
 
 ## License
 
@@ -71,4 +71,4 @@ Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for the f
 - [PulseEngine](https://github.com/pulseengine) — umbrella project
 - [Relay](https://github.com/pulseengine/relay) — stream transformers
 - [Rivet](https://github.com/pulseengine/rivet) — ASPICE traceability
-- Issue [#1](https://github.com/pulseengine/wohl/issues/1) — CI initiative this PR closes
+- Issue [#1](https://github.com/pulseengine/wohl/issues/1) — CI initiative
