@@ -1,0 +1,283 @@
+-- Wohl hardware component library.
+-- Specific parts from the starter shopping list. Each declaration maps
+-- 1:1 to a buyable part and carries a Zephyr_Binding for Gale/Zephyr
+-- devicetree generation.
+
+package Wohl_Hardware
+public
+  with Data_Model;
+  with Deployment;
+  with Wohl_Properties;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Buses
+  -- ══════════════════════════════════════════════════════════════
+
+  bus I2C_Bus
+    -- Standard-mode 100 kHz, fast-mode 400 kHz.
+    -- Used for SHT30, BMP280, SCD41, SPS30, BH1750, VEML7700.
+    properties
+      Transmission_Type => push;
+      Wohl_Properties::Zephyr_Binding => "i2c";
+  end I2C_Bus;
+
+  bus UART_Bus
+    -- For PMS5003, PZEM-004T, SPS30 (UART mode).
+    properties
+      Transmission_Type => push;
+      Wohl_Properties::Zephyr_Binding => "uart";
+  end UART_Bus;
+
+  bus GPIO_Line
+    -- Single-bit digital line for reed switches, PIR, water probe.
+    -- Edge-triggered wake source for deep-sleep MCUs.
+    properties
+      Transmission_Type => push;
+      Wohl_Properties::Zephyr_Binding => "gpio";
+  end GPIO_Line;
+
+  bus Thread_Mesh
+    -- IEEE 802.15.4 + OpenThread.
+    -- 2.4 GHz, 250 kbps, ~127-byte PHY frame. Fits Wohl's 14-byte sensor packet.
+    properties
+      Transmission_Type => push;
+      Wohl_Properties::Radio_Protocol => "thread";
+      Wohl_Properties::Zephyr_Binding => "openthread";
+  end Thread_Mesh;
+
+  bus LoRa_Link
+    -- Semtech SX1262, sub-GHz (868/915 MHz depending on region).
+    -- ~1-10 km LOS, 20 mA TX, duty-cycle-limited.
+    properties
+      Transmission_Type => push;
+      Wohl_Properties::Radio_Protocol => "lora";
+      Wohl_Properties::Zephyr_Binding => "semtech,sx1262";
+  end LoRa_Link;
+
+  bus Ethernet_LAN
+    properties
+      Transmission_Type => push;
+      Wohl_Properties::Zephyr_Binding => "ethernet";
+  end Ethernet_LAN;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Memories (MCU-local)
+  -- ══════════════════════════════════════════════════════════════
+
+  memory SRAM_nRF52840
+    -- 256 KB SRAM on Nordic nRF52840.
+    properties
+      Word_Size => 32 bits;
+      Memory_Size => 256 KByte;
+  end SRAM_nRF52840;
+
+  memory Flash_nRF52840
+    -- 1 MB on-chip flash on Nordic nRF52840.
+    properties
+      Word_Size => 32 bits;
+      Memory_Size => 1 MByte;
+  end Flash_nRF52840;
+
+  memory SRAM_ESP32S3
+    -- 512 KB SRAM on ESP32-S3.
+    properties
+      Word_Size => 32 bits;
+      Memory_Size => 512 KByte;
+  end SRAM_ESP32S3;
+
+  memory Flash_ESP32S3
+    -- 8 MB external QSPI flash on most S3 boards.
+    properties
+      Word_Size => 32 bits;
+      Memory_Size => 8 MByte;
+  end Flash_ESP32S3;
+
+  memory RAM_RaspberryPi
+    properties
+      Word_Size => 64 bits;
+      Memory_Size => 2 GByte;
+  end RAM_RaspberryPi;
+
+  memory SDCard_32G
+    properties
+      Word_Size => 8 bits;
+      Memory_Size => 32 GByte;
+  end SDCard_32G;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Processors (specific MCUs + host)
+  -- ══════════════════════════════════════════════════════════════
+
+  processor NRF52840
+    -- Nordic nRF52840: Cortex-M4F, 64 MHz, 256 KB RAM, 1 MB flash.
+    -- Integrated 802.15.4 + BLE 5.0 radio.
+    -- Zephyr board: xiao_ble / nrf52840dk/nrf52840.
+    features
+      thread_radio: requires bus access Thread_Mesh;
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Rate_Monotonic_Protocol);
+      Clock_Period => 15625 ps; -- 64 MHz
+      Wohl_Properties::Sleep_Current_uA => 2.0;
+      Wohl_Properties::Active_Current_uA => 6000.0;
+      Wohl_Properties::Zephyr_Binding => "nordic,nrf52840";
+  end NRF52840;
+
+  processor ESP32_S3
+    -- Espressif ESP32-S3: Xtensa LX7 dual-core, 240 MHz, 512 KB SRAM.
+    -- Integrated WiFi + BLE. Used for mains-powered nodes.
+    -- Zephyr board: esp32s3_devkitm.
+    features
+      wifi: requires bus access Ethernet_LAN;
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Rate_Monotonic_Protocol);
+      Clock_Period => 4167 ps; -- 240 MHz
+      Wohl_Properties::Sleep_Current_uA => 10.0;
+      Wohl_Properties::Active_Current_uA => 80000.0;
+      Wohl_Properties::Zephyr_Binding => "espressif,esp32s3";
+  end ESP32_S3;
+
+  processor RaspberryPi4
+    -- BCM2711, 1.5 GHz quad-core Cortex-A72, 2 GB RAM.
+    -- Hub target — runs Kiln WASM interpreter under Linux.
+    features
+      lan: requires bus access Ethernet_LAN;
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Posix_1003_Highest_Priority_First_Protocol);
+      Clock_Period => 667 ps; -- 1.5 GHz
+      Wohl_Properties::Active_Current_uA => 600000.0; -- @5V
+      Wohl_Properties::Zephyr_Binding => "brcm,bcm2711";
+  end RaspberryPi4;
+
+  processor IntelN100
+    -- Intel N100: 4-core x86-64, up to 3.4 GHz burst, 6 W TDP.
+    -- Used by GMKtec Nucbox, Beelink S12, Minisforum UN100 mini PCs.
+    -- Headroom for local ML (occupancy, anomaly detection) or local LLM.
+    features
+      lan: requires bus access Ethernet_LAN;
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Posix_1003_Highest_Priority_First_Protocol);
+      Clock_Period => 294 ps; -- 3.4 GHz burst
+      Wohl_Properties::Active_Current_uA => 1200000.0; -- ~6 W @ 5 V
+      Wohl_Properties::Zephyr_Binding => "intel,alderlake-n";
+  end IntelN100;
+
+  memory RAM_MiniPC
+    properties
+      Word_Size => 64 bits;
+      Memory_Size => 16 GByte;
+  end RAM_MiniPC;
+
+  memory SSD_NVMe_256G
+    properties
+      Word_Size => 8 bits;
+      Memory_Size => 256 GByte;
+  end SSD_NVMe_256G;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Sensor devices (specific parts)
+  -- ══════════════════════════════════════════════════════════════
+
+  device SHT30
+    -- Sensirion SHT30: temp ±0.3 °C, RH ±3 %, I2C addr 0x44.
+    features
+      i2c: requires bus access I2C_Bus;
+      reading: out data port;
+    properties
+      Period => 60000 ms; -- 1 sample/min on battery
+      Wohl_Properties::Sleep_Current_uA => 1.5;
+      Wohl_Properties::Active_Current_uA => 800.0;
+      Wohl_Properties::Sampling_Period_Sec => 60.0;
+      Wohl_Properties::Zephyr_Binding => "sensirion,sht3xd";
+  end SHT30;
+
+  device BMP280
+    -- Bosch BMP280: pressure ±1 hPa, temp ±1 °C, I2C addr 0x76/0x77.
+    features
+      i2c: requires bus access I2C_Bus;
+      reading: out data port;
+    properties
+      Period => 60000 ms;
+      Wohl_Properties::Sleep_Current_uA => 0.1;
+      Wohl_Properties::Active_Current_uA => 2.7;
+      Wohl_Properties::Sampling_Period_Sec => 60.0;
+      Wohl_Properties::Zephyr_Binding => "bosch,bme280";
+  end BMP280;
+
+  device BH1750
+    -- ROHM BH1750: lux, I2C addr 0x23.
+    features
+      i2c: requires bus access I2C_Bus;
+      reading: out data port;
+    properties
+      Period => 60000 ms;
+      Wohl_Properties::Active_Current_uA => 120.0;
+      Wohl_Properties::Sampling_Period_Sec => 60.0;
+      Wohl_Properties::Zephyr_Binding => "rohm,bh1750";
+  end BH1750;
+
+  device SCD41
+    -- Sensirion SCD41: true NDIR CO2, ±50 ppm + 5 %, I2C addr 0x62.
+    -- Mains-only sensor (low-power mode still 0.4 mA avg).
+    features
+      i2c: requires bus access I2C_Bus;
+      reading: out data port;
+    properties
+      Period => 30000 ms;
+      Wohl_Properties::Sleep_Current_uA => 15.0;
+      Wohl_Properties::Active_Current_uA => 15000.0;
+      Wohl_Properties::Sampling_Period_Sec => 30.0;
+      Wohl_Properties::Zephyr_Binding => "sensirion,scd4x";
+  end SCD41;
+
+  device SPS30
+    -- Sensirion SPS30: PM1/PM2.5/PM4/PM10, I2C or UART, 60 mA fan.
+    -- Mains-only. 8-year design life, upstream Zephyr driver.
+    features
+      i2c: requires bus access I2C_Bus;
+      reading: out data port;
+    properties
+      Period => 60000 ms;
+      Wohl_Properties::Active_Current_uA => 60000.0;
+      Wohl_Properties::Sampling_Period_Sec => 60.0;
+      Wohl_Properties::Zephyr_Binding => "sensirion,sps30";
+  end SPS30;
+
+  device AM312_PIR
+    -- Generic PIR motion sensor, 3.3 V, ~3 m cone.
+    -- Drives a GPIO line; edge interrupt wakes MCU.
+    features
+      gpio: requires bus access GPIO_Line;
+      event_out: out event data port;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Wohl_Properties::Sleep_Current_uA => 50.0;
+      Wohl_Properties::Active_Current_uA => 50.0;
+  end AM312_PIR;
+
+  device ReedSwitch_MC38
+    -- Surface-mount magnetic reed (window/door contact).
+    -- Passive — zero current draw at rest.
+    features
+      gpio: requires bus access GPIO_Line;
+      event_out: out event data port;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Wohl_Properties::Sleep_Current_uA => 0.0;
+      Wohl_Properties::Active_Current_uA => 0.0;
+  end ReedSwitch_MC38;
+
+  device WaterProbe
+    -- Gold-finger conductivity probe. Pulse-powered (GPIO-driven).
+    features
+      gpio: requires bus access GPIO_Line;
+      event_out: out event data port;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Wohl_Properties::Active_Current_uA => 100.0; -- during pulse
+  end WaterProbe;
+
+end Wohl_Hardware;

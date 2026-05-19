@@ -1,0 +1,45 @@
+-- Wohl custom property set.
+-- Hardware-level properties for power/battery/radio analysis.
+-- Units are encoded in property names because spar's property-set
+-- subset doesn't yet accept inline `units (...)` declarations.
+
+property set Wohl_Properties is
+
+  -- Power: current in microamps.
+  Sleep_Current_uA: aadlreal applies to (device, processor, system);
+  Active_Current_uA: aadlreal applies to (device, processor, system);
+
+  -- Battery capacity in milliamp-hours.
+  Battery_Capacity_mAh: aadlreal applies to (system);
+
+  -- Sampling period in seconds.
+  Sampling_Period_Sec: aadlreal applies to (device);
+
+  -- Radio protocol: use a plain string ("thread", "lora", "ble", "wifi", "ethernet").
+  Radio_Protocol: aadlstring applies to (bus, processor);
+
+  -- Zephyr/Gale devicetree-compatible string.
+  Zephyr_Binding: aadlstring applies to (device, processor, bus);
+
+  -- Expected battery lifetime estimate (years).
+  Expected_Battery_Life_Years: aadlreal applies to (system);
+
+  -- ── Deployment-time metadata (sensor-to-location mapping) ──
+  -- These carry the same information as wohl.toml but live in the
+  -- AADL model so fault-tree and deployment analyses can reason about
+  -- which zone loses coverage when a node fails.
+
+  -- Numeric zone ID that matches relay-lc watchpoint indices and the
+  -- CCSDS packet zone_id field.
+  Zone_Id: aadlinteger applies to (system, device);
+
+  -- Human-readable zone/room name for reports and dashboards.
+  Zone_Name: aadlstring applies to (system, device);
+
+  -- Physical location hint (e.g., "first_floor/kitchen/window_east").
+  Location: aadlstring applies to (system, device);
+
+  -- Sensor role within the zone (e.g., "door", "window", "leak_probe").
+  Role: aadlstring applies to (system, device);
+
+end Wohl_Properties;

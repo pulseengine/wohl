@@ -28,6 +28,7 @@ relay-hk.workspace = true
 relay-tbl.workspace = true
 relay-cs.workspace = true
 relay-to.workspace = true
+relay-ccsds.workspace = true
 
 # Runtime
 serde = { version = "1", features = ["derive"] }

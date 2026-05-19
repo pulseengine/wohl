@@ -28,6 +28,7 @@ relay-hk = { path = "../relay/crates/relay-hk" }
 relay-tbl = { path = "../relay/crates/relay-tbl" }
 relay-cs = { path = "../relay/crates/relay-cs" }
 relay-to = { path = "../relay/crates/relay-to" }
+relay-ccsds = { path = "../relay/crates/relay-ccsds" }
 wohl-leak = { path = "crates/wohl-leak" }
 wohl-temp = { path = "crates/wohl-temp" }
 wohl-air = { path = "crates/wohl-air" }

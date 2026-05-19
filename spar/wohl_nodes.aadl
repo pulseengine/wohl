@@ -1,0 +1,208 @@
+-- Wohl node system implementations.
+-- Each `system implementation` describes one physical node:
+-- MCU + sensors + firmware process + bus + memory. Nodes are battery
+-- or mains depending on the sensors they carry.
+
+package Wohl_Nodes
+public
+  with Wohl_Hardware;
+  with Wohl_Firmware;
+  with Wohl_Properties;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- DoorWindowNode.Battery
+  -- MC-38 reed on a XIAO nRF52840, CR2032 coin cell, ~2-3 yr life.
+  -- Event-driven — wakes on reed edge, sends Thread packet.
+  -- ══════════════════════════════════════════════════════════════
+
+  system DoorWindowNode
+    features
+      packet_out: out event data port Wohl_Firmware::SensorPacket;
+      image_in: in event data port Wohl_Firmware::FirmwareImage;
+      attest_out: out event data port Wohl_Firmware::AttestationReport;
+  end DoorWindowNode;
+
+  system implementation DoorWindowNode.Battery
+    subcomponents
+      mcu: processor Wohl_Hardware::NRF52840;
+      ram: memory Wohl_Hardware::SRAM_nRF52840;
+      rom: memory Wohl_Hardware::Flash_nRF52840;
+      reed: device Wohl_Hardware::ReedSwitch_MC38;
+      fw: process Wohl_Firmware::DoorFirmwareProcess.Impl;
+      gpio: bus Wohl_Hardware::GPIO_Line;
+      radio: bus Wohl_Hardware::Thread_Mesh;
+    connections
+      c_reed_bus: bus access gpio -> reed.gpio;
+      c_radio_bus: bus access radio -> mcu.thread_radio;
+      c_reed_to_fw: port reed.event_out -> fw.firmware.reed_in;
+      c_fw_out: port fw.firmware.packet_out -> packet_out;
+      c_ota_in: port image_in -> fw.image_in;
+      c_attest_out: port fw.attest_out -> attest_out;
+    properties
+      Actual_Processor_Binding => (reference (mcu)) applies to fw.firmware;
+      Actual_Processor_Binding => (reference (mcu)) applies to fw.bootloader;
+      Actual_Memory_Binding => (reference (ram)) applies to fw;
+      Actual_Memory_Binding => (reference (ram)) applies to fw.firmware;
+      Actual_Memory_Binding => (reference (ram)) applies to fw.bootloader;
+      Wohl_Properties::Battery_Capacity_mAh => 220.0;  -- CR2032
+      Wohl_Properties::Expected_Battery_Life_Years => 2.5;
+  end DoorWindowNode.Battery;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- ClimateNode.Battery
+  -- SHT30 + BMP280 + AM312 on a XIAO nRF52840, 2×AA lithium.
+  -- Periodic (1 sample/min) + motion event. ~7-10 yr life.
+  -- ══════════════════════════════════════════════════════════════
+
+  system ClimateNode
+    features
+      packet_out: out event data port Wohl_Firmware::SensorPacket;
+      image_in: in event data port Wohl_Firmware::FirmwareImage;
+      attest_out: out event data port Wohl_Firmware::AttestationReport;
+  end ClimateNode;
+
+  system implementation ClimateNode.Battery
+    subcomponents
+      mcu: processor Wohl_Hardware::NRF52840;
+      ram: memory Wohl_Hardware::SRAM_nRF52840;
+      rom: memory Wohl_Hardware::Flash_nRF52840;
+      temp_rh: device Wohl_Hardware::SHT30;
+      pressure: device Wohl_Hardware::BMP280;
+      motion: device Wohl_Hardware::AM312_PIR;
+      fw: process Wohl_Firmware::ClimateFirmwareProcess.Impl;
+      i2c: bus Wohl_Hardware::I2C_Bus;
+      gpio: bus Wohl_Hardware::GPIO_Line;
+      radio: bus Wohl_Hardware::Thread_Mesh;
+    connections
+      c_i2c_temp: bus access i2c -> temp_rh.i2c;
+      c_i2c_pres: bus access i2c -> pressure.i2c;
+      c_gpio_pir: bus access gpio -> motion.gpio;
+      c_radio_bus: bus access radio -> mcu.thread_radio;
+      c_temp_to_fw: port temp_rh.reading -> fw.temp_rh_in;
+      c_pres_to_fw: port pressure.reading -> fw.pressure_in;
+      c_motion_to_fw: port motion.event_out -> fw.motion_in;
+      c_fw_out: port fw.packet_out -> packet_out;
+      c_ota_in: port image_in -> fw.image_in;
+      c_attest_out: port fw.attest_out -> attest_out;
+    properties
+      Actual_Processor_Binding => (reference (mcu)) applies to fw.firmware;
+      Actual_Processor_Binding => (reference (mcu)) applies to fw.bootloader;
+      Actual_Memory_Binding => (reference (ram)) applies to fw.firmware;
+      Actual_Memory_Binding => (reference (ram)) applies to fw.bootloader;
+      Wohl_Properties::Battery_Capacity_mAh => 5000.0;  -- 2×AA lithium
+      Wohl_Properties::Expected_Battery_Life_Years => 8.0;
+  end ClimateNode.Battery;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- AirQualityNode.Mains
+  -- SCD41 + SPS30 on an ESP32-S3, USB-C wall power.
+  -- Continuous sampling — not battery-viable.
+  -- ══════════════════════════════════════════════════════════════
+
+  system AirQualityNode
+    features
+      packet_out: out event data port Wohl_Firmware::SensorPacket;
+      image_in: in event data port Wohl_Firmware::FirmwareImage;
+      attest_out: out event data port Wohl_Firmware::AttestationReport;
+  end AirQualityNode;
+
+  system implementation AirQualityNode.Mains
+    subcomponents
+      mcu: processor Wohl_Hardware::ESP32_S3;
+      ram: memory Wohl_Hardware::SRAM_ESP32S3;
+      rom: memory Wohl_Hardware::Flash_ESP32S3;
+      co2: device Wohl_Hardware::SCD41;
+      pm: device Wohl_Hardware::SPS30;
+      fw: process Wohl_Firmware::AirFirmwareProcess.Impl;
+      i2c: bus Wohl_Hardware::I2C_Bus;
+      lan: bus Wohl_Hardware::Ethernet_LAN;
+    connections
+      c_i2c_co2: bus access i2c -> co2.i2c;
+      c_i2c_pm: bus access i2c -> pm.i2c;
+      c_lan_bus: bus access lan -> mcu.wifi;
+      c_co2_to_fw: port co2.reading -> fw.co2_in;
+      c_pm_to_fw: port pm.reading -> fw.pm_in;
+      c_fw_out: port fw.packet_out -> packet_out;
+      c_ota_in: port image_in -> fw.image_in;
+      c_attest_out: port fw.attest_out -> attest_out;
+    properties
+      Actual_Processor_Binding => (reference (mcu)) applies to fw.firmware;
+      Actual_Processor_Binding => (reference (mcu)) applies to fw.bootloader;
+      Actual_Memory_Binding => (reference (ram)) applies to fw.firmware;
+      Actual_Memory_Binding => (reference (ram)) applies to fw.bootloader;
+  end AirQualityNode.Mains;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- HubNode.RPi
+  -- Raspberry Pi 4 2 GB running Kiln WASM interpreter under Linux.
+  -- Collects all sensor streams, runs monitors, dispatches alerts,
+  -- and runs the OTAManager for node firmware distribution.
+  -- ══════════════════════════════════════════════════════════════
+
+  system HubNode
+    features
+      packet_in: in event data port Wohl_Firmware::SensorPacket;
+      image_out: out event data port Wohl_Firmware::FirmwareImage;
+      attest_in: in event data port Wohl_Firmware::AttestationReport;
+      notification_out: out event data port;
+  end HubNode;
+
+  -- HubNode.RPi — budget/fanless: Raspberry Pi 4/5, Kiln WASM runtime.
+  system implementation HubNode.RPi
+    subcomponents
+      cpu: processor Wohl_Hardware::RaspberryPi4;
+      ram: memory Wohl_Hardware::RAM_RaspberryPi;
+      rom: memory Wohl_Hardware::SDCard_32G;
+      monitors: process Wohl_Firmware::HubMonitorProcess.Impl;
+      ota: process Wohl_Firmware::OTAManagerProcess.Impl;
+      lan: bus Wohl_Hardware::Ethernet_LAN;
+    connections
+      c_lan_bus: bus access lan -> cpu.lan;
+      c_pkt_in: port packet_in -> monitors.packet_in;
+      c_notif_out: port monitors.notification_out -> notification_out;
+      c_image_out: port ota.image_out -> image_out;
+      c_attest_in: port attest_in -> ota.attest_in;
+    properties
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.router;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.water_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.temp_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.air_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.door_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.power_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.dispatcher;
+      Actual_Processor_Binding => (reference (cpu)) applies to ota.mgr;
+      Actual_Memory_Binding => (reference (ram)) applies to monitors;
+      Actual_Memory_Binding => (reference (ram)) applies to ota;
+  end HubNode.RPi;
+
+  -- HubNode.MiniPC — upgrade path for local ML, larger histories.
+  -- Intel N100 in a GMKtec/Beelink/Minisforum chassis, 16 GB RAM, NVMe.
+  -- Same software, more ceiling.
+  system implementation HubNode.MiniPC
+    subcomponents
+      cpu: processor Wohl_Hardware::IntelN100;
+      ram: memory Wohl_Hardware::RAM_MiniPC;
+      rom: memory Wohl_Hardware::SSD_NVMe_256G;
+      monitors: process Wohl_Firmware::HubMonitorProcess.Impl;
+      ota: process Wohl_Firmware::OTAManagerProcess.Impl;
+      lan: bus Wohl_Hardware::Ethernet_LAN;
+    connections
+      c_lan_bus: bus access lan -> cpu.lan;
+      c_pkt_in: port packet_in -> monitors.packet_in;
+      c_notif_out: port monitors.notification_out -> notification_out;
+      c_image_out: port ota.image_out -> image_out;
+      c_attest_in: port attest_in -> ota.attest_in;
+    properties
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.router;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.water_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.temp_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.air_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.door_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.power_mon;
+      Actual_Processor_Binding => (reference (cpu)) applies to monitors.dispatcher;
+      Actual_Processor_Binding => (reference (cpu)) applies to ota.mgr;
+      Actual_Memory_Binding => (reference (ram)) applies to monitors;
+      Actual_Memory_Binding => (reference (ram)) applies to ota;
+  end HubNode.MiniPC;
+
+end Wohl_Nodes;
