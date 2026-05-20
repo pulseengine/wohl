@@ -49,6 +49,38 @@ public
   end DoorWindowNode.Battery;
 
   -- ══════════════════════════════════════════════════════════════
+  -- DoorWindowNode.WiredG0
+  -- MC-38 reed on an STM32G031K8, mains/USB-powered, wired UART to
+  -- the hub. Bare-metal Rust firmware (crates/wohl-fw-door): debounce
+  -- the reed edge, emit a 14-byte CCSDS SensorPacket over UART.
+  -- No radio, no battery — the first physically-deployed Wohl node.
+  -- ══════════════════════════════════════════════════════════════
+
+  system implementation DoorWindowNode.WiredG0
+    subcomponents
+      mcu: processor Wohl_Hardware::STM32G031;
+      ram: memory Wohl_Hardware::SRAM_STM32G031;
+      rom: memory Wohl_Hardware::Flash_STM32G031;
+      reed: device Wohl_Hardware::ReedSwitch_MC38;
+      fw: process Wohl_Firmware::DoorFirmwareProcess.Impl;
+      gpio: bus Wohl_Hardware::GPIO_Line;
+      uart: bus Wohl_Hardware::UART_Bus;
+    connections
+      c_reed_bus: bus access gpio -> reed.gpio;
+      c_uart_bus: bus access uart -> mcu.uart_out;
+      c_reed_to_fw: port reed.event_out -> fw.firmware.reed_in;
+      c_fw_out: port fw.firmware.packet_out -> packet_out;
+      c_ota_in: port image_in -> fw.image_in;
+      c_attest_out: port fw.attest_out -> attest_out;
+    properties
+      Actual_Processor_Binding => (reference (mcu)) applies to fw.firmware;
+      Actual_Processor_Binding => (reference (mcu)) applies to fw.bootloader;
+      Actual_Memory_Binding => (reference (ram)) applies to fw;
+      Actual_Memory_Binding => (reference (ram)) applies to fw.firmware;
+      Actual_Memory_Binding => (reference (ram)) applies to fw.bootloader;
+  end DoorWindowNode.WiredG0;
+
+  -- ══════════════════════════════════════════════════════════════
   -- ClimateNode.Battery
   -- SHT30 + BMP280 + AM312 on a XIAO nRF52840, 2×AA lithium.
   -- Periodic (1 sample/min) + motion event. ~7-10 yr life.
