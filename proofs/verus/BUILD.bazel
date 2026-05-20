@@ -1,0 +1,33 @@
+# Verus formal verification targets for Wohl.
+#
+# Invokes the Verus SMT-backed verifier on the AlertDispatcher dedup +
+# rate-limit proofs. Verification is separate from `cargo build` and only
+# runs under `bazel test` — `cargo build/test/clippy` and the Kani BMC
+# harnesses are unaffected.
+#
+# Usage:
+#   bazel build //proofs/verus:alert_dedup         # verify, produce stamp
+#   bazel test  //proofs/verus:alert_dedup_verify  # verify as a test
+
+load("@rules_verus//verus:defs.bzl", "verus_library", "verus_test")
+
+# ── Verified library ────────────────────────────────────────────────────
+# Runs Verus on the dedup proof module. On success, produces a stamp file
+# downstream targets can depend on as proof evidence.
+
+verus_library(
+    name = "alert_dedup",
+    srcs = ["alert_dedup.rs"],
+    crate_name = "wohl_alert_dedup",
+    visibility = ["//visibility:public"],
+)
+
+# ── Verification test ───────────────────────────────────────────────────
+# Same verification wrapped as a Bazel test so `bazel test //...` and CI
+# pick it up.
+
+verus_test(
+    name = "alert_dedup_verify",
+    srcs = ["alert_dedup.rs"],
+    crate_name = "wohl_alert_dedup",
+)
