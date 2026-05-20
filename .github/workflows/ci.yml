@@ -69,7 +69,7 @@ jobs:
         run: cargo test --workspace --all-features
 
   kani:
-    name: Kani BMC (all 6 components)
+    name: Kani BMC (all components)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
