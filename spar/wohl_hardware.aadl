@@ -138,7 +138,9 @@ public
   end NRF52840;
 
   processor STM32G031
-    -- STMicro STM32G031K8: Cortex-M0+, 64 MHz, 8 KB RAM, 64 KB flash.
+    -- STMicro STM32G031K8: Cortex-M0+, 8 KB RAM, 64 KB flash.
+    -- 64 MHz PLL ceiling; the bench firmware runs on HSI16 (16 MHz) —
+    -- the PLL is not enabled, 16 MHz is ample for the reed poll + UART.
     -- No integrated radio — sensor data leaves over a wired UART link.
     -- Bare-metal Rust firmware (crates/wohl-fw-door-bench), not Zephyr.
     -- Bench/development node only — field nodes use STM32WL55 (sub-GHz)
@@ -148,7 +150,7 @@ public
     properties
       Deployment::Execution_Platform => Native;
       Scheduling_Protocol => (Rate_Monotonic_Protocol);
-      Clock_Period => 15625 ps; -- 64 MHz
+      Clock_Period => 62500 ps; -- 16 MHz (HSI16, as the firmware runs)
       Wohl_Properties::Sleep_Current_uA => 1.8;
       Wohl_Properties::Active_Current_uA => 5000.0;
   end STM32G031;
