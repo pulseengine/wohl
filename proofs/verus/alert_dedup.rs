@@ -36,16 +36,16 @@
 //!
 //! # Verification
 //!
-//! With Verus installed (see `proofs/verus/README` style comment block below):
+//! Run via Bazel (hermetic Verus toolchain — no manual install):
 //!
 //! ```bash
-//! verus proofs/verus/alert_dedup.rs
+//! bazel test //proofs/verus:alert_dedup_verify
 //! ```
 //!
 //! Expected output:
 //!     verification results:: <N> verified, 0 errors
 //!
-//! Pinned against Verus 0.2026.05.17 (rust toolchain 1.95.0).
+//! The Verus toolchain version is pinned via `rules_verus` in `MODULE.bazel`.
 
 use vstd::prelude::*;
 

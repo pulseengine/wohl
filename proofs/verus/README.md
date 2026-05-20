@@ -14,27 +14,18 @@ properties that quantify over all `u64` timestamps).
 
 ## Running
 
-Verus is **not** invoked by `cargo` or by the regular CI workflow today.
-It must be installed locally and run by hand:
+Verus runs via Bazel through the [rules_verus][rules_verus] ruleset — the
+toolchain is downloaded hermetically, no manual install needed:
 
 ```bash
-# 1. Install Verus 0.2026.05.17 (pre-built macOS arm64 / linux x86_64 release):
-#    https://github.com/verus-lang/verus/releases
-# 2. Install the matching rust toolchain:
-rustup install 1.95.0
-# 3. Verify:
-verus proofs/verus/alert_dedup.rs
+bazel test //proofs/verus:alert_dedup_verify
 ```
 
-Expected output:
+The Verus toolchain version is pinned in `MODULE.bazel` (the `verus`
+extension). `cargo build` / `cargo test` / `cargo clippy` / Kani are
+unaffected — Verus is a separate `bazel test` gate.
 
-```
-verification results:: 8 verified, 0 errors
-```
-
-This output has been confirmed locally against Verus
-`0.2026.05.17.e479cce` (the macOS arm64 release) for the file as
-committed.
+Expected: the test passes with `verification results:: 8 verified, 0 errors`.
 
 ## Relationship to the executable code
 
@@ -50,9 +41,8 @@ in `engine.rs`) so that:
 - Plain `cargo build` / `cargo test` / `cargo clippy` / Kani are unaffected.
   Verus's macro syntax (`requires`, `ensures`, `forall`, `&&&`, ...)
   doesn't parse under stock rustc, so inline annotations would require
-  a `verus-strip` preprocessing step that we don't have in CI today.
-- A reviewer can read the proof file in isolation without needing Verus
-  installed.
+  a `verus-strip` preprocessing step that we don't have today.
+- A reviewer can read the proof file in isolation.
 
 The trade-off is that the Verus model and the runtime code can drift.
 Mitigations:
@@ -66,14 +56,9 @@ Mitigations:
 
 ## CI integration
 
-Adding a Verus job to `.github/workflows/ci.yml` is an orchestrator
-decision (Verus needs a specific nightly toolchain and a downloaded
-release binary; see `MODULE.bazel` in [pulseengine/rivet][rivet] for a
-Bazel-driven pattern via [rules_verus][rules_verus]).
+The `bazel test //proofs/verus:alert_dedup_verify` target above is
+CI-ready. Wiring it into `.github/workflows/ci.yml` as a job is tracked
+as a follow-up — Issue [#7](https://github.com/pulseengine/wohl/issues/7)
+stays open until that job lands.
 
-For now the Verus proofs are run by hand by anyone who modifies
-`engine.rs` or the proof file, and a follow-up issue should track wiring
-this into CI.
-
-[rivet]: https://github.com/pulseengine/rivet
 [rules_verus]: https://github.com/pulseengine/rules_verus
