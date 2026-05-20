@@ -994,6 +994,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wohl-ota"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "wohl-power"
 version = "0.1.0"
 dependencies = [
