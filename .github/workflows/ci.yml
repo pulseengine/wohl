@@ -103,7 +103,7 @@ jobs:
       - name: Run Kani on all components
         working-directory: wohl
         run: |
-          for c in wohl-leak wohl-temp wohl-air wohl-door wohl-power wohl-alert; do
+          for c in wohl-leak wohl-temp wohl-air wohl-door wohl-power wohl-alert wohl-ota; do
             echo "::group::Kani $c"
             cargo kani -p "$c"
             echo "::endgroup::"
