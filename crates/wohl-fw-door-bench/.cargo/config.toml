@@ -1,9 +1,9 @@
-# Cargo config for `wohl-fw-door`.
+# Cargo config for `wohl-fw-door-bench`.
 #
 # This only takes effect when cargo is invoked from inside this crate
 # directory (Cargo searches upward for `.cargo/config.toml` per the
 # canonical Cargo behaviour). When the crate is built from the parent
-# workspace via `cargo build -p wohl-fw-door --target thumbv6m-none-eabi`,
+# workspace via `cargo build -p wohl-fw-door-bench --target thumbv6m-none-eabi`,
 # the parent workspace's config (if any) wins and the user must pass
 # `--target` explicitly — which is exactly what the verification step
 # in the task description does.

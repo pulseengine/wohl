@@ -140,7 +140,9 @@ public
   processor STM32G031
     -- STMicro STM32G031K8: Cortex-M0+, 64 MHz, 8 KB RAM, 64 KB flash.
     -- No integrated radio — sensor data leaves over a wired UART link.
-    -- Bare-metal Rust firmware (crates/wohl-fw-door), not Zephyr.
+    -- Bare-metal Rust firmware (crates/wohl-fw-door-bench), not Zephyr.
+    -- Bench/development node only — field nodes use STM32WL55 (sub-GHz)
+    -- or a CAN-FD bus.
     features
       uart_out: requires bus access UART_Bus;
     properties

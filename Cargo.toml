@@ -9,6 +9,7 @@ members = [
     "crates/wohl-alert",
     "crates/wohl-hub",
     "crates/wohl-integration",
+    "crates/wohl-fw-door-bench",
 ]
 
 [workspace.package]

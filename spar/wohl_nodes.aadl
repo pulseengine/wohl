@@ -50,10 +50,13 @@ public
 
   -- ══════════════════════════════════════════════════════════════
   -- DoorWindowNode.WiredG0
-  -- MC-38 reed on an STM32G031K8, mains/USB-powered, wired UART to
-  -- the hub. Bare-metal Rust firmware (crates/wohl-fw-door): debounce
-  -- the reed edge, emit a 14-byte CCSDS SensorPacket over UART.
-  -- No radio, no battery — the first physically-deployed Wohl node.
+  -- MC-38 reed on an STM32G031K8, bench/USB-powered, wired UART to
+  -- the hub. Bare-metal Rust firmware (crates/wohl-fw-door-bench):
+  -- debounce the reed edge, emit a 14-byte CCSDS SensorPacket.
+  -- No radio, no battery — a BENCH/DEVELOPMENT node: it exercises the
+  -- hub's CCSDS ingest without radio or bus hardware. Field door
+  -- nodes use STM32WL55 (sub-GHz) or a CAN-FD bus, not point-to-point
+  -- UART. See DoorWindowNode.Battery for the wireless field shape.
   -- ══════════════════════════════════════════════════════════════
 
   system implementation DoorWindowNode.WiredG0

@@ -35,9 +35,9 @@ mod firmware {
     use panic_halt as _;
     use stm32g0xx_hal::{prelude::*, serial::FullConfig, stm32};
 
-    use wohl_fw_door::ccsds::PACKET_SIZE;
-    use wohl_fw_door::debounce::DoorLevel;
-    use wohl_fw_door::door::DoorState;
+    use wohl_fw_door_bench::ccsds::PACKET_SIZE;
+    use wohl_fw_door_bench::debounce::DoorLevel;
+    use wohl_fw_door_bench::door::DoorState;
 
     /// CCSDS APID for this node. One device per APID, set per build.
     /// Provisioning will turn this into a flash-resident value later.
@@ -86,7 +86,7 @@ mod firmware {
         // Errors are ignored: a banner is best-effort, not safety.
         let _ = writeln!(
             tx,
-            "wohl-fw-door boot apid=0x{:03X} zone=0x{:04X}\r",
+            "wohl-fw-door-bench boot apid=0x{:03X} zone=0x{:04X}\r",
             DEVICE_ID, ZONE_ID
         );
 

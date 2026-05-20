@@ -1,4 +1,11 @@
-//! Wohl door/window sensor firmware — pure-logic library.
+//! Wohl door sensor — bench/development firmware, pure-logic library.
+//!
+//! This is the **bench variant**: STM32G0 + reed switch emitting CCSDS
+//! over a wired point-to-point UART. It exists to exercise the hub's
+//! `--ccsds` ingest path without radio or bus hardware. It is NOT a
+//! field deployment — point-to-point UART does not scale to a real
+//! home. The field door firmware (STM32WL55 sub-GHz + CAN-FD, with a
+//! transport-agnostic CCSDS layer) is tracked separately.
 //!
 //! This crate is split in two:
 //!
@@ -10,7 +17,7 @@
 //!       into [`ccsds::SensorPacket`]s with a monotonic sequence counter.
 //!
 //!   These modules have no MCU-specific code, build on any target, and
-//!   are unit-tested on the host (`cargo test -p wohl-fw-door`).
+//!   are unit-tested on the host (`cargo test -p wohl-fw-door-bench`).
 //! - **`main.rs`** — the actual firmware binary. Wires GPIO + SysTick +
 //!   USART1 of an STM32G031 into the modules above. Gated behind
 //!   `#[cfg(target_os = "none")]` so `cargo test` on the host skips it.
