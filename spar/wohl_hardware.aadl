@@ -78,6 +78,20 @@ public
       Memory_Size => 1 MByte;
   end Flash_nRF52840;
 
+  memory SRAM_STM32G031
+    -- 8 KB SRAM on STMicro STM32G031.
+    properties
+      Word_Size => 32 bits;
+      Memory_Size => 8 KByte;
+  end SRAM_STM32G031;
+
+  memory Flash_STM32G031
+    -- 64 KB on-chip flash on STMicro STM32G031K8.
+    properties
+      Word_Size => 32 bits;
+      Memory_Size => 64 KByte;
+  end Flash_STM32G031;
+
   memory SRAM_ESP32S3
     -- 512 KB SRAM on ESP32-S3.
     properties
@@ -122,6 +136,24 @@ public
       Wohl_Properties::Active_Current_uA => 6000.0;
       Wohl_Properties::Zephyr_Binding => "nordic,nrf52840";
   end NRF52840;
+
+  processor STM32G031
+    -- STMicro STM32G031K8: Cortex-M0+, 8 KB RAM, 64 KB flash.
+    -- 64 MHz PLL ceiling; the bench firmware runs on HSI16 (16 MHz) —
+    -- the PLL is not enabled, 16 MHz is ample for the reed poll + UART.
+    -- No integrated radio — sensor data leaves over a wired UART link.
+    -- Bare-metal Rust firmware (crates/wohl-fw-door-bench), not Zephyr.
+    -- Bench/development node only — field nodes use STM32WL55 (sub-GHz)
+    -- or a CAN-FD bus.
+    features
+      uart_out: requires bus access UART_Bus;
+    properties
+      Deployment::Execution_Platform => Native;
+      Scheduling_Protocol => (Rate_Monotonic_Protocol);
+      Clock_Period => 62500 ps; -- 16 MHz (HSI16, as the firmware runs)
+      Wohl_Properties::Sleep_Current_uA => 1.8;
+      Wohl_Properties::Active_Current_uA => 5000.0;
+  end STM32G031;
 
   processor ESP32_S3
     -- Espressif ESP32-S3: Xtensa LX7 dual-core, 240 MHz, 512 KB SRAM.

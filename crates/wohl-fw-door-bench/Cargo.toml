@@ -1,0 +1,46 @@
+[package]
+name = "wohl-fw-door-bench"
+description = "Wohl door sensor — bench/dev firmware: STM32G0 + reed switch + CCSDS over wired UART. Not a field deployment; the STM32WL55 sub-GHz / CAN-FD field firmware is tracked separately."
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/pulseengine/wohl"
+rust-version = "1.85.0"
+
+# Pure-logic crate (packet encoder, debouncer). Builds on host for tests,
+# and on thumbv6m-none-eabi as part of the firmware binary.
+[lib]
+name = "wohl_fw_door_bench"
+path = "src/lib.rs"
+
+# The actual firmware binary. Only meaningful when built for an ARMv6-M
+# target; on the host the binary still compiles but `#[entry]` and the
+# HAL are gated behind `cfg(target_os = "none")` so `cargo test` is happy.
+[[bin]]
+name = "wohl-fw-door-bench"
+path = "src/main.rs"
+test = false
+bench = false
+doctest = false
+
+# Embedded-only dependencies. Cargo only resolves these when the target
+# triple is bare-metal (`target_os = "none"`), so host `cargo test`
+# and `cargo clippy` never pull in cortex-m-rt or the HAL.
+[target.'cfg(target_os = "none")'.dependencies]
+# Note: stm32g0xx-hal's default features include `i2c-blocking`, which
+# the prelude unconditionally re-exports — disabling it breaks the
+# build. We keep defaults on; the I2C code paths are tree-shaken out
+# of the firmware when we don't import them.
+stm32g0xx-hal = { version = "0.2.0", features = ["stm32g031", "rt"] }
+cortex-m = { version = "0.7.7", default-features = false }
+cortex-m-rt = { version = "0.7.5", default-features = false }
+panic-halt = { version = "1.0.0", default-features = false }
+nb = { version = "1.1.0", default-features = false }
+
+# Host-only test deps. `proptest` is already declared as a workspace
+# dependency in the parent workspace.
+[dev-dependencies]
+proptest = "1"
+
+[lints]
+workspace = true
