@@ -1,0 +1,28 @@
+artifacts:
+  - id: SWREQ-MATTER-001
+    type: sw-req
+    title: "MATTER-P01: Matter ecosystem interoperability via hub bridge"
+    status: approved
+    description: >
+      Wohl sensor state and alerts shall be reachable from third-party
+      Matter controllers (Apple Home, Google Home, Amazon Alexa). The hub
+      shall expose each sensor as a Matter bridged endpoint, acting as a
+      Matter Bridge.
+
+      Sensors shall NOT implement the Matter application stack. They emit
+      the compact CCSDS wire format; the hub performs the CCSDS-to-Matter
+      translation. This keeps sensor firmware lean, no_std and no_alloc,
+      and within reach of Kani and Verus, while still giving users
+      visibility from their existing smart-home app.
+    tags: [matter, interoperability, bridge, ccsds]
+    fields:
+      req-type: functional
+      priority: should
+      verification-criteria: >
+        Integration test: a sensor CCSDS event appears as the correct
+        Matter cluster attribute change on a commissioned Matter
+        controller. Build verification confirms no Matter or OpenThread
+        stack is linked into the sensor firmware image.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-006
