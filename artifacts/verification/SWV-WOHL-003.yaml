@@ -1,0 +1,17 @@
+artifacts:
+  - id: SWV-WOHL-003
+    type: sw-verification
+    title: Air quality SW requirement verification
+    status: approved
+    description: >
+      SW-level verification that the AirMonitor satisfies all air quality
+      software requirements. Combines unit test evidence (UV-AIR-001)
+      and formal verification evidence (UV-AIR-002).
+    tags: [verification, air-quality, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-AIR-001
+      - type: verifies
+        target: SWREQ-AIR-002

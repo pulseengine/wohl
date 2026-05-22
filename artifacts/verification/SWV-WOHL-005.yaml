@@ -1,0 +1,18 @@
+artifacts:
+  - id: SWV-WOHL-005
+    type: sw-verification
+    title: Alert dispatcher SW requirement verification
+    status: planned
+    description: >
+      SW-level verification that the AlertDispatcher satisfies alert
+      dispatch software requirements. Unit tests for deduplication
+      and rate limiting, plus formal verification that critical alerts
+      are never suppressed.
+    tags: [verification, alert, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-ALERT-001
+      - type: verifies
+        target: SWREQ-ALERT-002
