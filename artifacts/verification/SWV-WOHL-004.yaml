@@ -1,0 +1,17 @@
+artifacts:
+  - id: SWV-WOHL-004
+    type: sw-verification
+    title: Door watch SW requirement verification
+    status: approved
+    description: >
+      SW-level verification that the DoorWatch satisfies all door/window
+      supervision software requirements. Combines unit test evidence
+      (UV-DOOR-001) and formal verification evidence (UV-DOOR-002).
+    tags: [verification, door-watch, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-DOOR-001
+      - type: verifies
+        target: SWREQ-DOOR-002

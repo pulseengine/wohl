@@ -1,0 +1,20 @@
+artifacts:
+  - id: SWV-WOHL-001
+    type: sw-verification
+    title: Water leak SW requirement verification
+    status: approved
+    description: >
+      SW-level verification that the LeakDetector satisfies all water leak
+      software requirements. Combines unit test evidence (UV-LEAK-001)
+      and formal verification evidence (UV-LEAK-002) to demonstrate
+      SWREQ-LEAK-001 through SWREQ-LEAK-003 are met.
+    tags: [verification, water-leak, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-LEAK-001
+      - type: verifies
+        target: SWREQ-LEAK-002
+      - type: verifies
+        target: SWREQ-LEAK-003

@@ -1,0 +1,19 @@
+artifacts:
+  - id: SWV-WOHL-002
+    type: sw-verification
+    title: Temperature monitoring SW requirement verification
+    status: approved
+    description: >
+      SW-level verification that the TemperatureMonitor satisfies all
+      temperature software requirements. Combines unit test evidence
+      (UV-TEMP-001) and formal verification evidence (UV-TEMP-002).
+    tags: [verification, temperature, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-TEMP-001
+      - type: verifies
+        target: SWREQ-TEMP-002
+      - type: verifies
+        target: SWREQ-TEMP-003
