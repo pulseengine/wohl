@@ -201,6 +201,11 @@ jobs:
           path: rules_wasm_component
           ref: ${{ env.RULES_WASM_COMPONENT_REF }}
           fetch-depth: 0
+      # rules_rocq_rust's module extension eagerly creates a
+      # nixpkgs-backed rocq_toolchains repo at Bazel analysis time,
+      # so every Bazel job needs nix-build on PATH (see MODULE.bazel
+      # comment). Pinned to cachix/install-nix-action v31.10.6.
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
       - uses: bazel-contrib/setup-bazel@0.15.0
         with:
           bazelisk-cache: true
