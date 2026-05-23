@@ -25,6 +25,20 @@ use_repo(verus, "verus_toolchains")
 
 register_toolchains("@verus_toolchains//:all")
 
+# ── rules_rocq_rust (Rocq theorem-proving rules) ────────────────────────
+# Pinned for reproducibility. wohl has no proofs/rocq/ yet, so the Rocq
+# toolchain extension is intentionally deferred — when rocq proofs land,
+# follow the rivet integration pattern (toolchain + nixpkgs + register).
+
+bazel_dep(name = "rules_rocq_rust", version = "0.1.0")
+
+git_override(
+    module_name = "rules_rocq_rust",
+    remote = "https://github.com/pulseengine/rules_rocq_rust.git",
+    # e4660cc: build: migrate rocq-of-rust to a hermetic rules_rust toolchain (#34).
+    commit = "e4660cc1b06fc4c0aefb49401fa2e2184cf804e3",
+)
+
 local_path_override(
     module_name = "rules_wasm_component",
     path = "../rules_wasm_component",
