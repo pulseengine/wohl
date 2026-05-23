@@ -23,6 +23,11 @@ env:
   # resolve under actions/checkout's default shallow strategy.
   RELAY_REF: 178ffd479ad863c91ece4f580379a9207c36a530
   RIVET_REF: 78f001e23d595ba816f7a7be59282194dedfdc12
+  # Pinned rules_wasm_component for Bazel-running jobs (verus, future
+  # bazel build //...). wohl's MODULE.bazel uses local_path_override
+  # for local dev; CI checks out the pinned ref into a sibling path so
+  # the override resolves.
+  RULES_WASM_COMPONENT_REF: fbe20571eee9bd05687c95e7a43f6c236d9b2428
 
 jobs:
   lint:
@@ -182,3 +187,25 @@ jobs:
       - name: rivet validate
         working-directory: wohl
         run: rivet validate
+
+  verus:
+    name: Verus (bazel test //proofs/verus)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/rules_wasm_component
+          path: rules_wasm_component
+          ref: ${{ env.RULES_WASM_COMPONENT_REF }}
+          fetch-depth: 0
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-verus
+          repository-cache: true
+      - name: bazel test //proofs/verus:alert_dedup_verify
+        working-directory: wohl
+        run: bazel test //proofs/verus:alert_dedup_verify --test_output=summary
