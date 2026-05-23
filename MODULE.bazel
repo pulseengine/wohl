@@ -3,8 +3,8 @@ module(
     version = "0.1.0",
 )
 
-bazel_dep(name = "rules_rust", version = "0.61.0")
-bazel_dep(name = "rules_wasm_component", version = "0.1.0")
+bazel_dep(name = "rules_rust", version = "0.70.0")
+bazel_dep(name = "rules_wasm_component", version = "1.0.0")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.0.0")
 
@@ -44,11 +44,10 @@ local_path_override(
     path = "../rules_wasm_component",
 )
 
-git_override(
-    module_name = "rules_rust",
-    commit = "6281d27f3ffdb826df90db25c1dc66a198345d64",
-    remote = "https://github.com/bazelbuild/rules_rust.git",
-)
+# rules_rust 0.70.0 (from BCR) — old git_override to commit 6281d27 is
+# no longer needed because 6281d27 is now an ancestor of 0.70.0, and
+# rules_rocq_rust + rules_wasm_component 1.0.0 both require the newer
+# rust_toolchain API (channel / iso_date / version attributes).
 
 crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
 crate.from_cargo(
