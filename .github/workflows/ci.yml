@@ -12,6 +12,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  # Pinned sibling-repo commits — bumped explicitly via PR. Without these
+  # pins, unpinned `main` of relay/rivet can change tool behavior on this
+  # workflow with zero wohl code change (see #8 for the concrete
+  # incident that motivated pinning).
+  RELAY_REF: 4d42acf4a23c56980091f943c966ae5e0223a79f
+  RIVET_REF: 335bb84be0bb1be3768438ecec109c945c6b6530
 
 jobs:
   lint:
@@ -25,6 +31,7 @@ jobs:
         with:
           repository: pulseengine/relay
           path: relay
+          ref: ${{ env.RELAY_REF }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.85.0"
@@ -58,6 +65,7 @@ jobs:
         with:
           repository: pulseengine/relay
           path: relay
+          ref: ${{ env.RELAY_REF }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.85.0"
@@ -79,6 +87,7 @@ jobs:
         with:
           repository: pulseengine/relay
           path: relay
+          ref: ${{ env.RELAY_REF }}
       # Kani-verifier (the installer) needs newer Rust than our MSRV.
       # Kani itself uses an internal nightly for the proofs.
       - uses: dtolnay/rust-toolchain@stable
@@ -120,6 +129,7 @@ jobs:
         with:
           repository: pulseengine/relay
           path: relay
+          ref: ${{ env.RELAY_REF }}
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
@@ -150,6 +160,7 @@ jobs:
         with:
           repository: pulseengine/rivet
           path: rivet
+          ref: ${{ env.RIVET_REF }}
       # rivet-cli's deps need Rust 1.89+; we don't care about MSRV for tooling.
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
