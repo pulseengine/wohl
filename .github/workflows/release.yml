@@ -253,6 +253,13 @@ jobs:
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The wohl checkout is at `wohl/` (not the workspace root, so
+          # we can co-locate the relay sibling at `../relay`). That means
+          # the workspace root has no `.git`, and `gh release ...` can't
+          # infer the repo via the normal git remote lookup. GH_REPO
+          # makes it explicit. Without this the step fails with
+          # `fatal: not a git repository`.
+          GH_REPO: ${{ github.repository }}
           # Untrusted-input safety: the tag name flows in via env: and is
           # dereferenced through $VERSION, never expanded into the shell.
           INPUT_TAG: ${{ inputs.tag }}
