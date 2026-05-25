@@ -1,0 +1,71 @@
+name: Nightly Fuzz
+
+# 15 min/target deep-fuzz, run nightly. The PR gate (ci.yml::fuzz-smoke)
+# only runs 60s/target — enough to catch obvious regressions on every
+# PR; this workflow exists to actually exercise the corpora.
+#
+# On failure: GitHub Actions emits the default notification to repo
+# watchers. No Slack/email wiring here on purpose (out of scope for #8).
+
+on:
+  schedule:
+    # 03:00 UTC daily.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # If a new nightly fires while the previous run is still going,
+  # cancel the in-flight one — we'd rather see the latest tip than
+  # double-book a runner.
+  group: nightly-fuzz
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # IMPORTANT: this RELAY_REF must be kept in lock-step with the
+  # RELAY_REF in `.github/workflows/ci.yml`. When you bump one, bump
+  # the other in the same PR — otherwise the nightly fuzzes a
+  # different sibling-relay than the PR gate, which defeats the
+  # purpose of pinning.
+  RELAY_REF: 178ffd479ad863c91ece4f580379a9207c36a530
+
+jobs:
+  fuzz:
+    name: "fuzz: ${{ matrix.target }} (15min)"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Mirrors fuzz/fuzz_targets/. Add new targets here as they land.
+        target:
+          - fuzz_leak
+          - fuzz_temp
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+          ref: ${{ env.RELAY_REF }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wohl
+          key: fuzz-nightly-${{ matrix.target }}
+      - name: Install cargo-fuzz
+        # NOT --locked: matches ci.yml::fuzz-smoke — cargo-fuzz 0.13.1's
+        # lockfile pins rustix 0.36.5 which uses unstable rustc_attrs
+        # that current nightly no longer accepts. Unlocked resolution
+        # picks a newer rustix that compiles cleanly.
+        run: cargo install cargo-fuzz
+      - name: Fuzz ${{ matrix.target }} (15 min)
+        working-directory: wohl
+        # 900s = 15 min/target. Two targets => ~30 min wall-clock when
+        # the matrix runs in parallel, which is the steady state.
+        run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=900

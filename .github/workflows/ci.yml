@@ -65,6 +65,33 @@ jobs:
         working-directory: wohl
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+  cargo-deny:
+    # Supply-chain gate: bans, licenses, advisories, sources.
+    # Configuration lives in deny.toml at the repo root. Duplicate-
+    # versions and unmaintained advisories currently warn rather than
+    # fail (see deny.toml comment and #8 follow-ups).
+    name: cargo-deny (supply-chain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+          ref: ${{ env.RELAY_REF }}
+          fetch-depth: 0
+      # cargo-deny-action handles install + cache + invocation. v2 is
+      # the current stable major (matches the action's tag scheme).
+      # If we want SHA-pinning parity with the rest of this workflow,
+      # bump to a sha256 in a follow-up — for now @v2 keeps us on
+      # security patches in the v2 major automatically.
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: wohl/Cargo.toml
+          command: check bans licenses advisories sources
+
   test:
     name: cargo test (workspace, incl. proptest)
     runs-on: ubuntu-latest
@@ -89,8 +116,25 @@ jobs:
         run: cargo test --workspace --all-features
 
   kani:
-    name: Kani BMC (all components)
+    # Matrix split (was a single serial bash loop): each component gets
+    # its own job so a Kani failure names the offending crate in the
+    # GitHub UI without log-diving, and the 7 proofs run in parallel.
+    # Crates are hardcoded — dynamic discovery would mean parsing
+    # Cargo.toml at job-graph time, which GH Actions can't do cleanly.
+    # When a new Kani-verified crate lands, add it here.
+    name: "Kani: ${{ matrix.crate }}"
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - wohl-leak
+          - wohl-temp
+          - wohl-air
+          - wohl-door
+          - wohl-power
+          - wohl-alert
+          - wohl-ota
     steps:
       - uses: actions/checkout@v4
         with:
@@ -107,7 +151,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: wohl
-          key: kani
+          key: kani-${{ matrix.crate }}
       - name: Cache Kani install
         uses: actions/cache@v4
         with:
@@ -115,6 +159,10 @@ jobs:
             ~/.cargo/bin/cargo-kani
             ~/.cargo/bin/kani
             ~/.kani
+          # Shared Kani install cache across matrix cells: the toolchain
+          # bits are crate-independent and large (~1 GB), so per-cell
+          # caching would waste bandwidth and time. Per-crate target/
+          # incremental dirs are covered by Swatinem/rust-cache above.
           key: kani-${{ runner.os }}-v1
       - name: Install Kani
         run: |
@@ -122,14 +170,9 @@ jobs:
             cargo install --locked kani-verifier
           fi
           cargo kani setup
-      - name: Run Kani on all components
+      - name: Run Kani on ${{ matrix.crate }}
         working-directory: wohl
-        run: |
-          for c in wohl-leak wohl-temp wohl-air wohl-door wohl-power wohl-alert wohl-ota; do
-            echo "::group::Kani $c"
-            cargo kani -p "$c"
-            echo "::endgroup::"
-          done
+        run: cargo kani -p "${{ matrix.crate }}"
 
   fuzz-smoke:
     name: cargo-fuzz smoke (60s/target)
