@@ -1,0 +1,137 @@
+# /etc/systemd/system/wohl-hub.service
+#
+# Wohl Hub — home supervision system orchestrator.
+# "Verified. Always on." — this unit is the *Always on* half.
+#
+# Install (see docs/INSTALL.md for the full walkthrough):
+#   sudo install -d -o wohl -g wohl /var/lib/wohl /var/log/wohl /etc/wohl
+#   sudo install -m 0644 /etc/wohl/wohl.toml.example /etc/wohl/wohl.toml
+#   sudo cp deploy/systemd/wohl-hub.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now wohl-hub
+#   journalctl -u wohl-hub -f
+#
+# This unit is intentionally minimal. It runs `wohl-hub --config
+# /etc/wohl/wohl.toml` under a dedicated, unprivileged `wohl` user with
+# tight filesystem isolation. wohl-hub reads sensor data on stdin and
+# writes alerts on stdout; under systemd both go to the journal, which
+# is exactly what we want for `journalctl -u wohl-hub`. When a real
+# packet source (UART / TCP) lands the unit will need a small
+# `ExecStartPre=` or a socket-activated companion — out of scope here.
+
+[Unit]
+Description=Wohl Hub — home supervision orchestrator
+Documentation=https://github.com/pulseengine/wohl
+Documentation=file:///usr/share/doc/wohl/INSTALL.md
+# Order after the network is *configured* (not necessarily online).
+# wohl-hub does not yet open sockets, so we don't need network-online.
+After=network.target
+Wants=network.target
+
+[Service]
+# `simple` because wohl-hub does not yet call sd_notify(READY=1).
+# When sd_notify support is added, switch this to `notify` and
+# enable WatchdogSec= below — see "Open questions" in docs/INSTALL.md.
+Type=simple
+
+# Dedicated unprivileged account. Create it once with:
+#   sudo useradd --system --home-dir /var/lib/wohl \
+#                --shell /usr/sbin/nologin wohl
+User=wohl
+Group=wohl
+
+# The binary lives in /usr/local/bin so distro package upgrades don't
+# clobber it. The config lives in /etc/wohl/. Both paths are documented
+# in docs/INSTALL.md and used by the release tarball install script.
+ExecStart=/usr/local/bin/wohl-hub --config /etc/wohl/wohl.toml
+
+# Restart policy: always come back. The hub is a long-running daemon —
+# crashes, panics, OOM kills, anything other than a clean systemctl
+# stop should trigger a restart after a short backoff. The 60s window
+# / 5 burst bound prevents a fast crash loop from pegging a CPU forever
+# (systemd will give up and mark the unit failed after that, which
+# fires `OnFailure=` if/when an alerting unit is wired up).
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Send wohl-hub's stdout (the JSON alert stream) and stderr (the
+# `[wohl-hub] ...` operator log) to the systemd journal. `journalctl
+# -u wohl-hub -o cat` prints just the alerts, ready for piping into a
+# downstream consumer.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wohl-hub
+
+# ── Hardening ─────────────────────────────────────────────────────────
+# Each directive is `systemd-analyze security wohl-hub`-recommended and
+# costs us nothing at runtime: wohl-hub is a pure stdin→stdout daemon
+# that touches the filesystem only to read its config and (eventually)
+# write state under /var/lib/wohl.
+
+# Reject SUID/SGID escalation. No reason for a sensor-fanout daemon to
+# call setuid().
+NoNewPrivileges=true
+
+# Mount most of the filesystem read-only and hide /home, /root, /run/user.
+# `strict` is the most aggressive setting — only /dev, /proc, /sys
+# remain writable, and we open holes back via ReadWritePaths= below.
+ProtectSystem=strict
+ProtectHome=true
+
+# Private /tmp and /var/tmp namespaces. Anything we write to /tmp is
+# scoped to this unit and torn down on stop.
+PrivateTmp=true
+
+# Open holes for the only paths wohl-hub legitimately writes to.
+# /var/lib/wohl: persistent state (planned: dedup cache snapshots,
+#   health counters between restarts).
+# /var/log/wohl: optional log files if an operator opts out of
+#   journal-only logging. Today wohl-hub writes to neither, but having
+#   these declared up-front lets future code land without a unit edit.
+ReadWritePaths=/var/lib/wohl /var/log/wohl
+
+# Block kernel attack surface that has no business being reachable
+# from a userspace alerting daemon.
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+# Network namespace lockdown. wohl-hub doesn't open any sockets today;
+# when it does it will use AF_INET / AF_INET6 / AF_UNIX (e.g. CCSDS over
+# TCP from sensor nodes, or a Unix socket for a CLI). Restrict to that
+# minimum so an exploit can't pivot to AF_NETLINK or raw sockets.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# System-call allow-list. @system-service is the broad allow-list
+# systemd documents as appropriate for a long-running daemon, with the
+# obvious dangerous classes (@privileged, @resources, @debug) revoked.
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @debug
+SystemCallArchitectures=native
+
+# Capability lockdown. The daemon needs none — it's a user-space
+# event-routing process.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Note on WatchdogSec=: deliberately omitted. Enabling the systemd
+# watchdog requires wohl-hub to call sd_notify(WATCHDOG=1) on a regular
+# tick (see man:sd_watchdog_enabled(3)). Adding sd_notify support is
+# tracked as a 0.3 follow-up — the libsystemd-dev dep + raw-FD I/O
+# isn't worth the dep on a stdin-driven daemon yet. When it lands,
+# uncomment:
+#   WatchdogSec=30s
+
+[Install]
+WantedBy=multi-user.target

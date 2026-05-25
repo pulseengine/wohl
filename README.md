@@ -21,6 +21,16 @@ Verified. Always on.
 
 All component cores are `no_std`, `no_alloc`, and verified by Kani bounded model checking.
 
+## Deploying
+
+The `wohl-hub` orchestrator is published as a 4-target release tarball
+(`aarch64`/`x86_64` for Linux + macOS) with cosign-signed checksums and
+SLSA build provenance. Installing on a Raspberry Pi takes three steps:
+download + verify the tarball, drop in `/etc/wohl/wohl.toml`, enable
+the systemd unit at `deploy/systemd/wohl-hub.service`. See
+[docs/INSTALL.md](docs/INSTALL.md) for the full walkthrough plus the
+Docker / Compose alternative.
+
 ## Architecture
 
 - **Sensor nodes** — ESP32-C3 / STM32G0 firmware, CCSDS-framed streams

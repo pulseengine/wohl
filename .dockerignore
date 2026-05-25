@@ -1,0 +1,34 @@
+# Keep the build context small + reproducible. The build needs
+# wohl/ source + the relay/ sibling — exclude everything else.
+#
+# Note: this .dockerignore lives at the repo root, but the build
+# context for the Dockerfile is the *parent* directory (so relay/
+# can come along). Most of these patterns are wohl-relative; CI
+# wires a top-level .dockerignore there if/when an OCI image is
+# published from the release workflow.
+
+target/
+**/target/
+.git/
+.github/
+.claude/
+.bazelignore
+bazel-*
+MODULE.bazel.lock
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/target/
+proofs/target/
+
+# Editor / OS junk
+.DS_Store
+*.swp
+*~
+
+# Test/runtime output
+*.log
+release-assets/
+artifacts/
+
+# Built docs — not needed in build context
+**/*.cdx.json

@@ -1,0 +1,65 @@
+# Compose stack for a single wohl-hub container.
+# See docs/INSTALL.md → "Docker deployment" for the full walkthrough.
+# This file lives at deploy/docker/ but the build context climbs two
+# levels up so it can reach both wohl/ and the relay/ sibling — see the
+# Dockerfile header for why.
+
+services:
+  wohl-hub:
+    # The image is built locally from the wohl repo + the relay sibling.
+    # CI does not yet publish an OCI image (tracked as a follow-up —
+    # see docs/INSTALL.md → "Open questions"). When it does, replace
+    # `build:` with `image: ghcr.io/pulseengine/wohl-hub:vX.Y.Z`.
+    build:
+      # The build context must contain BOTH wohl/ and relay/. Two ../
+      # gets us from deploy/docker/ to the repo root's parent.
+      context: ../../..
+      dockerfile: wohl/Dockerfile
+      args:
+        WOHL_PATH: wohl
+        RELAY_PATH: relay
+    image: wohl-hub:dev
+    container_name: wohl-hub
+    # `unless-stopped` mirrors the systemd `Restart=always` behavior:
+    # the container comes back from crashes and host reboots, but a
+    # deliberate `docker compose down` keeps it down.
+    restart: unless-stopped
+    # wohl-hub is a stdin-driven daemon today, so we keep stdin attached
+    # and reserve a TTY so the operator can `docker attach wohl-hub`
+    # for live JSON-line input during smoke tests. Production senders
+    # will pipe a UART/TCP source into the container instead.
+    stdin_open: true
+    tty: false
+    volumes:
+      # Operator-edited config at the standard /etc/wohl path.
+      # Drop a real wohl.toml into ./config/ next to this file.
+      - ./config/wohl.toml:/etc/wohl/wohl.toml:ro
+      # Persistent state — wohl-hub will write dedup snapshots and
+      # housekeeping data here in upcoming work. Volume-backed so it
+      # survives `docker compose down && up`.
+      - wohl-state:/var/lib/wohl
+    # Container-level resource caps mirror what a Pi 4 (the modeled
+    # primary HubNode) can spare. Adjust upward on MiniPC deploys.
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+    # Drop every capability we don't need; the container also runs as
+    # uid 65532 thanks to the distroless `nonroot` base image.
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=8M
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  wohl-state:
+    name: wohl-state

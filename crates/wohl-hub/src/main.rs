@@ -600,7 +600,53 @@ impl WohlHub {
 
 // ── Config loading ─────────────────────────────────────────────
 
+/// CLI-flag / env override for the config-file path.
+///
+/// Resolution order:
+///   1. `--config <path>` on the command line (used by the systemd unit
+///      and the Docker entrypoint)
+///   2. `WOHL_CONFIG=<path>` environment variable
+///   3. the historical search list (`wohl.toml`, then
+///      `crates/wohl-hub/wohl.toml`) — kept for `cargo run` workflows
+fn explicit_config_path() -> Option<String> {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--config" {
+            if let Some(p) = args.next() {
+                return Some(p);
+            }
+        } else if let Some(rest) = arg.strip_prefix("--config=") {
+            return Some(rest.to_string());
+        }
+    }
+    std::env::var("WOHL_CONFIG").ok()
+}
+
 fn load_config() -> HubConfig {
+    // Explicit path wins: if the operator points us at a config file via
+    // --config or $WOHL_CONFIG we either load it or fail loudly. We do
+    // *not* fall back to defaults — a typo in the deployment path should
+    // be a hard error so the systemd unit restarts rather than silently
+    // booting with defaults.
+    if let Some(path) = explicit_config_path() {
+        match std::fs::read_to_string(&path) {
+            Ok(content) => match toml::from_str::<HubConfig>(&content) {
+                Ok(config) => {
+                    eprintln!("[wohl-hub] loaded config from {}", path);
+                    return config;
+                }
+                Err(e) => {
+                    eprintln!("[wohl-hub] fatal: error parsing {}: {}", path, e);
+                    std::process::exit(2);
+                }
+            },
+            Err(e) => {
+                eprintln!("[wohl-hub] fatal: cannot read {}: {}", path, e);
+                std::process::exit(2);
+            }
+        }
+    }
+
     let config_paths = ["wohl.toml", "crates/wohl-hub/wohl.toml"];
 
     for path in &config_paths {
