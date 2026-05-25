@@ -10,6 +10,10 @@ use std::io::{BufRead, Read};
 
 use relay_ccsds::sensor_wire;
 use serde::{Deserialize, Serialize};
+use wohl_matter_bridge::{
+    AlertKind as MatterAlertKind, BridgedAlert, LoggingBridge, MatterBridge, ReadingKind,
+    SensorReading,
+};
 
 // ── Configuration types ────────────────────────────────────────
 
@@ -179,6 +183,10 @@ struct WohlHub {
 
     // Track the last tick time for housekeeping
     last_tick: u64,
+
+    // Optional Matter bridge — populated when --matter / WOHL_MATTER is set.
+    // When None (the default), wohl-hub behaves identically to 0.1.0.
+    matter_bridge: Option<Box<dyn MatterBridge>>,
 }
 
 impl WohlHub {
@@ -198,10 +206,52 @@ impl WohlHub {
             contact_zones: [(0, 0); 32],
             contact_zone_count: 0,
             last_tick: 0,
+            matter_bridge: None,
         };
 
         hub.configure(config);
         hub
+    }
+
+    /// Install an optional Matter bridge. When set, dispatched alerts and
+    /// sensor readings are forwarded to the bridge in addition to the
+    /// existing stdout JSON output.
+    fn set_matter_bridge(&mut self, bridge: Box<dyn MatterBridge>) {
+        self.matter_bridge = Some(bridge);
+    }
+
+    /// Push a sensor reading to the bridge, if configured. Best-effort —
+    /// the bridge is a side-channel and must never block the monitor
+    /// dispatch path.
+    fn bridge_reading(&self, kind: ReadingKind, endpoint_id: u32, value: i64, time: u64) {
+        if let Some(b) = self.matter_bridge.as_ref() {
+            b.publish_reading(SensorReading {
+                kind,
+                endpoint_id,
+                value,
+                time,
+            });
+        }
+    }
+
+    /// Push a dispatched alert (one that already survived dedup +
+    /// rate-limit) to the bridge, if configured. Reads the same
+    /// `AlertOutput` we emit on stdout to keep the wiring minimal.
+    fn bridge_alert(&self, alert: &AlertOutput) {
+        let Some(b) = self.matter_bridge.as_ref() else {
+            return;
+        };
+        let Some(kind) = MatterAlertKind::from_tag(&alert.alert) else {
+            return;
+        };
+        b.publish_alert(BridgedAlert {
+            kind,
+            zone_id: alert.zone,
+            contact_id: alert.contact,
+            circuit_id: alert.circuit,
+            value: alert.value,
+            time: alert.time,
+        });
     }
 
     fn configure(&mut self, config: &HubConfig) {
@@ -355,6 +405,7 @@ impl WohlHub {
                 self.monitor_counters[0] += 1;
                 self.health
                     .update_counter(APP_TEMP, self.monitor_counters[0]);
+                self.bridge_reading(ReadingKind::Temperature, zone, value as i64, time);
 
                 let result = self.temp.process_reading(zone, value, time);
                 for i in 0..result.alert_count as usize {
@@ -388,6 +439,12 @@ impl WohlHub {
                 self.monitor_counters[1] += 1;
                 self.health
                     .update_counter(APP_LEAK, self.monitor_counters[1]);
+                self.bridge_reading(
+                    ReadingKind::WaterPresence,
+                    zone,
+                    if wet { 1 } else { 0 },
+                    time,
+                );
 
                 let action = self.leak.process_event(zone, wet, time);
                 if action == wohl_leak::engine::LeakAction::NewLeak
@@ -416,6 +473,13 @@ impl WohlHub {
                 self.monitor_counters[2] += 1;
                 self.health
                     .update_counter(APP_AIR, self.monitor_counters[2]);
+                self.bridge_reading(ReadingKind::Co2, zone, co2 as i64, time);
+                if let Some(v) = pm25 {
+                    self.bridge_reading(ReadingKind::Pm25, zone, v as i64, time);
+                }
+                if let Some(v) = voc {
+                    self.bridge_reading(ReadingKind::Voc, zone, v as i64, time);
+                }
 
                 let reading = wohl_air::engine::AirReading {
                     zone_id: zone,
@@ -466,6 +530,7 @@ impl WohlHub {
                 self.monitor_counters[3] += 1;
                 self.health
                     .update_counter(APP_DOOR, self.monitor_counters[3]);
+                self.bridge_reading(ReadingKind::Contact, id, if open { 1 } else { 0 }, time);
 
                 let result = self.door.process_event(id, open, time);
                 for i in 0..result.alert_count as usize {
@@ -502,6 +567,7 @@ impl WohlHub {
                 self.monitor_counters[4] += 1;
                 self.health
                     .update_counter(APP_POWER, self.monitor_counters[4]);
+                self.bridge_reading(ReadingKind::Power, circuit, watts as i64, time);
 
                 let result = self.power.process_reading(circuit, watts, time);
                 for i in 0..result.alert_count as usize {
@@ -592,6 +658,13 @@ impl WohlHub {
                 // Clear expired dedup entries periodically
                 self.alert.clear_expired(time);
             }
+        }
+
+        // Forward every dispatched alert to the Matter bridge, if one is
+        // installed. The bridge is a side-channel: with --matter off this
+        // is a no-op and wohl-hub behaves identically to 0.1.0.
+        for a in &alerts {
+            self.bridge_alert(a);
         }
 
         alerts
@@ -862,11 +935,31 @@ fn input_mode_is_ccsds() -> bool {
     matches!(std::env::var("WOHL_INPUT").as_deref(), Ok("ccsds"))
 }
 
+/// True if the operator opted into the Matter bridge (off by default).
+/// Recognized: `--matter` CLI flag, or `WOHL_MATTER=1` / `WOHL_MATTER=true`.
+fn matter_bridge_enabled() -> bool {
+    if std::env::args().any(|a| a == "--matter") {
+        return true;
+    }
+    matches!(
+        std::env::var("WOHL_MATTER").as_deref(),
+        Ok("1") | Ok("true")
+    )
+}
+
 // ── Main ───────────────────────────────────────────────────────
 
 fn main() {
     let config = load_config();
     let mut hub = WohlHub::new(&config);
+
+    if matter_bridge_enabled() {
+        eprintln!(
+            "[wohl-hub] --matter: installing LoggingBridge stub (0.2.0 scaffold; \
+             real rs-matter integration lands in 0.3.0)"
+        );
+        hub.set_matter_bridge(Box::new(LoggingBridge::to_stderr()));
+    }
 
     if input_mode_is_ccsds() {
         run_ccsds_mode(&mut hub);
@@ -1437,6 +1530,80 @@ dedup_cooldown_sec = 60
             value: 0,
         };
         assert!(packet_to_event(&pkt, 0).is_none());
+    }
+
+    /// Counting Matter bridge stub for tests — records every reading /
+    /// alert call so we can assert wohl-hub forwards them when --matter
+    /// is set.
+    #[derive(Default)]
+    struct CountingBridge {
+        readings: std::sync::Mutex<Vec<ReadingKind>>,
+        alerts: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl MatterBridge for CountingBridge {
+        fn publish_reading(&self, reading: SensorReading) {
+            self.readings.lock().unwrap().push(reading.kind);
+        }
+        fn publish_alert(&self, alert: BridgedAlert) {
+            self.alerts.lock().unwrap().push(alert.kind.as_tag().into());
+        }
+    }
+
+    #[test]
+    fn test_bridge_off_by_default_behaves_like_0_1_0() {
+        // Default hub: no bridge installed. The reading/alert paths must
+        // still produce the same JSON alerts as before.
+        let mut hub = test_hub();
+        assert!(hub.matter_bridge.is_none());
+        let alerts = hub.process_event(SensorEvent::Temp {
+            zone: 1,
+            value: -100,
+            time: 1000,
+        });
+        assert_eq!(alerts[0].alert, "freeze");
+    }
+
+    #[test]
+    fn test_bridge_receives_readings_and_alerts_when_installed() {
+        let mut hub = test_hub();
+        let bridge = std::sync::Arc::new(CountingBridge::default());
+        // Install via a thin Arc-cloning adapter so the test can still
+        // observe the counts after the hub takes ownership.
+        struct ArcAdapter(std::sync::Arc<CountingBridge>);
+        impl MatterBridge for ArcAdapter {
+            fn publish_reading(&self, r: SensorReading) {
+                self.0.publish_reading(r);
+            }
+            fn publish_alert(&self, a: BridgedAlert) {
+                self.0.publish_alert(a);
+            }
+        }
+        hub.set_matter_bridge(Box::new(ArcAdapter(bridge.clone())));
+
+        // Below-freeze temp → one Temperature reading + one freeze alert.
+        let alerts = hub.process_event(SensorEvent::Temp {
+            zone: 1,
+            value: -100,
+            time: 1000,
+        });
+        assert_eq!(alerts.len(), 1);
+
+        let readings = bridge.readings.lock().unwrap();
+        assert!(
+            readings
+                .iter()
+                .any(|k| matches!(k, ReadingKind::Temperature)),
+            "expected a Temperature reading: got {:?}",
+            *readings
+        );
+
+        let alerts_fwd = bridge.alerts.lock().unwrap();
+        assert!(
+            alerts_fwd.iter().any(|s| s == "freeze"),
+            "expected freeze forwarded to bridge: got {:?}",
+            *alerts_fwd
+        );
     }
 
     #[test]
