@@ -1,0 +1,35 @@
+[package]
+name = "wohl-matter-bridge"
+description = "Wohl Matter Bridge — hub-side translation of Wohl alerts / sensor readings into Matter bridged-endpoint attributes"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.85.0"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["rlib"]
+
+# NOTE: This 0.2.0 deliverable is the *scaffold* — a public trait
+# (`MatterBridge`), a typed cluster-mapping table, and a logging stub impl.
+# It deliberately does NOT depend on rs-matter so that:
+#   1. It compiles fast and reliably on the workspace MSRV (1.85).
+#   2. The verified line (wohl-leak/temp/air/door/power/alert/ota) keeps
+#      a small, audited dependency closure.
+#   3. The Matter wire integration can be scoped as its own follow-up PR
+#      (target: 0.3.0), gated behind a feature flag and pinned rs-matter
+#      version. See DESIGN.md "rs-matter target version".
+#
+# When the live integration lands, expect:
+#   [features]
+#   default = []
+#   rs-matter-backend = ["dep:rs-matter"]
+#   [dependencies]
+#   rs-matter = { version = "...", optional = true, default-features = false, features = ["std", "rustcrypto"] }
+
+[dependencies]
+
+[dev-dependencies]
+
+[lints]
+workspace = true
