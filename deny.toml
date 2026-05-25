@@ -53,8 +53,19 @@ deny = []
 skip = []
 
 [advisories]
-# RUSTSEC IDs we explicitly accept (none yet).
-ignore = []
+# RUSTSEC IDs we explicitly accept, each with a load-bearing reason.
+#
+# RUSTSEC-2026-0110 — `bare-metal` deprecated. Transitive via
+#   wohl-fw-door-bench → stm32g0xx-hal 0.2.0 → cortex-m 0.7.x →
+#   bare-metal {0.2.5, 1.0.0}. The advisory's own "Solution" reads
+#   "No safe upgrade is available!" — the upstream migration target
+#   (`critical-section`) is not yet reflected in the cortex-m 0.7.x
+#   release line that the entire embedded Rust ecosystem still pins.
+#   Re-evaluate when cortex-m 0.8 stabilises and stm32g0xx-hal cuts a
+#   release against it.
+ignore = [
+    "RUSTSEC-2026-0110",
+]
 # Yanked crates in the lockfile: warn, don't fail — yanks can happen
 # mid-CI run.
 yanked = "warn"
