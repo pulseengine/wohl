@@ -96,15 +96,23 @@ use wohl_leak_bindings::exports::pulseengine::wohl_leak::leak::{
 
 struct Component;
 
-static mut TABLE: Option<engine::LeakDetector> = None;
+// Singleton detector state. WASM components are single-threaded, but we use
+// `OnceLock<Mutex<_>>` because it's the simplest way to satisfy Rust 2024's
+// `static_mut_refs` lint without `static mut` / `unsafe`. The Mutex is
+// uncontended in practice (single-threaded wasm32-wasip2 guest).
+use std::sync::{Mutex, OnceLock};
 
-fn get_table() -> &'static mut engine::LeakDetector {
-    unsafe {
-        if TABLE.is_none() {
-            TABLE = Some(engine::LeakDetector::new());
-        }
-        TABLE.as_mut().unwrap()
-    }
+static TABLE: OnceLock<Mutex<engine::LeakDetector>> = OnceLock::new();
+
+fn with_table<R>(f: impl FnOnce(&mut engine::LeakDetector) -> R) -> R {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::LeakDetector::new()));
+    let mut guard = cell.lock().expect("LeakDetector mutex poisoned");
+    f(&mut guard)
+}
+
+fn reset_table() {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::LeakDetector::new()));
+    *cell.lock().expect("LeakDetector mutex poisoned") = engine::LeakDetector::new();
 }
 
 fn to_wit_action(action: engine::LeakAction) -> WitLeakAction {
@@ -120,12 +128,12 @@ fn to_wit_action(action: engine::LeakAction) -> WitLeakAction {
 impl Guest for Component {
     #[cfg(target_arch = "wasm32")]
     async fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::LeakDetector::new()); }
+        reset_table();
         Ok(())
     }
     #[cfg(not(target_arch = "wasm32"))]
     fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::LeakDetector::new()); }
+        reset_table();
         Ok(())
     }
 
@@ -159,15 +167,15 @@ impl Guest for Component {
 
 impl Component {
     fn do_register_zone(zone_id: u32) -> bool {
-        get_table().register_zone(zone_id)
+        with_table(|t| t.register_zone(zone_id))
     }
 
     fn do_process_event(zone_id: u32, wet: bool, timestamp_sec: u64) -> WitLeakAction {
-        to_wit_action(get_table().process_event(zone_id, wet, timestamp_sec))
+        with_table(|t| to_wit_action(t.process_event(zone_id, wet, timestamp_sec)))
     }
 
     fn do_any_wet() -> bool {
-        get_table().any_wet()
+        with_table(|t| t.any_wet())
     }
 }
 

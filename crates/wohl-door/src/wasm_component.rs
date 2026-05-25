@@ -202,15 +202,23 @@ use wohl_door_bindings::exports::pulseengine::wohl_door_watch::door_watch::{
 
 struct Component;
 
-static mut TABLE: Option<engine::DoorWatch> = None;
+// Singleton watch state. WASM components are single-threaded, but we use
+// `OnceLock<Mutex<_>>` because it's the simplest way to satisfy Rust 2024's
+// `static_mut_refs` lint without `static mut` / `unsafe`. The Mutex is
+// uncontended in practice (single-threaded wasm32-wasip2 guest).
+use std::sync::{Mutex, OnceLock};
 
-fn get_table() -> &'static mut engine::DoorWatch {
-    unsafe {
-        if TABLE.is_none() {
-            TABLE = Some(engine::DoorWatch::new());
-        }
-        TABLE.as_mut().unwrap()
-    }
+static TABLE: OnceLock<Mutex<engine::DoorWatch>> = OnceLock::new();
+
+fn with_table<R>(f: impl FnOnce(&mut engine::DoorWatch) -> R) -> R {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::DoorWatch::new()));
+    let mut guard = cell.lock().expect("DoorWatch mutex poisoned");
+    f(&mut guard)
+}
+
+fn reset_table() {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::DoorWatch::new()));
+    *cell.lock().expect("DoorWatch mutex poisoned") = engine::DoorWatch::new();
 }
 
 fn to_wit_alert_type(t: engine::DoorAlertType) -> WitAlertType {
@@ -237,12 +245,12 @@ fn door_result_to_vec(res: engine::DoorResult) -> Vec<WitAlert> {
 impl Guest for Component {
     #[cfg(target_arch = "wasm32")]
     async fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::DoorWatch::new()); }
+        reset_table();
         Ok(())
     }
     #[cfg(not(target_arch = "wasm32"))]
     fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::DoorWatch::new()); }
+        reset_table();
         Ok(())
     }
 
@@ -276,22 +284,22 @@ impl Guest for Component {
 
 impl Component {
     fn do_register_contact(contact_id: u32, zone_id: u32, max_open_sec: u32, night_start_hour: u8, night_end_hour: u8) -> bool {
-        get_table().register_contact(engine::ContactConfig {
+        with_table(|t| t.register_contact(engine::ContactConfig {
             contact_id,
             zone_id,
             max_open_sec,
             night_start_hour,
             night_end_hour,
             enabled: true,
-        })
+        }))
     }
 
     fn do_process_event(contact_id: u32, open: bool, time: u64) -> Vec<WitAlert> {
-        door_result_to_vec(get_table().process_event(contact_id, open, time))
+        door_result_to_vec(with_table(|t| t.process_event(contact_id, open, time)))
     }
 
     fn do_check_timeouts(current_time: u64) -> Vec<WitAlert> {
-        door_result_to_vec(get_table().check_timeouts(current_time))
+        door_result_to_vec(with_table(|t| t.check_timeouts(current_time)))
     }
 }
 

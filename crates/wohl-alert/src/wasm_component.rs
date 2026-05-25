@@ -12,7 +12,6 @@
 
 mod engine {
     pub const MAX_RECENT_ALERTS: usize = 64;
-    pub const MAX_OUTPUT_QUEUE: usize = 16;
     pub const DEDUP_COOLDOWN_SEC: u64 = 300;
     pub const MAX_ALERTS_PER_MINUTE: u32 = 10;
 
@@ -128,15 +127,23 @@ use wohl_alert_bindings::exports::pulseengine::wohl_alert_dispatcher::alert::{
 
 struct Component;
 
-static mut TABLE: Option<engine::AlertDispatcher> = None;
+// Singleton dispatcher state. WASM components are single-threaded, but we use
+// `OnceLock<Mutex<_>>` because it's the simplest way to satisfy Rust 2024's
+// `static_mut_refs` lint without `static mut` / `unsafe`. The Mutex is
+// uncontended in practice (single-threaded wasm32-wasip2 guest).
+use std::sync::{Mutex, OnceLock};
 
-fn get_table() -> &'static mut engine::AlertDispatcher {
-    unsafe {
-        if TABLE.is_none() {
-            TABLE = Some(engine::AlertDispatcher::new());
-        }
-        TABLE.as_mut().unwrap()
-    }
+static TABLE: OnceLock<Mutex<engine::AlertDispatcher>> = OnceLock::new();
+
+fn with_table<R>(f: impl FnOnce(&mut engine::AlertDispatcher) -> R) -> R {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::AlertDispatcher::new()));
+    let mut guard = cell.lock().expect("AlertDispatcher mutex poisoned");
+    f(&mut guard)
+}
+
+fn reset_table() {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::AlertDispatcher::new()));
+    *cell.lock().expect("AlertDispatcher mutex poisoned") = engine::AlertDispatcher::new();
 }
 
 fn to_wit_action(action: engine::DispatchAction) -> WitAction {
@@ -150,12 +157,12 @@ fn to_wit_action(action: engine::DispatchAction) -> WitAction {
 impl Guest for Component {
     #[cfg(target_arch = "wasm32")]
     async fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::AlertDispatcher::new()); }
+        reset_table();
         Ok(())
     }
     #[cfg(not(target_arch = "wasm32"))]
     fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::AlertDispatcher::new()); }
+        reset_table();
         Ok(())
     }
 
@@ -180,7 +187,7 @@ impl Guest for Component {
 
 impl Component {
     fn do_process_alert(zone_id: u32, alert_type: u8, time: u64) -> WitResult {
-        let result = get_table().process_alert(zone_id, alert_type, time);
+        let result = with_table(|t| t.process_alert(zone_id, alert_type, time));
         WitResult {
             action: to_wit_action(result.action),
             queue_depth: result.queue_depth,
@@ -188,7 +195,7 @@ impl Component {
     }
 
     fn do_clear_expired(current_time: u64) {
-        get_table().clear_expired(current_time);
+        with_table(|t| t.clear_expired(current_time));
     }
 }
 

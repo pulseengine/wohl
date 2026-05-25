@@ -210,15 +210,23 @@ use wohl_power_bindings::exports::pulseengine::wohl_power_meter::power::{
 
 struct Component;
 
-static mut TABLE: Option<engine::PowerMonitor> = None;
+// Singleton monitor state. WASM components are single-threaded, but we use
+// `OnceLock<Mutex<_>>` because it's the simplest way to satisfy Rust 2024's
+// `static_mut_refs` lint without `static mut` / `unsafe`. The Mutex is
+// uncontended in practice (single-threaded wasm32-wasip2 guest).
+use std::sync::{Mutex, OnceLock};
 
-fn get_table() -> &'static mut engine::PowerMonitor {
-    unsafe {
-        if TABLE.is_none() {
-            TABLE = Some(engine::PowerMonitor::new());
-        }
-        TABLE.as_mut().unwrap()
-    }
+static TABLE: OnceLock<Mutex<engine::PowerMonitor>> = OnceLock::new();
+
+fn with_table<R>(f: impl FnOnce(&mut engine::PowerMonitor) -> R) -> R {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::PowerMonitor::new()));
+    let mut guard = cell.lock().expect("PowerMonitor mutex poisoned");
+    f(&mut guard)
+}
+
+fn reset_table() {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::PowerMonitor::new()));
+    *cell.lock().expect("PowerMonitor mutex poisoned") = engine::PowerMonitor::new();
 }
 
 fn to_wit_alert_type(t: engine::PowerAlertType) -> WitAlertType {
@@ -232,12 +240,12 @@ fn to_wit_alert_type(t: engine::PowerAlertType) -> WitAlertType {
 impl Guest for Component {
     #[cfg(target_arch = "wasm32")]
     async fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::PowerMonitor::new()); }
+        reset_table();
         Ok(())
     }
     #[cfg(not(target_arch = "wasm32"))]
     fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::PowerMonitor::new()); }
+        reset_table();
         Ok(())
     }
 
@@ -271,17 +279,17 @@ impl Guest for Component {
 
 impl Component {
     fn do_register_circuit(circuit_id: u32, max_watts: u32, idle_watts: u32, spike_threshold: u32) -> bool {
-        get_table().register_circuit(engine::CircuitConfig {
+        with_table(|t| t.register_circuit(engine::CircuitConfig {
             circuit_id,
             max_watts,
             idle_watts,
             spike_threshold,
             enabled: true,
-        })
+        }))
     }
 
     fn do_process_reading(circuit_id: u32, watts: u32, time: u64) -> Vec<WitAlert> {
-        let result = get_table().process_reading(circuit_id, watts, time);
+        let result = with_table(|t| t.process_reading(circuit_id, watts, time));
         let mut out = Vec::with_capacity(result.alert_count as usize);
         for i in 0..result.alert_count as usize {
             out.push(WitAlert {
@@ -296,7 +304,7 @@ impl Component {
     }
 
     fn do_check_idle(circuit_id: u32, current_watts: u32) -> bool {
-        get_table().check_idle(circuit_id, current_watts)
+        with_table(|t| t.check_idle(circuit_id, current_watts))
     }
 }
 

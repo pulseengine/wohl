@@ -224,15 +224,23 @@ use wohl_air_bindings::exports::pulseengine::wohl_air_quality::air_quality::{
 
 struct Component;
 
-static mut TABLE: Option<engine::AirMonitor> = None;
+// Singleton monitor state. WASM components are single-threaded, but we use
+// `OnceLock<Mutex<_>>` because it's the simplest way to satisfy Rust 2024's
+// `static_mut_refs` lint without `static mut` / `unsafe`. The Mutex is
+// uncontended in practice (single-threaded wasm32-wasip2 guest).
+use std::sync::{Mutex, OnceLock};
 
-fn get_table() -> &'static mut engine::AirMonitor {
-    unsafe {
-        if TABLE.is_none() {
-            TABLE = Some(engine::AirMonitor::new());
-        }
-        TABLE.as_mut().unwrap()
-    }
+static TABLE: OnceLock<Mutex<engine::AirMonitor>> = OnceLock::new();
+
+fn with_table<R>(f: impl FnOnce(&mut engine::AirMonitor) -> R) -> R {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::AirMonitor::new()));
+    let mut guard = cell.lock().expect("AirMonitor mutex poisoned");
+    f(&mut guard)
+}
+
+fn reset_table() {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::AirMonitor::new()));
+    *cell.lock().expect("AirMonitor mutex poisoned") = engine::AirMonitor::new();
 }
 
 fn to_wit_alert_type(t: engine::AirAlertType) -> WitAlertType {
@@ -249,12 +257,12 @@ fn to_wit_alert_type(t: engine::AirAlertType) -> WitAlertType {
 impl Guest for Component {
     #[cfg(target_arch = "wasm32")]
     async fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::AirMonitor::new()); }
+        reset_table();
         Ok(())
     }
     #[cfg(not(target_arch = "wasm32"))]
     fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::AirMonitor::new()); }
+        reset_table();
         Ok(())
     }
 
@@ -279,7 +287,7 @@ impl Guest for Component {
 
 impl Component {
     fn do_register_zone(config: WitConfig) -> bool {
-        get_table().register_zone(engine::AirConfig {
+        with_table(|t| t.register_zone(engine::AirConfig {
             zone_id: config.zone_id,
             co2_warn: config.co2_warn,
             co2_critical: config.co2_critical,
@@ -288,17 +296,17 @@ impl Component {
             voc_warn: config.voc_warn,
             voc_critical: config.voc_critical,
             enabled: config.enabled,
-        })
+        }))
     }
 
     fn do_process_reading(reading: WitReading) -> Vec<WitAlert> {
-        let result = get_table().process_reading(engine::AirReading {
+        let result = with_table(|t| t.process_reading(engine::AirReading {
             zone_id: reading.zone_id,
             co2_ppm: reading.co2_ppm,
             pm25: reading.pm25,
             voc_index: reading.voc_index,
             time: reading.time,
-        });
+        }));
         let mut out = Vec::with_capacity(result.alert_count as usize);
         for i in 0..result.alert_count as usize {
             out.push(WitAlert {

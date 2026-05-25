@@ -274,15 +274,23 @@ use wohl_temp_bindings::exports::pulseengine::wohl_temperature::temperature::{
 
 struct Component;
 
-static mut TABLE: Option<engine::TemperatureMonitor> = None;
+// Singleton monitor state. WASM components are single-threaded, but we use
+// `OnceLock<Mutex<_>>` because it's the simplest way to satisfy Rust 2024's
+// `static_mut_refs` lint without `static mut` / `unsafe`. The Mutex is
+// uncontended in practice (single-threaded wasm32-wasip2 guest).
+use std::sync::{Mutex, OnceLock};
 
-fn get_table() -> &'static mut engine::TemperatureMonitor {
-    unsafe {
-        if TABLE.is_none() {
-            TABLE = Some(engine::TemperatureMonitor::new());
-        }
-        TABLE.as_mut().unwrap()
-    }
+static TABLE: OnceLock<Mutex<engine::TemperatureMonitor>> = OnceLock::new();
+
+fn with_table<R>(f: impl FnOnce(&mut engine::TemperatureMonitor) -> R) -> R {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::TemperatureMonitor::new()));
+    let mut guard = cell.lock().expect("TemperatureMonitor mutex poisoned");
+    f(&mut guard)
+}
+
+fn reset_table() {
+    let cell = TABLE.get_or_init(|| Mutex::new(engine::TemperatureMonitor::new()));
+    *cell.lock().expect("TemperatureMonitor mutex poisoned") = engine::TemperatureMonitor::new();
 }
 
 fn to_wit_alert_type(t: engine::TempAlertType) -> WitAlertType {
@@ -297,12 +305,12 @@ fn to_wit_alert_type(t: engine::TempAlertType) -> WitAlertType {
 impl Guest for Component {
     #[cfg(target_arch = "wasm32")]
     async fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::TemperatureMonitor::new()); }
+        reset_table();
         Ok(())
     }
     #[cfg(not(target_arch = "wasm32"))]
     fn init() -> Result<(), String> {
-        unsafe { TABLE = Some(engine::TemperatureMonitor::new()); }
+        reset_table();
         Ok(())
     }
 
@@ -327,17 +335,17 @@ impl Guest for Component {
 
 impl Component {
     fn do_register_zone(zone_id: u32, freeze_threshold: i32, overheat_threshold: i32, rate_threshold: i32) -> bool {
-        get_table().register_zone(engine::ZoneConfig {
+        with_table(|t| t.register_zone(engine::ZoneConfig {
             zone_id,
             freeze_threshold,
             overheat_threshold,
             rate_threshold,
             enabled: true,
-        })
+        }))
     }
 
     fn do_process_reading(zone_id: u32, value: i32, time: u64) -> Vec<WitAlert> {
-        let result = get_table().process_reading(zone_id, value, time);
+        let result = with_table(|t| t.process_reading(zone_id, value, time));
         let mut out = Vec::with_capacity(result.alert_count as usize);
         for i in 0..result.alert_count as usize {
             out.push(WitAlert {
