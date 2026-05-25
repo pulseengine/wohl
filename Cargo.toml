@@ -11,6 +11,7 @@ members = [
     "crates/wohl-integration",
     "crates/wohl-fw-door-bench",
     "crates/wohl-ota",
+    "crates/wohl-matter-bridge",
 ]
 
 [workspace.package]
@@ -41,4 +42,5 @@ wohl-door = { path = "crates/wohl-door" }
 wohl-power = { path = "crates/wohl-power" }
 wohl-alert = { path = "crates/wohl-alert" }
 wohl-ota = { path = "crates/wohl-ota" }
+wohl-matter-bridge = { path = "crates/wohl-matter-bridge" }
 proptest = "1"

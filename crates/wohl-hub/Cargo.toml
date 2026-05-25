@@ -18,7 +18,7 @@ wohl-air.workspace = true
 wohl-door.workspace = true
 wohl-power.workspace = true
 wohl-alert.workspace = true
-wohl-matter-bridge = { path = "../wohl-matter-bridge" }
+wohl-matter-bridge.workspace = true
 
 # Relay engines
 relay-lc.workspace = true
