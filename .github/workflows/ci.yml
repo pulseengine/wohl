@@ -214,3 +214,43 @@ jobs:
       - name: bazel test //proofs/verus:alert_dedup_verify
         working-directory: wohl
         run: bazel test //proofs/verus:alert_dedup_verify --test_output=summary
+
+  bazel-build:
+    # Catches drift in `rules_wasm_component` and in the
+    # `src/wasm_component.rs` files that cargo never sees — each
+    # monitor crate's Cargo [lib] points at plain/src/lib.rs, so cargo
+    # clippy never type-checks the bindgen glue. `bazel build //:all`
+    # exercises every `rust_wasm_component_bindgen` target on the
+    # wasm32-wasip2 toolchain, closing that gap (issue #14).
+    name: Bazel build (//:all — exercises WASM component glue)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+          ref: ${{ env.RELAY_REF }}
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/rules_wasm_component
+          path: rules_wasm_component
+          ref: ${{ env.RULES_WASM_COMPONENT_REF }}
+          fetch-depth: 0
+      # rules_rocq_rust's module extension eagerly creates a
+      # nixpkgs-backed rocq_toolchains repo at Bazel analysis time,
+      # so every Bazel job needs nix-build on PATH (see MODULE.bazel
+      # comment). Pinned to the same SHA as the verus job above so
+      # both stay aligned on cachix/install-nix-action v31.10.6.
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-bazel-build
+          repository-cache: true
+      - name: bazel build //:all
+        working-directory: wohl
+        run: bazel build //:all
