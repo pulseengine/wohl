@@ -1,0 +1,13 @@
+// Generated from AADL process: Wohl_Firmware::ota
+package wohl_firmware:ota;
+
+interface ota-ports {
+    on-manifest_in: func() -> option<bytes>;
+    emit-image_out: func(val: firmwareimage);
+    on-attest_in: func() -> option<attestationreport>;
+}
+
+world ota-world {
+    import ota-ports;
+    export mgr: func();
+}

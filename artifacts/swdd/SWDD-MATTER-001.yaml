@@ -1,0 +1,73 @@
+artifacts:
+  - id: SWDD-MATTER-001
+    type: sw-detail-design
+    title: MatterBridgeProcess thread set and composition
+    status: approved
+    description: >
+      Detailed design of the `MatterBridgeProcess` AADL process
+      (spar/wohl_matter.aadl) and its five threads. Each thread is a
+      Rust task in the wohl-hub process when the `rs-matter-backend`
+      feature is active.
+
+      Thread set:
+
+      - `MdnsResponder` — periodic, 30 s. Wraps the rs-matter mDNS
+        responder. Announces _matter._tcp on the LAN; falls back to
+        sub-second cadence during open commissioning windows.
+
+      - `MatterStackEventLoop` — sporadic on UDP rx + on internal
+        attribute_in tick. Drives rs-matter's exchange machinery,
+        secure channel state, and Report formatting.
+
+      - `CommissioningHandler` — sporadic during open commissioning
+        window. Runs PASE, generates NOC at CASE establishment,
+        emits FabricRecord on success. Idle (zero CPU) when no
+        window is open.
+
+      - `MatterBridgePublisher` — sporadic on notification_in
+        arrival. Translates `Alert` / `Reading` into a
+        `BridgedAttributeUpdate` via `mapping_for_alert` /
+        `mapping_for_reading` (cluster.rs). Drops HealthMiss
+        silently. Hands the update to the event loop's
+        `attribute_in`.
+
+      - `FabricPersistor` — sporadic on fabric_in arrival. Writes
+        FabricRecord to /var/lib/wohl/matter/fabrics/<fabric-id>/ with
+        fsync, validates checksums on read, fails the process on
+        corruption (per SWREQ-MATTER-004).
+
+      Cluster mapping table — see
+      `crates/wohl-matter-bridge/src/cluster.rs` for the exhaustive
+      enum match. The 0.2.0 scaffold defines the table; 0.3.0 wires
+      it through to rs-matter cluster IDs at publish time.
+
+      Unit conversion at the bridge boundary:
+        Temperature: wohl centi-°C → Matter int16 centi-°C (passthrough)
+        Power: wohl watts → Matter ElectricalPowerMeasurement int64
+          milliwatts (× 1000)
+        CO₂ / PM2.5 / VOC: wohl ppm/ppb → Matter int16 ppm/ppb
+          (passthrough; check cluster-spec scaling)
+        Contact / WaterLeak: wohl boolean → Matter BooleanState bool
+          (polarity per device type — see cluster.rs comment;
+          ContactSensor: true=closed, WaterLeakDetector: true=leak)
+    tags: [matter, detailed-design, threads, cluster-mapping]
+    fields:
+      unit: crates/wohl-matter-bridge/src/{rs_matter,cluster,logging}.rs
+      function: "MatterBridge::{publish_alert,publish_reading}"
+      algorithm: >
+        Per-thread responsibilities and inter-thread connections are
+        the AADL process implementation MatterBridgeProcess.Impl in
+        spar/wohl_matter.aadl. The Rust task layout is one tokio
+        task per AADL thread, communicating via mpsc::channel
+        bounded to 64 messages (per-thread, isolated).
+    links:
+      - type: refines
+        target: SWARCH-WOHL-007
+      - type: satisfies
+        target: SWREQ-MATTER-002
+      - type: satisfies
+        target: SWREQ-MATTER-003
+      - type: satisfies
+        target: SWREQ-MATTER-004
+      - type: satisfies
+        target: SWREQ-MATTER-005

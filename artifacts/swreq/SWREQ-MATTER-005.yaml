@@ -1,0 +1,50 @@
+artifacts:
+  - id: SWREQ-MATTER-005
+    type: sw-req
+    title: "MATTER-P05: Bridged attribute updates published to all fabrics"
+    status: approved
+    description: >
+      Every alert and reading emitted by the verified monitor +
+      dispatcher chain shall be translated to the corresponding
+      Matter cluster attribute update and published to every
+      commissioned fabric that has an active subscription on the
+      target attribute.
+
+      The cluster mapping shall be encoded in
+      `crates/wohl-matter-bridge/src/cluster.rs` as an exhaustive
+      `match` against the wohl `AlertKind` and `ReadingKind` enums.
+      The mapping table is the single source of truth; the
+      MatterBridgePublisher thread shall reject any input whose kind
+      has no mapping rather than silently dropping it (debug-log
+      gate).
+
+      End-to-end latency from monitor alert emission to Matter
+      Report transmission shall not exceed the alert dispatcher
+      deadline (100 ms hub-internal) plus the Matter MRP round-trip
+      time on the controller's link.
+
+      Health-miss alerts (HealthMiss in AlertKind) shall NOT be
+      bridged — they are an internal liveness signal, not a
+      bridged-endpoint state change.
+
+      Unit conversion (centi-degrees Celsius for TemperatureMeasurement,
+      milliwatts for ElectricalPowerMeasurement, ppm for the gas
+      clusters) shall be applied at the bridge boundary, not in the
+      verified monitors.
+    tags: [matter, bridged-endpoints, cluster-mapping, latency]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Integration: a wohl water-leak alert appears on the Matter
+        controller as a BooleanState.StateValue=true within 1 s of
+        the sensor event. End-to-end latency measured under load.
+        Mapping exhaustiveness: a Rust compile-time check (exhaustive
+        match) prevents adding an AlertKind without a mapping
+        decision. Unit conversion verified by a property test that
+        round-trips wohl-internal values through the bridge and back.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-006
+      - type: refines
+        target: SWREQ-MATTER-001

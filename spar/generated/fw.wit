@@ -1,0 +1,16 @@
+// Generated from AADL process: Wohl_Firmware::fw
+package wohl_firmware:fw;
+
+interface fw-ports {
+    co2_in: func() -> bytes;
+    pm_in: func() -> bytes;
+    emit-packet_out: func(val: sensorpacket);
+    on-image_in: func() -> option<firmwareimage>;
+    emit-attest_out: func(val: attestationreport);
+}
+
+world fw-world {
+    import fw-ports;
+    export firmware: func();
+    export bootloader: func();
+}

@@ -1,0 +1,71 @@
+artifacts:
+  - id: SWV-MATTER-001
+    type: sw-verification
+    title: Matter integration SW verification
+    status: approved
+    description: >
+      SW-level verification that the Matter Bridge satisfies the
+      MATTER family of software requirements (SWREQ-MATTER-001
+      through SWREQ-MATTER-005) and the architectural shape decided
+      in SWARCH-WOHL-007.
+
+      Verification methods, by requirement:
+
+      - SWREQ-MATTER-001 (ecosystem visibility): integration test —
+        the matter-bridge crate exposes a `MatterBridge` trait, and
+        a Matter controller commissioning against an rs-matter-backed
+        build sees sensor state as bridged endpoints.
+
+      - SWREQ-MATTER-002 (commissioning): integration test using
+        chip-tool or ember-mdns to discover the bridge, run PASE
+        with a known setup code, and complete CASE handshake.
+        Negative test: closed-window discovery fails.
+
+      - SWREQ-MATTER-003 (multi-admin): integration test
+        commissioning two distinct fabrics, asserting independent
+        subscription state and ACL enforcement.
+
+      - SWREQ-MATTER-004 (persistence): kill-and-restart test —
+        commission, SIGKILL wohl-hub, restart, verify the controller
+        does not need to re-commission. Corruption negative test on
+        FabricRecord disk format.
+
+      - SWREQ-MATTER-005 (bridged updates): property test on the
+        cluster mapping (exhaustive enum match against AlertKind /
+        ReadingKind). End-to-end latency test from sensor event to
+        Matter Report tx, measured under controlled load. Unit
+        conversion property test (round-trip wohl values through the
+        bridge boundary).
+
+      Coverage gates: the wohl-matter-bridge crate is in scope for
+      the standard cargo-llvm-cov line/branch coverage gate.
+      `RsMatterBridge` integration tests run under the
+      `rs-matter-backend` Cargo feature.
+
+      Out of scope for 0.3.0: MC/DC truth tables via witness apply
+      only to wasm-component crates. The bridge runs host-side
+      (Linux process) and is not yet wasm-componentized.
+
+      Sigil attestation step (release-signing) is also out of scope
+      for this PR — the architecture/traceability/skeleton bundle
+      ships no new build artifact. The existing `release.yml`
+      pipeline (SLSA build provenance + cosign keyless signing of
+      SHA256SUMS) continues to sign wohl-hub binary releases. When
+      the live `rs-matter-backend` integration lands and the
+      `wohl-matter-bridge` crate is published or vendored into a
+      release tarball, the same release-signing chain applies
+      without modification.
+    tags: [verification, matter, swe-6]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWREQ-MATTER-001
+      - type: verifies
+        target: SWREQ-MATTER-002
+      - type: verifies
+        target: SWREQ-MATTER-003
+      - type: verifies
+        target: SWREQ-MATTER-004
+      - type: verifies
+        target: SWREQ-MATTER-005

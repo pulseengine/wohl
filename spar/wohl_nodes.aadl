@@ -7,6 +7,7 @@ package Wohl_Nodes
 public
   with Wohl_Hardware;
   with Wohl_Firmware;
+  with Wohl_Matter;
   with Wohl_Properties;
 
   -- ══════════════════════════════════════════════════════════════
@@ -180,6 +181,13 @@ public
       image_out: out event data port Wohl_Firmware::FirmwareImage;
       attest_in: in event data port Wohl_Firmware::AttestationReport;
       notification_out: out event data port;
+      -- Matter LAN traffic. These ports carry the (post-IPv6,
+      -- post-UDP) Matter messages and the mDNS announces produced
+      -- by the bridge. SWARCH-WOHL-006 — the bridge runs on the
+      -- hub, presenting CCSDS sensors as Matter bridged endpoints.
+      matter_lan_in: in event data port Wohl_Matter::MatterMessage;
+      matter_lan_out: out event data port Wohl_Matter::MatterMessage;
+      mdns_announce_out: out event data port;
   end HubNode;
 
   -- HubNode.RPi — budget/fanless: Raspberry Pi 4/5, Kiln WASM runtime.
@@ -190,13 +198,22 @@ public
       rom: memory Wohl_Hardware::SDCard_32G;
       monitors: process Wohl_Firmware::HubMonitorProcess.Impl;
       ota: process Wohl_Firmware::OTAManagerProcess.Impl;
+      matter: process Wohl_Matter::MatterBridgeProcess.Impl;
       lan: bus Wohl_Hardware::Ethernet_LAN;
     connections
       c_lan_bus: bus access lan -> cpu.lan;
       c_pkt_in: port packet_in -> monitors.packet_in;
+      -- Verified-monitor notifications fan out to the external sink
+      -- (stdout JSON / push) and into the Matter bridge for cluster
+      -- attribute publishing on every commissioned fabric.
       c_notif_out: port monitors.notification_out -> notification_out;
+      c_notif_to_matter: port monitors.notification_out -> matter.notification_in;
       c_image_out: port ota.image_out -> image_out;
       c_attest_in: port attest_in -> ota.attest_in;
+      -- Matter LAN socket plumbing (UDP/TCP Matter messages + mDNS)
+      c_matter_in: port matter_lan_in -> matter.message_in;
+      c_matter_out: port matter.message_out -> matter_lan_out;
+      c_mdns_out: port matter.announce_out -> mdns_announce_out;
     properties
       Actual_Processor_Binding => (reference (cpu)) applies to monitors.router;
       Actual_Processor_Binding => (reference (cpu)) applies to monitors.water_mon;
@@ -206,8 +223,14 @@ public
       Actual_Processor_Binding => (reference (cpu)) applies to monitors.power_mon;
       Actual_Processor_Binding => (reference (cpu)) applies to monitors.dispatcher;
       Actual_Processor_Binding => (reference (cpu)) applies to ota.mgr;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.mdns;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.event_loop;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.commissioning;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.publisher;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.persistor;
       Actual_Memory_Binding => (reference (ram)) applies to monitors;
       Actual_Memory_Binding => (reference (ram)) applies to ota;
+      Actual_Memory_Binding => (reference (ram)) applies to matter;
   end HubNode.RPi;
 
   -- HubNode.MiniPC — upgrade path for local ML, larger histories.
@@ -220,13 +243,18 @@ public
       rom: memory Wohl_Hardware::SSD_NVMe_256G;
       monitors: process Wohl_Firmware::HubMonitorProcess.Impl;
       ota: process Wohl_Firmware::OTAManagerProcess.Impl;
+      matter: process Wohl_Matter::MatterBridgeProcess.Impl;
       lan: bus Wohl_Hardware::Ethernet_LAN;
     connections
       c_lan_bus: bus access lan -> cpu.lan;
       c_pkt_in: port packet_in -> monitors.packet_in;
       c_notif_out: port monitors.notification_out -> notification_out;
+      c_notif_to_matter: port monitors.notification_out -> matter.notification_in;
       c_image_out: port ota.image_out -> image_out;
       c_attest_in: port attest_in -> ota.attest_in;
+      c_matter_in: port matter_lan_in -> matter.message_in;
+      c_matter_out: port matter.message_out -> matter_lan_out;
+      c_mdns_out: port matter.announce_out -> mdns_announce_out;
     properties
       Actual_Processor_Binding => (reference (cpu)) applies to monitors.router;
       Actual_Processor_Binding => (reference (cpu)) applies to monitors.water_mon;
@@ -236,8 +264,14 @@ public
       Actual_Processor_Binding => (reference (cpu)) applies to monitors.power_mon;
       Actual_Processor_Binding => (reference (cpu)) applies to monitors.dispatcher;
       Actual_Processor_Binding => (reference (cpu)) applies to ota.mgr;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.mdns;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.event_loop;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.commissioning;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.publisher;
+      Actual_Processor_Binding => (reference (cpu)) applies to matter.persistor;
       Actual_Memory_Binding => (reference (ram)) applies to monitors;
       Actual_Memory_Binding => (reference (ram)) applies to ota;
+      Actual_Memory_Binding => (reference (ram)) applies to matter;
   end HubNode.MiniPC;
 
 end Wohl_Nodes;

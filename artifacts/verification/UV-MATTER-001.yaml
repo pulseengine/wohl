@@ -1,0 +1,45 @@
+artifacts:
+  - id: UV-MATTER-001
+    type: unit-verification
+    title: wohl-matter-bridge unit tests
+    status: approved
+    description: >
+      Unit-level verification of the wohl-matter-bridge crate. Tests
+      live alongside the implementation in
+      `crates/wohl-matter-bridge/src/{cluster,logging,types}.rs` and
+      execute under `cargo test -p wohl-matter-bridge`.
+
+      Test coverage (0.2.0 scaffold baseline):
+
+      - AlertKind / ReadingKind round-trip through string
+        representations (`types::tests::alert_kind_roundtrip_through_string`).
+
+      - Cluster mapping correctness, one test per AlertKind variant.
+        Verifies the table in `cluster::mapping_for_alert` matches
+        the SWDD-MATTER-001 design (TemperatureMeasurement 0x0402,
+        BooleanState 0x0045, CO₂ 0x040D, PM2.5 0x042A, VOC 0x042C,
+        ElectricalPowerMeasurement 0x0090).
+
+      - HealthMiss alert is mapped to None (dropped silently per
+        SWREQ-MATTER-005).
+
+      - LoggingBridge sink captures publish_reading and publish_alert
+        calls with the resolved cluster + attribute identifiers.
+
+      - Endpoint id allocation through the zone → contact → circuit
+        flat-namespace scheme (interim; tracked as open question
+        in DESIGN.md §7).
+
+      Tests run on every CI invocation (the cargo test job) and
+      gate every PR touching the crate.
+
+      Scope limitations: these tests exercise only the `LoggingBridge`
+      and the cluster mapping. The `RsMatterBridge` implementation is
+      0.3.0 scope and will land alongside IV-MATTER-001
+      (integration verification with chip-tool / ember-mdns).
+    tags: [verification, matter, unit-test]
+    fields:
+      method: automated-test
+    links:
+      - type: verifies
+        target: SWDD-MATTER-001

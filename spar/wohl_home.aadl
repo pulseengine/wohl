@@ -7,12 +7,19 @@ package Wohl_Home
 public
   with Wohl_Hardware;
   with Wohl_Firmware;
+  with Wohl_Matter;
   with Wohl_Nodes;
   with Wohl_Properties;
 
   system StarterHome
     features
       notification_out: out event data port;
+      -- Matter LAN traffic leaves/enters the home through the hub's
+      -- existing Ethernet connection. The bridge speaks Matter on the
+      -- same LAN as the rest of the household network.
+      matter_lan_in: in event data port Wohl_Matter::MatterMessage;
+      matter_lan_out: out event data port Wohl_Matter::MatterMessage;
+      mdns_announce_out: out event data port;
   end StarterHome;
 
   system implementation StarterHome.Deployed
@@ -70,6 +77,11 @@ public
 
       -- Notifications leave the home
       n_out: port hub.notification_out -> notification_out;
+
+      -- Matter LAN traffic (UDP/TCP Matter messages + mDNS)
+      m_in: port matter_lan_in -> hub.matter_lan_in;
+      m_out: port hub.matter_lan_out -> matter_lan_out;
+      mdns_out: port hub.mdns_announce_out -> mdns_announce_out;
   end StarterHome.Deployed;
 
   -- Alternate deployment using the MiniPC hub variant.
@@ -98,6 +110,9 @@ public
       a_living_room: port living_room.attest_out -> hub.attest_in;
       a_kitchen_air: port kitchen_air.attest_out -> hub.attest_in;
       n_out: port hub.notification_out -> notification_out;
+      m_in: port matter_lan_in -> hub.matter_lan_in;
+      m_out: port hub.matter_lan_out -> matter_lan_out;
+      mdns_out: port hub.mdns_announce_out -> mdns_announce_out;
   end StarterHome.DeployedMiniPC;
 
 end Wohl_Home;

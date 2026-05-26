@@ -1,0 +1,18 @@
+// Generated from AADL process: Wohl_Firmware::monitors
+package wohl_firmware:monitors;
+
+interface monitors-ports {
+    on-packet_in: func() -> option<sensorpacket>;
+    emit-notification_out: func(val: bytes);
+}
+
+world monitors-world {
+    import monitors-ports;
+    export router: func();
+    export water_mon: func();
+    export temp_mon: func();
+    export air_mon: func();
+    export door_mon: func();
+    export power_mon: func();
+    export dispatcher: func();
+}
