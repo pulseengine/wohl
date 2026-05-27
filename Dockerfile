@@ -27,10 +27,10 @@
 # build locally or download the release tarball.
 
 # ── Stage 1: build ────────────────────────────────────────────────────
-# Pin to 1.85 to match `rust-version` in workspace Cargo.toml. The
+# Pin to 1.87 to match `rust-version` in workspace Cargo.toml. The
 # release workflow uses dtolnay/rust-toolchain@stable — keep this floor
 # matched when bumping MSRV.
-FROM rust:1.85-slim-bookworm AS builder
+FROM rust:1.87-slim-bookworm AS builder
 
 # Argument layout: by default we expect `wohl` and `relay` as
 # sibling subdirectories of the build context (matches release.yml's
