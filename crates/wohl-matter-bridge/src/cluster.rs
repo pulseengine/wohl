@@ -12,6 +12,17 @@
 //! Cluster IDs and attribute references follow the Matter Application
 //! Cluster Specification 1.3 (latest at time of writing). Source for each
 //! mapping decision is documented inline.
+//!
+//! ## On device types vs clusters
+//!
+//! Matter draws a sharp line between **clusters** (server-side functional
+//! units identified by cluster id, e.g. BooleanState = 0x0045) and
+//! **device types** (named compositions of mandatory + optional clusters,
+//! identified by a separate Device Type ID, e.g. WaterLeakDetector = 0x0043).
+//! This enum tracks **clusters only**. Water-leak support is a *device type*
+//! that uses BooleanState (0x0045) as its mandatory server cluster; the
+//! "WaterLeakDetector" name is intentionally NOT enumerated here — see
+//! DESIGN.md §2 for the rationale.
 
 use crate::types::{AlertKind, ReadingKind};
 
@@ -22,13 +33,12 @@ use crate::types::{AlertKind, ReadingKind};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MatterCluster {
     /// Boolean State (0x0045) — Matter 1.0 generic "is this thing
-    /// triggered?" cluster. Used for door/window contact and as a
-    /// 1.0-compatible fallback for water-leak.
+    /// triggered?" cluster. Used for door/window contact and for
+    /// water-leak (the WaterLeakDetector device type uses BooleanState
+    /// as its mandatory server cluster; there is no separate
+    /// "WaterLeakDetector cluster" in the Matter spec — see DESIGN.md
+    /// §2 for the corrected understanding).
     BooleanState,
-    /// Water Leak Detector (0x0048) — Matter 1.2+ specific cluster.
-    /// We declare it for forward-compat, but ship with BooleanState as
-    /// the wire-level publish in 0.3.0 for broadest controller support.
-    WaterLeakDetector,
     /// Temperature Measurement (0x0402) — measured temperature in
     /// centi-degrees Celsius (signed int16).
     TemperatureMeasurement,
@@ -48,7 +58,6 @@ impl MatterCluster {
     pub const fn cluster_id(self) -> u32 {
         match self {
             Self::BooleanState => 0x0045,
-            Self::WaterLeakDetector => 0x0048,
             Self::TemperatureMeasurement => 0x0402,
             Self::CarbonDioxideConcentrationMeasurement => 0x040D,
             Self::Pm25ConcentrationMeasurement => 0x042A,
@@ -66,14 +75,19 @@ pub enum MatterAttribute {
     /// as a trait invariant. On a ContactSensor device type (door /
     /// window), `true` means contact closed (door shut) and `false`
     /// means open. On a WaterLeakDetector device type — Matter 1.2+
-    /// — or when using BooleanState as the 1.0-compat fallback for
-    /// water leak, `true` means leak detected. The bridge
-    /// implementor reads the wohl `AlertKind` / `ReadingKind` to
-    /// decide which polarity to encode. The cluster + attribute id
+    /// — `true` means leak detected. The bridge implementor reads
+    /// the wohl `AlertKind` / `ReadingKind` to decide which polarity
+    /// to encode; the device-type descriptor on the endpoint
+    /// disambiguates for the controller. The cluster + attribute id
     /// are the same in both cases (0x0045 / 0x0000).
     StateValue,
     /// MeasuredValue (0x0000) — the generic measurement attribute, used
-    /// by Temperature, CO2, PM2.5, VOC clusters.
+    /// by Temperature, CO2, PM2.5, VOC clusters. **Wire encoding is
+    /// cluster-dependent**: TemperatureMeasurement encodes int16 in
+    /// 0.01 °C; the concentration-measurement clusters (CO2, PM2.5,
+    /// VOC) encode IEEE 754 float32 with a separate MeasurementUnit
+    /// (0x0008) attribute declaring the unit. The bridge publish path
+    /// applies the per-cluster encoding — see DESIGN.md §7.4.
     MeasuredValue,
     /// ElectricalPowerMeasurement::ActivePower (0x0005) —
     /// instantaneous active power. **Matter wire encoding is
@@ -138,16 +152,19 @@ pub const fn mapping_for_alert(kind: AlertKind) -> Option<MatterClusterMapping> 
             MatterClusterMapping::new(TemperatureMeasurement, MeasuredValue)
         }
 
-        // Water leak. Matter 1.0 generic fallback is BooleanState;
-        // Matter 1.2 added a specific WaterLeakDetector device type.
-        // In 0.2.0 the mapping table records BooleanState (broadest
-        // controller compatibility). 0.3.0 may dual-publish.
+        // Water leak. The endpoint is declared with the WaterLeakDetector
+        // *device type* (DTL 0x0043) which mandates BooleanState (0x0045)
+        // as its server cluster. There is no separate "WaterLeakDetector
+        // cluster"; an earlier draft incorrectly listed cluster id 0x0048
+        // (which is the Smoke/CO Alarm cluster). See DESIGN.md §2 and
+        // SWDD-MATTER-001 for the corrected design.
         AlertKind::WaterLeak => MatterClusterMapping::new(BooleanState, StateValue),
 
         // Air-quality clusters all share the MeasuredValue attribute id
         // (0x0000) within their respective concentration-measurement
         // clusters. We surface MeasuredValue; controllers compare it
-        // against their own thresholds.
+        // against their own thresholds. Wire encoding is IEEE 754
+        // float32 for concentration MeasuredValue — see DESIGN.md §7.4.
         AlertKind::Co2Warning | AlertKind::Co2Critical => {
             MatterClusterMapping::new(CarbonDioxideConcentrationMeasurement, MeasuredValue)
         }
@@ -160,9 +177,10 @@ pub const fn mapping_for_alert(kind: AlertKind) -> Option<MatterClusterMapping> 
         ),
 
         // Door / window contact events surface as BooleanState::StateValue
-        // toggling. The two alert flavors (open-too-long, opened-at-night)
-        // both point at the same attribute; the rich detail lives in the
-        // hub's notification path, not Matter.
+        // toggling on a ContactSensor device-type endpoint. The two alert
+        // flavors (open-too-long, opened-at-night) both point at the same
+        // attribute; the rich detail lives in the hub's notification
+        // path, not Matter.
         AlertKind::DoorOpenTooLong | AlertKind::DoorOpenedAtNight => {
             MatterClusterMapping::new(BooleanState, StateValue)
         }
@@ -267,7 +285,12 @@ mod tests {
     }
 
     #[test]
-    fn water_leak_maps_to_boolean_state_for_1_0_compat() {
+    fn water_leak_maps_to_boolean_state_on_water_leak_detector_device_type() {
+        // Matter 1.2 water-leak is a DEVICE TYPE (DTL 0x0043), not a
+        // separate cluster. The mandatory server cluster on that
+        // device type is BooleanState (0x0045). Cluster id 0x0048 —
+        // which an earlier draft incorrectly assigned to water-leak —
+        // is actually the Smoke/CO Alarm cluster.
         let m = matter_cluster_for("water_leak").unwrap();
         assert_eq!(m.cluster, MatterCluster::BooleanState);
         assert_eq!(m.attribute, MatterAttribute::StateValue);
@@ -332,7 +355,6 @@ mod tests {
         // Pin specific cluster IDs to catch accidental edits — these are
         // the Matter Application Cluster Specification 1.3 values.
         assert_eq!(MatterCluster::BooleanState.cluster_id(), 0x0045);
-        assert_eq!(MatterCluster::WaterLeakDetector.cluster_id(), 0x0048);
         assert_eq!(MatterCluster::TemperatureMeasurement.cluster_id(), 0x0402);
         assert_eq!(
             MatterCluster::CarbonDioxideConcentrationMeasurement.cluster_id(),

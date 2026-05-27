@@ -5,61 +5,98 @@ artifacts:
     status: approved
     description: >
       Detailed design of the `MatterBridgeProcess` AADL process
-      (spar/wohl_matter.aadl) and its five threads. Each thread is a
-      Rust task in the wohl-hub process when the `rs-matter-backend`
-      feature is active.
+      (spar/wohl_matter.aadl) and its five conceptual threads.
 
-      Thread set:
+      The thread set described here is the **logical concurrency
+      model** the AADL captures (for scheduling analysis, WCET
+      bookkeeping, and architectural review). The Rust realization
+      need not be one-OS-thread-per-AADL-thread: some threads will
+      collapse into trait impls (FabricPersistor → rs-matter's
+      `KvBlobStore` callback) or into individual futures driven by a
+      single tokio task. The mapping from AADL thread to Rust
+      construct is documented in the live integration PR; this SWDD
+      pins the per-thread responsibilities and budgets, not the
+      runtime topology.
 
-      - `MdnsResponder` — periodic, 30 s. Wraps the rs-matter mDNS
-        responder. Announces _matter._tcp on the LAN; falls back to
-        sub-second cadence during open commissioning windows.
+      Thread set (conceptual):
+
+      - `MdnsResponder` — periodic, 30 s. Drives the rs-matter mDNS
+        responder (or the OS mDNS daemon if running with
+        `astro-dnssd`/`zeroconf` backend). Announces _matter._tcp on
+        the LAN. During an open commissioning window the cadence
+        shifts to sub-second per Matter Core §4.3.
 
       - `MatterStackEventLoop` — sporadic on UDP rx + on internal
         attribute_in tick. Drives rs-matter's exchange machinery,
         secure channel state, and Report formatting.
 
       - `CommissioningHandler` — sporadic during open commissioning
-        window. Runs PASE, generates NOC at CASE establishment,
-        emits FabricRecord on success. Idle (zero CPU) when no
-        window is open.
+        window. Runs PASE (SPAKE2+ over P-256), generates NOC at
+        CASE establishment, emits FabricRecord on success. Idle
+        (zero CPU) when no window is open.
 
       - `MatterBridgePublisher` — sporadic on notification_in
         arrival. Translates `Alert` / `Reading` into a
         `BridgedAttributeUpdate` via `mapping_for_alert` /
         `mapping_for_reading` (cluster.rs). Drops HealthMiss
         silently. Hands the update to the event loop's
-        `attribute_in`.
+        attribute cache (see AADL `c_attr` comment — the live
+        rs-matter integration mediates the AADL push-shape against
+        rs-matter's pull-callback API via a current-value cache).
 
-      - `FabricPersistor` — sporadic on fabric_in arrival. Writes
-        FabricRecord to /var/lib/wohl/matter/fabrics/<fabric-id>/ with
-        fsync, validates checksums on read, fails the process on
-        corruption (per SWREQ-MATTER-004).
+      - `FabricPersistor` — sporadic on fabric_in arrival. In the
+        live integration this collapses into the rs-matter
+        `KvBlobStore` callback pointed at
+        `/var/lib/wohl/matter/`. Writes are fsync'd; corruption
+        fails the process on read per SWREQ-MATTER-004.
 
       Cluster mapping table — see
       `crates/wohl-matter-bridge/src/cluster.rs` for the exhaustive
       enum match. The 0.2.0 scaffold defines the table; 0.3.0 wires
       it through to rs-matter cluster IDs at publish time.
 
-      Unit conversion at the bridge boundary:
-        Temperature: wohl centi-°C → Matter int16 centi-°C (passthrough)
-        Power: wohl watts → Matter ElectricalPowerMeasurement int64
-          milliwatts (× 1000)
-        CO₂ / PM2.5 / VOC: wohl ppm/ppb → Matter int16 ppm/ppb
-          (passthrough; check cluster-spec scaling)
-        Contact / WaterLeak: wohl boolean → Matter BooleanState bool
-          (polarity per device type — see cluster.rs comment;
-          ContactSensor: true=closed, WaterLeakDetector: true=leak)
+      Note on water-leak (corrected from earlier draft): water-leak
+      is a Matter **device type** (DTL `0x0043`), NOT a separate
+      cluster. The endpoint exposes BooleanState (`0x0045`) as its
+      mandatory server cluster, with the WaterLeakDetector device
+      type identifier on the endpoint descriptor. An earlier draft
+      of this document listed a fictitious "WaterLeakDetector
+      cluster" at `0x0048` (which is actually the Smoke/CO Alarm
+      cluster) — removed in the honesty-fixes pass.
+
+      Unit conversion at the bridge boundary (corrected per Matter
+      App Cluster Spec review — see DESIGN.md §7.4):
+        Temperature: wohl centi-°C → Matter TemperatureMeasurement
+          MeasuredValue **int16 in 0.01 °C** (passthrough).
+        Power: wohl watts → Matter ElectricalPowerMeasurement
+          ActivePower **int64 milliwatts** (× 1000).
+        CO₂ / PM2.5: wohl ppm or μg/m³ → ConcentrationMeasurement
+          MeasuredValue **IEEE 754 float32** (cast). The cluster's
+          MeasurementUnit attribute (0x0008) declares the unit.
+        VOC: wohl carries a Sensirion-style index, not a
+          concentration; the Matter VOC cluster expects a real
+          concentration. This is a known mismatch — see DESIGN.md
+          §7.5. The live impl either omits VOC publish or defines
+          an extension.
+        Contact / WaterPresence: wohl boolean → Matter BooleanState
+          StateValue bool. **Polarity is device-type dependent** —
+          ContactSensor device type (DTL `0x0015`): `true`=closed;
+          WaterLeakDetector device type (DTL `0x0043`):
+          `true`=leak. See cluster.rs StateValue doc.
     tags: [matter, detailed-design, threads, cluster-mapping]
     fields:
       unit: crates/wohl-matter-bridge/src/{rs_matter,cluster,logging}.rs
       function: "MatterBridge::{publish_alert,publish_reading}"
       algorithm: >
         Per-thread responsibilities and inter-thread connections are
-        the AADL process implementation MatterBridgeProcess.Impl in
-        spar/wohl_matter.aadl. The Rust task layout is one tokio
-        task per AADL thread, communicating via mpsc::channel
-        bounded to 64 messages (per-thread, isolated).
+        the AADL process implementation `MatterBridgeProcess.Impl`
+        in spar/wohl_matter.aadl. The Rust task layout will be
+        decided in the live integration PR — likely a dedicated
+        std::thread running `block_on(...)` against rs-matter's
+        future tree, with the AADL threads collapsing into selected
+        sub-futures and trait impls. The AADL push-shape for the
+        attribute_in connection is mediated by a current-value
+        cache that rs-matter pulls from when emitting Reports.
     links:
       - type: refines
         target: SWARCH-WOHL-007
