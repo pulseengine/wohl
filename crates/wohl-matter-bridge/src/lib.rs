@@ -31,6 +31,8 @@ pub mod logging;
 pub mod types;
 
 #[cfg(feature = "rs-matter-backend")]
+pub mod commissioning;
+#[cfg(feature = "rs-matter-backend")]
 pub mod rs_matter;
 
 pub use cluster::{MatterAttribute, MatterCluster, MatterClusterMapping, matter_cluster_for};

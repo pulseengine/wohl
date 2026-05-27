@@ -102,6 +102,42 @@ impl RsMatterBridge {
     pub fn config(&self) -> &RsMatterConfig {
         &self.config
     }
+
+    /// Spawn the Matter commissioning thread.
+    ///
+    /// Constructs the rs-matter `Matter` instance, binds the IPv6
+    /// UDP socket, opens a commissioning window if no fabric is yet
+    /// persisted, and runs the rs-matter futures on a dedicated OS
+    /// thread (≥550 KB stack). The thread runs for the lifetime of
+    /// the process; the returned `JoinHandle` is provided for the
+    /// caller's bookkeeping but is not expected to be joined under
+    /// normal operation.
+    ///
+    /// **Single-instance constraint:** the underlying static cells
+    /// (`Matter`, IM buffers, subscriptions, KV scratch) live in
+    /// `static_cell::StaticCell` statics. This method can be called
+    /// at most once per process — a second call panics on
+    /// `StaticCell` re-init. This matches how rs-matter is
+    /// architected to be embedded.
+    ///
+    /// On first boot (no commissioned fabric), the standard Matter
+    /// QR code + manual pairing code are printed via the rs-matter
+    /// helpers (Verhoeff-checksummed manual code, Base38-encoded
+    /// TLV QR per Matter Core §5.1.3).
+    ///
+    /// This method does NOT yet wire `publish_*` to the running
+    /// stack — that's the attribute-publishing slice. Today's
+    /// commissioning loop will succeed (a Matter controller can
+    /// commission the bridge against the test DAC / vendor 0xFFF1)
+    /// but no application clusters are advertised on the endpoint
+    /// set, so a commissioned controller sees only the root
+    /// endpoint (Basic Information, General Commissioning,
+    /// Operational Credentials).
+    pub fn start_commissioning(
+        &self,
+    ) -> std::io::Result<std::thread::JoinHandle<Result<(), rs_matter::error::Error>>> {
+        crate::commissioning::start(self.config.state_dir.clone())
+    }
 }
 
 impl MatterBridge for RsMatterBridge {
