@@ -2,12 +2,24 @@ artifacts:
   - id: SWV-MATTER-001
     type: sw-verification
     title: Matter integration SW verification
-    status: approved
+    status: proposed
     description: >
-      SW-level verification that the Matter Bridge satisfies the
-      MATTER family of software requirements (SWREQ-MATTER-001
-      through SWREQ-MATTER-005) and the architectural shape decided
-      in SWARCH-WOHL-007.
+      SW-level verification PLAN for how the Matter Bridge will
+      satisfy the MATTER family of software requirements
+      (SWREQ-MATTER-001 through SWREQ-MATTER-005) and the
+      architectural shape decided in SWARCH-WOHL-007.
+
+      STATUS NOTE: this artifact is `proposed`, not `approved`,
+      until at least one of the integration tests below is wired
+      into CI. The 0.3.0-architecture PR (the architecture +
+      traceability + skeleton foundation) provides the trait
+      surface, cluster mapping table, and unit tests on the
+      LoggingBridge stub — but no rs-matter wire integration runs
+      anywhere yet. Treat the `verifies` links below as a
+      verification plan; the mechanical evidence lands when the
+      live rs-matter integration PR turns
+      `RsMatterBridge::publish_*` into real calls and adds
+      `IV-MATTER-001` integration tests.
 
       Verification methods, by requirement:
 

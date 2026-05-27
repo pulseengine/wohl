@@ -202,10 +202,19 @@ public
       -- Verified-monitor notifications drive bridged-attribute updates
       c_notif: port notification_in -> publisher.notification_in;
 
-      -- Bridged updates leave the publisher into the event loop for
-      -- multi-fabric broadcast. The event loop wraps each
-      -- BridgedAttributeUpdate in a Matter Report message and emits
-      -- it on response_out (which flows to message_out below).
+      -- Bridged updates flow from publisher to the event loop via an
+      -- attribute_in port. NOTE on the push-vs-pull boundary: this
+      -- AADL connection models a PUSH (publisher hands the update
+      -- to the event loop). rs-matter itself is callback / pull —
+      -- when a Matter controller subscribes, rs-matter calls the
+      -- application's DataModel handler for the current attribute
+      -- value. The live `RsMatterBridge` mediates between the two
+      -- by keeping a current-value cache: the publisher pushes new
+      -- values into the cache, and rs-matter pulls from the cache
+      -- when it needs to emit a Report on a subscription. The AADL
+      -- connection therefore models the BRIDGE-INTERNAL push from
+      -- monitors to cache; the wire-side pull happens beyond the
+      -- model boundary inside rs-matter's runtime.
       c_attr: port publisher.attribute_out -> event_loop.attribute_in;
   end MatterBridgeProcess.Impl;
 
