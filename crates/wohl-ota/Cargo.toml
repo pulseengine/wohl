@@ -4,7 +4,7 @@ description = "Wohl OTA Core — verified dual-bank firmware update state machin
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
-rust-version = "1.85.0"
+rust-version = "1.87.0"
 
 [lib]
 path = "plain/src/lib.rs"

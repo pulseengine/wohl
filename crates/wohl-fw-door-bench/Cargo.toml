@@ -5,7 +5,7 @@ version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/pulseengine/wohl"
-rust-version = "1.85.0"
+rust-version = "1.87.0"
 
 # Pure-logic crate (packet encoder, debouncer). Builds on host for tests,
 # and on thumbv6m-none-eabi as part of the firmware binary.
