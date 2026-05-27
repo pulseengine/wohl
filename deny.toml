@@ -63,8 +63,23 @@ skip = []
 #   release line that the entire embedded Rust ecosystem still pins.
 #   Re-evaluate when cortex-m 0.8 stabilises and stm32g0xx-hal cuts a
 #   release against it.
+#
+# RUSTSEC-2026-0009 — `time 0.3.45` stack-exhaustion DoS via RFC 2822
+#   parser. Transitive via wohl-matter-bridge → rs-matter → domain
+#   0.10.4 (which pins time). The wohl bridge never calls RFC 2822
+#   parsing — rs-matter only uses `time` for cert validity intervals.
+#   `cargo update -p time` declines to bump because of `domain`'s
+#   pinned requirement. Re-evaluate when rs-matter (or domain) bumps
+#   time to >= 0.3.47.
+#
+# RUSTSEC-2024-0436 — `paste 1.0.15` no longer maintained. Transitive
+#   via wohl-matter-bridge → rs-matter → pinned-init → paste. The
+#   crate still functions; rs-matter upstream tracks migration off
+#   pinned-init. Re-evaluate when rs-matter drops the dependency.
 ignore = [
     "RUSTSEC-2026-0110",
+    "RUSTSEC-2026-0009",
+    "RUSTSEC-2024-0436",
 ]
 # Yanked crates in the lockfile: warn, don't fail — yanks can happen
 # mid-CI run.
@@ -77,4 +92,15 @@ yanked = "warn"
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
+# Git sources we explicitly trust. Each entry MUST be pinned by `rev` in
+# Cargo.toml (never `branch` or `tag` against a moving ref).
+#
+# project-chip/rs-matter — pinned in crates/wohl-matter-bridge/Cargo.toml
+#   behind the `rs-matter-backend` feature. Pinned to a specific commit
+#   because crates.io `rs-matter = "0.1.0"` (July 2023) predates the
+#   current API surface entirely. Three workspace members resolve to
+#   this repo via the git dep: rs-matter, rs-matter-codegen,
+#   rs-matter-macros. See DESIGN.md §3 in wohl-matter-bridge.
+allow-git = [
+    "https://github.com/project-chip/rs-matter",
+]
