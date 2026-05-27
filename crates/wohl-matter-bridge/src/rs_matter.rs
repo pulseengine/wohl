@@ -26,9 +26,14 @@
 //!   - rs-matter upstream `examples/src/bin/onoff_light.rs` for the
 //!     canonical std-thread + `block_on` construction sketch.
 
+use std::sync::Arc;
+
 use rs_matter::persist::DirKvBlobStore;
 
 use crate::MatterBridge;
+use crate::cache::{AttributeCache, AttributeKey};
+use crate::cluster::{mapping_for_alert, mapping_for_reading};
+use crate::conversion::{convert_alert, convert_reading};
 use crate::types::{BridgedAlert, SensorReading};
 
 /// Configuration handed to [`RsMatterBridge::new`] at construction
@@ -61,18 +66,30 @@ impl Default for RsMatterConfig {
 
 /// Live rs-matter-backed bridge.
 ///
-/// In the current slice, construction wires the concrete
-/// `DirKvBlobStore` against the configured state directory but does
-/// not yet start the Matter runtime. The `MatterBridge` trait impl's
-/// `publish_*` methods still `unimplemented!()` because the runtime
-/// they need (rs-matter event loop on a dedicated OS thread) is
-/// constructed in the next slice.
+/// Owns:
+///   - the rs-matter persistence backend (`DirKvBlobStore`) for
+///     fabric data,
+///   - an `Arc<AttributeCache>` of the latest bridged values per
+///     endpoint+cluster+attribute (mediates rs-matter's pull-callback
+///     `DataModel` against wohl's push-style dispatcher — see
+///     `cache.rs` doc and the AADL `c_attr` comment).
+///
+/// `publish_reading` / `publish_alert` write into the cache. The
+/// rs-matter `DataModelHandler` integration (slice 6) reads from
+/// the cache when a controller subscribes; until then the cache is
+/// observable from this crate's tests + the next implementor's
+/// integration code.
 pub struct RsMatterBridge {
     config: RsMatterConfig,
-    /// Persistent fabric / ACL / setup-code storage. The next slice
-    /// hands a reference to `matter.load_persist(...)` at boot and
-    /// stores updates through rs-matter's exchange-handler callbacks.
+    /// Persistent fabric / ACL / setup-code storage. The
+    /// commissioning thread hands a reference to
+    /// `matter.load_persist(...)` at boot and stores updates through
+    /// rs-matter's exchange-handler callbacks.
     kv_store: DirKvBlobStore,
+    /// Current-value cache, shared with the rs-matter
+    /// `DataModelHandler` once the next slice wires endpoint
+    /// registration.
+    cache: Arc<AttributeCache>,
 }
 
 impl RsMatterBridge {
@@ -83,7 +100,21 @@ impl RsMatterBridge {
     /// at boot to replay any prior commissioned fabric.
     pub fn new(config: RsMatterConfig) -> Self {
         let kv_store = DirKvBlobStore::new(config.state_dir.clone());
-        Self { config, kv_store }
+        let cache = Arc::new(AttributeCache::new());
+        Self {
+            config,
+            kv_store,
+            cache,
+        }
+    }
+
+    /// Borrow the attribute cache. The next slice's
+    /// `DataModelHandler` integration calls this on the commissioning
+    /// thread to pull current values during controller subscriptions.
+    /// Tests use it to assert the publish path landed the right
+    /// value in the cache.
+    pub fn cache(&self) -> &Arc<AttributeCache> {
+        &self.cache
     }
 
     /// The state directory this bridge persists fabric data to.
@@ -141,21 +172,48 @@ impl RsMatterBridge {
 }
 
 impl MatterBridge for RsMatterBridge {
-    fn publish_reading(&self, _reading: SensorReading) {
-        unimplemented!(
-            "RsMatterBridge::publish_reading needs the commissioning \
-             loop (mDNS + PASE + CASE) running first. That's the next \
-             slice. Use LoggingBridge for now; switch to \
-             RsMatterBridge once the live runtime starts. See \
-             SWARCH-WOHL-007 and DESIGN.md §3."
+    /// Translate a wohl sensor reading to its Matter cluster
+    /// attribute and write it into the cache. Drops readings whose
+    /// kind has no Matter mapping (none today; future kinds without
+    /// a Matter analog would be silently dropped via the `None`
+    /// branch).
+    fn publish_reading(&self, reading: SensorReading) {
+        let Some(mapping) = mapping_for_reading(reading.kind) else {
+            return;
+        };
+        let value = convert_reading(reading.kind, reading.value, mapping);
+        let key = AttributeKey::new(
+            reading.endpoint_id,
+            mapping.cluster.cluster_id(),
+            mapping.attribute.attribute_id(),
         );
+        self.cache.set(key, value);
     }
 
-    fn publish_alert(&self, _alert: BridgedAlert) {
-        unimplemented!(
-            "RsMatterBridge::publish_alert needs the commissioning \
-             loop running first. See SWARCH-WOHL-007 and DESIGN.md §3."
+    /// Translate a wohl alert to its Matter cluster attribute and
+    /// write it into the cache. Drops alerts:
+    ///   - whose kind has no Matter mapping (today: only
+    ///     `AlertKind::HealthMiss`, an internal liveness signal),
+    ///   - whose target cluster expects a numeric value but the
+    ///     alert payload is `None` — see `conversion::convert_alert`.
+    fn publish_alert(&self, alert: BridgedAlert) {
+        let Some(mapping) = mapping_for_alert(alert.kind) else {
+            return;
+        };
+        let Some(value) = convert_alert(alert.kind, alert.value, mapping) else {
+            return;
+        };
+        let endpoint_id = alert
+            .zone_id
+            .or(alert.contact_id)
+            .or(alert.circuit_id)
+            .unwrap_or(0);
+        let key = AttributeKey::new(
+            endpoint_id,
+            mapping.cluster.cluster_id(),
+            mapping.attribute.attribute_id(),
         );
+        self.cache.set(key, value);
     }
 }
 
@@ -192,6 +250,116 @@ mod tests {
         // accessor — proves the rs-matter type is wired in, not just
         // declared.
         let _: &DirKvBlobStore = bridge.kv_store();
+    }
+
+    #[test]
+    fn publish_reading_populates_cache() {
+        use crate::cache::AttributeValue;
+        use crate::types::ReadingKind;
+        let bridge = RsMatterBridge::new(RsMatterConfig::default());
+        bridge.publish_reading(SensorReading {
+            kind: ReadingKind::Temperature,
+            endpoint_id: 7,
+            value: -150,
+            time: 1234,
+        });
+        assert_eq!(
+            bridge.cache().get(AttributeKey::new(7, 0x0402, 0x0000)),
+            Some(AttributeValue::Int16(-150))
+        );
+        assert_eq!(bridge.cache().len(), 1);
+    }
+
+    #[test]
+    fn publish_alert_water_leak_sets_boolean_state_true() {
+        use crate::cache::AttributeValue;
+        use crate::types::AlertKind;
+        let bridge = RsMatterBridge::new(RsMatterConfig::default());
+        bridge.publish_alert(BridgedAlert {
+            kind: AlertKind::WaterLeak,
+            zone_id: Some(3),
+            contact_id: None,
+            circuit_id: None,
+            value: None,
+            time: 5000,
+        });
+        assert_eq!(
+            bridge.cache().get(AttributeKey::new(3, 0x0045, 0x0000)),
+            Some(AttributeValue::Bool(true))
+        );
+    }
+
+    #[test]
+    fn publish_alert_power_spike_converts_watts_to_milliwatts() {
+        use crate::cache::AttributeValue;
+        use crate::types::AlertKind;
+        let bridge = RsMatterBridge::new(RsMatterConfig::default());
+        bridge.publish_alert(BridgedAlert {
+            kind: AlertKind::PowerSpike,
+            zone_id: None,
+            contact_id: None,
+            circuit_id: Some(11),
+            value: Some(15_000),
+            time: 1,
+        });
+        assert_eq!(
+            bridge.cache().get(AttributeKey::new(11, 0x0090, 0x0005)),
+            Some(AttributeValue::Int64(15_000_000))
+        );
+    }
+
+    #[test]
+    fn publish_alert_health_miss_is_dropped() {
+        use crate::types::AlertKind;
+        let bridge = RsMatterBridge::new(RsMatterConfig::default());
+        bridge.publish_alert(BridgedAlert {
+            kind: AlertKind::HealthMiss,
+            zone_id: None,
+            contact_id: None,
+            circuit_id: None,
+            value: Some(1),
+            time: 10,
+        });
+        assert!(
+            bridge.cache().is_empty(),
+            "HealthMiss must not appear on Matter"
+        );
+    }
+
+    #[test]
+    fn publish_alert_freeze_without_value_skips_cache() {
+        use crate::types::AlertKind;
+        let bridge = RsMatterBridge::new(RsMatterConfig::default());
+        bridge.publish_alert(BridgedAlert {
+            kind: AlertKind::Freeze,
+            zone_id: Some(2),
+            contact_id: None,
+            circuit_id: None,
+            value: None,
+            time: 0,
+        });
+        // No value → no Matter Report can be emitted → cache stays
+        // empty rather than publishing a stale or fabricated number.
+        assert!(bridge.cache().is_empty());
+    }
+
+    #[test]
+    fn cache_is_shared_through_arc() {
+        // The cache accessor returns an Arc so the future
+        // commissioning-thread integration can clone a handle
+        // without taking a long-lived borrow on the bridge.
+        let bridge = RsMatterBridge::new(RsMatterConfig::default());
+        let cache_clone = bridge.cache().clone();
+        assert_eq!(cache_clone.len(), 0);
+        // A write through the bridge is visible through the
+        // independently-held handle.
+        bridge.publish_reading(SensorReading {
+            kind: crate::types::ReadingKind::Co2,
+            endpoint_id: 99,
+            value: 412,
+            time: 0,
+        });
+        assert_eq!(cache_clone.len(), 1);
     }
 
     #[test]

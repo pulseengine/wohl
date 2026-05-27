@@ -26,7 +26,9 @@
 
 #![forbid(unsafe_code)]
 
+pub mod cache;
 pub mod cluster;
+pub mod conversion;
 pub mod logging;
 pub mod types;
 
