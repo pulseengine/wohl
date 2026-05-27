@@ -10,26 +10,26 @@ rust-version = "1.87.0"
 path = "src/lib.rs"
 crate-type = ["rlib"]
 
-# 0.3.0-architecture: the `rs-matter-backend` feature gates the typed
-# skeleton (`RsMatterBridge`) that future PRs flesh out with the live
-# rs-matter wiring. The feature exists today as a *symbol gate* — turning
-# it on compiles the `rs_matter` module so callers can already write
-# `#[cfg(feature = "rs-matter-backend")] let bridge = RsMatterBridge::new(..);`.
-# rs-matter is NOT yet a real dependency: the skeleton's methods return
-# `unimplemented!()` and the wire integration is the 0.3.x implementation
-# PR. See DESIGN.md §3 "rs-matter target version" and SWARCH-WOHL-007.
+# The `rs-matter-backend` feature gates the live rs-matter wiring in
+# `src/rs_matter.rs`. Turn it on to compile against the Matter stack;
+# leave it off for cargo builds that don't need Matter (e.g. CI on the
+# verified line).
 #
-# When the live integration lands, this feature will pull in:
-#   rs-matter = { version = "...", optional = true, default-features = false,
-#                 features = ["std", "rustcrypto"] }
-# behind `dep:rs-matter`. Until then the feature has no transitive deps,
-# so it can be turned on freely without lockfile churn.
+# rs-matter is pinned by git rev — crates.io `rs-matter = "0.1.0"` is
+# from July 2023 and predates the current API surface entirely (no
+# `DirKvBlobStore`, no `Matter::init`, different module layout). The
+# pin is bumped deliberately when upstream stabilises a relevant
+# change; see DESIGN.md §3 for the version-pin policy.
 
 [features]
 default = []
-rs-matter-backend = []
+rs-matter-backend = ["dep:rs-matter"]
 
 [dependencies]
+# Pinned to project-chip/rs-matter @ 0030ba4a99 (HEAD as of 2026-05-26
+# per the rs-matter API exploration agent). MSRV 1.87 declared by
+# that revision. License Apache-2.0 (passes deny.toml allowlist).
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", optional = true, default-features = false, features = ["std"] }
 
 [dev-dependencies]
 
