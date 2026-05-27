@@ -1,0 +1,39 @@
+artifacts:
+  - id: SWREQ-MATTER-003
+    type: sw-req
+    title: "MATTER-P03: Multi-admin support"
+    status: approved
+    description: >
+      The bridge shall support concurrent commissioning by multiple
+      independent Matter administrators (Apple Home + Google Home,
+      etc.), each established as its own fabric.
+
+      The bridge shall maintain at least 5 distinct fabrics
+      simultaneously (Matter 1.0 §5.1.4 minimum). Each fabric
+      maintains its own Node Operational Certificate (NOC), fabric
+      label, vendor ID, and access control list.
+
+      Adding or removing a fabric shall not interrupt service to
+      other fabrics: an in-flight attribute report on fabric A shall
+      complete before fabric B's removal takes effect; fabric A's
+      subscriptions shall not be invalidated by fabric B's lifecycle.
+
+      Per-fabric access control shall be enforced on every Invoke and
+      Read interaction: a controller on fabric A cannot read or
+      modify attributes of an endpoint it has not been ACL'd to.
+    tags: [matter, multi-admin, fabric, acl]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Integration: commission with Apple Home, then with Google
+        Home, confirm both see the same sensor endpoints and receive
+        independent subscription updates. Remove Apple Home fabric;
+        Google Home continues to receive updates without
+        re-subscription. ACL test: a controller without ACL grant
+        cannot read the corresponding cluster attribute.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-006
+      - type: refines
+        target: SWREQ-MATTER-001

@@ -10,22 +10,24 @@ rust-version = "1.85.0"
 path = "src/lib.rs"
 crate-type = ["rlib"]
 
-# NOTE: This 0.2.0 deliverable is the *scaffold* — a public trait
-# (`MatterBridge`), a typed cluster-mapping table, and a logging stub impl.
-# It deliberately does NOT depend on rs-matter so that:
-#   1. It compiles fast and reliably on the workspace MSRV (1.85).
-#   2. The verified line (wohl-leak/temp/air/door/power/alert/ota) keeps
-#      a small, audited dependency closure.
-#   3. The Matter wire integration can be scoped as its own follow-up PR
-#      (target: 0.3.0), gated behind a feature flag and pinned rs-matter
-#      version. See DESIGN.md "rs-matter target version".
+# 0.3.0-architecture: the `rs-matter-backend` feature gates the typed
+# skeleton (`RsMatterBridge`) that future PRs flesh out with the live
+# rs-matter wiring. The feature exists today as a *symbol gate* — turning
+# it on compiles the `rs_matter` module so callers can already write
+# `#[cfg(feature = "rs-matter-backend")] let bridge = RsMatterBridge::new(..);`.
+# rs-matter is NOT yet a real dependency: the skeleton's methods return
+# `unimplemented!()` and the wire integration is the 0.3.x implementation
+# PR. See DESIGN.md §3 "rs-matter target version" and SWARCH-WOHL-007.
 #
-# When the live integration lands, expect:
-#   [features]
-#   default = []
-#   rs-matter-backend = ["dep:rs-matter"]
-#   [dependencies]
-#   rs-matter = { version = "...", optional = true, default-features = false, features = ["std", "rustcrypto"] }
+# When the live integration lands, this feature will pull in:
+#   rs-matter = { version = "...", optional = true, default-features = false,
+#                 features = ["std", "rustcrypto"] }
+# behind `dep:rs-matter`. Until then the feature has no transitive deps,
+# so it can be turned on freely without lockfile churn.
+
+[features]
+default = []
+rs-matter-backend = []
 
 [dependencies]
 

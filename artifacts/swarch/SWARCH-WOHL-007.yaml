@@ -1,0 +1,57 @@
+artifacts:
+  - id: SWARCH-WOHL-007
+    type: sw-arch-component
+    title: "Matter Bridge implementation: rs-matter integration shape"
+    status: approved
+    description: >
+      Architectural decision (0.3.0) for HOW the Matter bridge from
+      SWARCH-WOHL-006 is implemented. The bridge is provided by the
+      `wohl-matter-bridge` crate, which exposes the `MatterBridge`
+      trait. The trait has two production implementations:
+
+      - `LoggingBridge` (always available) — logs the
+        BridgedAttributeUpdate records that *would* be published
+        instead of publishing them. Used in development and as the
+        fallback when the rs-matter backend isn't compiled in.
+
+      - `RsMatterBridge` (behind the `rs-matter-backend` Cargo
+        feature) — drives the rs-matter library to commission,
+        maintain fabrics, and publish cluster attribute updates.
+
+      rs-matter version pin: TBD on first implementation merge.
+      Tracked in `crates/wohl-matter-bridge/DESIGN.md` and bumped via
+      PR when the upstream releases a relevant version. The pin is a
+      hard dependency floor for the `rs-matter-backend` feature.
+
+      The bridge runs as the `matter` subcomponent of HubNode.RPi
+      and HubNode.MiniPC (modeled in spar/wohl_nodes.aadl). It
+      consumes `monitors.notification_out` and emits Matter Report
+      traffic on the existing LAN bus access.
+
+      Concurrency: bridge threads run on the same Linux host as the
+      verified monitor + OTA process, isolated by separate UNIX
+      processes. The verified monitor process never directly invokes
+      bridge code — the boundary is the AADL connection
+      `c_notif_to_matter`, realized as an MPSC channel in wohl-hub.
+    tags: [architecture, matter, rs-matter, bridge, decision]
+    fields:
+      interfaces:
+        provided:
+          - "trait MatterBridge — publish_alert, publish_reading (wohl-matter-bridge::MatterBridge)"
+          - "Matter bridged endpoints (rs-matter wire) — feature-gated"
+        required:
+          - "monitors.notification_out — verified alert + reading stream"
+          - "Ethernet_LAN bus access — UDP/TCP Matter messages, mDNS-SD"
+          - "/var/lib/wohl/matter/ — durable fabric storage"
+      concurrency: "Bridge threads on the hub Linux process; isolated from verified monitor process by Linux PID boundary"
+    links:
+      - type: refines
+        target: SWARCH-WOHL-006
+      - type: allocated-from
+        target: SWREQ-MATTER-002
+      - type: allocated-from
+        target: SWREQ-MATTER-003
+      - type: allocated-from
+        target: SWREQ-MATTER-004
+      - type: allocated-from
+        target: SWREQ-MATTER-005

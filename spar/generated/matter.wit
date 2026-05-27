@@ -1,0 +1,18 @@
+// Generated from AADL process: Wohl_Matter::matter
+package wohl_matter:matter;
+
+interface matter-ports {
+    on-notification_in: func() -> option<bytes>;
+    on-message_in: func() -> option<mattermessage>;
+    emit-message_out: func(val: mattermessage);
+    emit-announce_out: func(val: bytes);
+}
+
+world matter-world {
+    import matter-ports;
+    export mdns: func();
+    export event_loop: func();
+    export commissioning: func();
+    export publisher: func();
+    export persistor: func();
+}

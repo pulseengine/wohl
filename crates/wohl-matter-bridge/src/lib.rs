@@ -30,9 +30,15 @@ pub mod cluster;
 pub mod logging;
 pub mod types;
 
+#[cfg(feature = "rs-matter-backend")]
+pub mod rs_matter;
+
 pub use cluster::{MatterAttribute, MatterCluster, MatterClusterMapping, matter_cluster_for};
 pub use logging::LoggingBridge;
 pub use types::{AlertKind, BridgedAlert, ReadingKind, SensorReading};
+
+#[cfg(feature = "rs-matter-backend")]
+pub use rs_matter::{RsMatterBridge, RsMatterConfig};
 
 /// The boundary between wohl-hub's alert / reading loop and any Matter
 /// implementation. wohl-hub holds a `Box<dyn MatterBridge>` (or similar)

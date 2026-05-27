@@ -1,0 +1,47 @@
+artifacts:
+  - id: SWREQ-MATTER-004
+    type: sw-req
+    title: "MATTER-P04: Persistent fabric state across restarts"
+    status: approved
+    description: >
+      Commissioned fabrics shall survive hub reboot, power loss, and
+      wohl-hub process restart without re-commissioning by the
+      administrator.
+
+      Each FabricRecord (root cert, NOC, intermediate CA, fabric id,
+      vendor id, label, ACL) shall be persisted to durable storage
+      with fsync(2) before the bridge acknowledges commissioning to
+      the controller.
+
+      The default storage path shall be `/var/lib/wohl/matter/` and
+      shall be configurable via `WOHL_MATTER_STATE_DIR`. The
+      directory shall be created with mode 0700 owned by the wohl
+      service user.
+
+      On boot, the bridge shall replay the persisted fabric set
+      before opening any LAN socket — incoming Matter messages from
+      previously-commissioned controllers shall succeed against the
+      first post-boot CASE handshake.
+
+      Storage corruption (failed checksum, partial write, schema
+      mismatch) shall be reported via stderr and shall not silently
+      drop a fabric — the bridge shall refuse to start and require
+      operator intervention.
+    tags: [matter, persistence, fabric, durability]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Integration: commission a fabric, restart the hub, confirm
+        the controller maintains its subscription without
+        re-commissioning. Power-loss simulation: SIGKILL wohl-hub
+        between commissioning ack and the next read — on restart,
+        either the fabric is fully present or fully absent (no
+        partial state). Storage-corruption test: corrupt a
+        FabricRecord byte on disk, confirm wohl-hub fails fast at
+        startup.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-006
+      - type: refines
+        target: SWREQ-MATTER-001

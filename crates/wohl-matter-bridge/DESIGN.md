@@ -177,3 +177,24 @@ chain, not the engineering work.
    reporting cadence? Leaning toward "pass through, let
    rs-matter subscription cadence handle it" — but verify the
    bridge doesn't accidentally hot-loop the radio.
+
+4. **Unit-conversion contract.** Matter cluster attributes have
+   specific units that differ from wohl's internal representation.
+   The 0.2.0 stub passes raw wohl values through; the live
+   `RsMatterBridge` must apply conversions at the bridge boundary
+   (not inside the verified monitors):
+
+   | Wohl internal | Matter attribute target | Conversion |
+   |---|---|---|
+   | Temperature: signed centi-°C (already) | `TemperatureMeasurement::MeasuredValue` int16 centi-°C | passthrough |
+   | Power: watts (signed, f64-ish or i32) | `ElectricalPowerMeasurement::ActivePower` int64 milliwatts | `× 1000` (cast saturating) |
+   | CO₂: ppm | `CarbonDioxideConcentrationMeasurement::MeasuredValue` float32 ppm | cast |
+   | PM2.5: µg/m³ | `Pm25ConcentrationMeasurement::MeasuredValue` float32 µg/m³ | passthrough (verify cluster scaling) |
+   | VOC: ppb | `TotalVolatileOrganicCompoundsConcentrationMeasurement::MeasuredValue` float32 ppm or ppb (per cluster spec scaling) | check cluster scaling attr |
+   | Contact (door): bool | `BooleanState::StateValue` bool — ContactSensor device type: `true`=closed, `false`=open | **passthrough but check polarity** |
+   | Water presence: bool | `BooleanState::StateValue` bool — WaterLeakDetector device type: `true`=leak detected | **passthrough — opposite polarity from contact** |
+
+   Encode the conversion in a single `bridge_value` helper alongside
+   the cluster mapping so the policy is centralized and unit-testable.
+   Property test: round-trip a wohl value through `bridge_value` and
+   confirm the cluster wire encoding round-trips back.

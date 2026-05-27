@@ -61,14 +61,26 @@ impl MatterCluster {
 /// A specific Matter attribute within a cluster.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MatterAttribute {
-    /// BooleanState::StateValue (0x0000) — true when contact closed
-    /// / leak present (per Matter device-type semantics).
+    /// BooleanState::StateValue (0x0000). Polarity is **device-type
+    /// dependent** and must be applied at publish time, not stored
+    /// as a trait invariant. On a ContactSensor device type (door /
+    /// window), `true` means contact closed (door shut) and `false`
+    /// means open. On a WaterLeakDetector device type — Matter 1.2+
+    /// — or when using BooleanState as the 1.0-compat fallback for
+    /// water leak, `true` means leak detected. The bridge
+    /// implementor reads the wohl `AlertKind` / `ReadingKind` to
+    /// decide which polarity to encode. The cluster + attribute id
+    /// are the same in both cases (0x0045 / 0x0000).
     StateValue,
     /// MeasuredValue (0x0000) — the generic measurement attribute, used
     /// by Temperature, CO2, PM2.5, VOC clusters.
     MeasuredValue,
-    /// ElectricalPowerMeasurement::ActivePower (0x0005) — instantaneous
-    /// active power, milliwatts on the wire.
+    /// ElectricalPowerMeasurement::ActivePower (0x0005) —
+    /// instantaneous active power. **Matter wire encoding is
+    /// milliwatts (int64).** wohl's internal `Reading::Power.value`
+    /// is watts, so the bridge implementor must scale `× 1000`
+    /// before publishing. See DESIGN.md §7.4 for the unit-conversion
+    /// contract.
     ActivePower,
 }
 

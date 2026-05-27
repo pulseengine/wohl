@@ -1,0 +1,212 @@
+-- Wohl Matter Bridge — hub-side Matter integration architecture.
+--
+-- Implements SWARCH-WOHL-006: the hub is a Matter Bridge that presents
+-- the verified sensor stream as Matter bridged endpoints. The verified
+-- monitor / dispatcher line stays untouched; the bridge consumes the
+-- alert + reading stream from HubMonitorProcess.dispatcher and translates
+-- to Matter cluster attribute updates on the IP fabric.
+--
+-- This package models the bridge component set; wohl_nodes.aadl wires
+-- one instance into HubNode.RPi and HubNode.MiniPC alongside the existing
+-- monitors and ota subcomponents.
+
+package Wohl_Matter
+public
+  with Wohl_Firmware;
+  with Wohl_Properties;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Data types carried in/out of the Matter bridge
+  -- ══════════════════════════════════════════════════════════════
+
+  data MatterCommand
+    -- Incoming Matter cluster command (Invoke), encoded as the wire
+    -- payload after secure-channel decryption. The CommissioningHandler
+    -- and MatterStackEventLoop produce these; bridge logic consumes.
+    properties
+      Data_Size => 256 Bytes; -- typical command payload
+  end MatterCommand;
+
+  data BridgedAttributeUpdate
+    -- Outgoing cluster attribute update (Report). Produced when a
+    -- wohl alert or reading maps to a Matter cluster attribute; the
+    -- event loop publishes it to all commissioned fabrics.
+    properties
+      Data_Size => 64 Bytes; -- attribute path (8) + tag (8) + value (≤48)
+  end BridgedAttributeUpdate;
+
+  data FabricRecord
+    -- Persistent record of one commissioned Matter fabric: root cert,
+    -- node operational cert, fabric id, vendor id, label.
+    properties
+      Data_Size => 2048 Bytes; -- per-fabric NOC + ICAC + metadata
+  end FabricRecord;
+
+  data CommissioningWindow
+    -- One open commissioning session: PASE state + setup-code-derived
+    -- verifier + window-expiration timestamp.
+    properties
+      Data_Size => 512 Bytes;
+  end CommissioningWindow;
+
+  data MatterMessage
+    -- Raw UDP/TCP Matter message envelope (post-MRP, pre-secure-channel
+    -- decryption). The event loop reads these from the socket and
+    -- dispatches to the appropriate handler.
+    properties
+      Data_Size => 1280 Bytes; -- IPv6 minimum MTU, typical Matter MTU
+  end MatterMessage;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Bridge threads (hub-side, host OS — Linux on the RPi/MiniPC)
+  --
+  -- WCET / deadline figures are first-cut budgets. They will be
+  -- tightened in a follow-up after `spar analyze` + measured runs
+  -- against the rs-matter reference implementation (see
+  -- artifacts/decisions/SWARCH-WOHL-007 for the version pin).
+  -- ══════════════════════════════════════════════════════════════
+
+  thread MdnsResponder
+    -- Advertises the bridge on _matter._tcp.local via mDNS-SD. Wakes
+    -- on the periodic re-announce interval plus on incoming query.
+    -- Single-shot publish at boot, then maintenance.
+    features
+      announce_out: out event data port; -- mDNS announce packets to LAN
+    properties
+      Dispatch_Protocol => Periodic;
+      Period => 30000 ms; -- RFC 6762 §10 baseline announce; re-announce
+                          -- can move to seconds during commissioning
+      Compute_Execution_Time => 0 ms .. 5 ms;
+      Deadline => 1000 ms;
+      Priority => 8;
+      Stack_Size => 4096 Bytes;
+  end MdnsResponder;
+
+  thread MatterStackEventLoop
+    -- Reads incoming Matter messages from the UDP/TCP socket, runs the
+    -- exchange / secure channel state machines, dispatches commands.
+    -- This is the rs-matter "event loop" body when wired up; for now
+    -- it models the sporadic budget so allocators see the WCET.
+    --
+    -- Has two distinct in-ports: `message_in` for raw inbound LAN
+    -- packets, `attribute_in` for BridgedAttributeUpdate records
+    -- arriving from the publisher (the event loop wraps them in
+    -- Report messages and emits per-fabric).
+    features
+      message_in: in event data port MatterMessage;
+      attribute_in: in event data port BridgedAttributeUpdate;
+      command_out: out event data port MatterCommand;
+      response_out: out event data port MatterMessage;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 10 ms;
+      Deadline => 50 ms; -- interactive controller latency budget
+      Priority => 6;
+      Stack_Size => 16384 Bytes; -- rs-matter holds non-trivial state
+  end MatterStackEventLoop;
+
+  thread CommissioningHandler
+    -- Opens / closes commissioning windows, runs PASE during pairing,
+    -- generates Node Operational Cert (NOC) on CASE establishment,
+    -- persists the new fabric record via FabricPersistor.
+    -- Only active during a commissioning session (default ~60 s, max
+    -- ~15 min per Matter spec).
+    features
+      command_in: in event data port MatterCommand;
+      fabric_out: out event data port FabricRecord;
+      window_state: out data port CommissioningWindow;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 50 ms; -- PASE crypto dominates
+      Deadline => 200 ms;
+      Priority => 7;
+      Stack_Size => 16384 Bytes; -- ECDH + cert allocs
+  end CommissioningHandler;
+
+  thread MatterBridgePublisher
+    -- Translates wohl alerts + readings into BridgedAttributeUpdate
+    -- records and hands them to the event loop for publishing on every
+    -- commissioned fabric. Mapped one-to-one against the cluster table
+    -- in crates/wohl-matter-bridge/src/cluster.rs.
+    features
+      notification_in: in event data port; -- from HubMonitorProcess.dispatcher
+      attribute_out: out event data port BridgedAttributeUpdate;
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 5 ms;
+      Deadline => 100 ms; -- pace-matched to the alert dispatcher
+      Priority => 4;
+      Stack_Size => 4096 Bytes;
+  end MatterBridgePublisher;
+
+  thread FabricPersistor
+    -- Writes / reads FabricRecord to durable storage (default path
+    -- /var/lib/wohl/matter/fabrics/). fsync per write so a commissioned
+    -- fabric survives reboot. Sporadic — fires only on commissioning
+    -- success, fabric removal, or admin-key rotation.
+    features
+      fabric_in: in event data port FabricRecord;
+      restore_out: out event data port FabricRecord; -- replays on boot
+    properties
+      Dispatch_Protocol => Sporadic;
+      Compute_Execution_Time => 0 ms .. 50 ms; -- write + fsync
+      Deadline => 1000 ms;
+      Priority => 9;
+      Stack_Size => 4096 Bytes;
+  end FabricPersistor;
+
+  -- ══════════════════════════════════════════════════════════════
+  -- Matter Bridge Process — composes the threads
+  --
+  -- One process per hub. Subcomponent of HubNode.RPi / HubNode.MiniPC.
+  -- Sees the dispatcher's notification stream and the LAN socket.
+  -- ══════════════════════════════════════════════════════════════
+
+  process MatterBridgeProcess
+    features
+      -- From the verified monitor chain
+      notification_in: in event data port;
+      -- LAN-side IO
+      message_in: in event data port MatterMessage;
+      message_out: out event data port MatterMessage;
+      announce_out: out event data port;
+  end MatterBridgeProcess;
+
+  process implementation MatterBridgeProcess.Impl
+    subcomponents
+      mdns: thread MdnsResponder;
+      event_loop: thread MatterStackEventLoop;
+      commissioning: thread CommissioningHandler;
+      publisher: thread MatterBridgePublisher;
+      persistor: thread FabricPersistor;
+    connections
+      -- mDNS announces leave the process
+      c_announce: port mdns.announce_out -> announce_out;
+
+      -- LAN ↔ event loop
+      c_msg_in: port message_in -> event_loop.message_in;
+      c_msg_out: port event_loop.response_out -> message_out;
+
+      -- Event loop dispatches Matter cluster commands to the
+      -- commissioning handler when they target the General
+      -- Commissioning / Network Commissioning / Operational
+      -- Credentials clusters.
+      c_cmd: port event_loop.command_out -> commissioning.command_in;
+
+      -- Commissioning result flows to the persistor; persistor's
+      -- restore_out is consumed by event_loop at boot to repopulate
+      -- the fabric table. The restore path is modeled by a connection
+      -- in the boot-time mode (not shown here — single-mode model).
+      c_fabric: port commissioning.fabric_out -> persistor.fabric_in;
+
+      -- Verified-monitor notifications drive bridged-attribute updates
+      c_notif: port notification_in -> publisher.notification_in;
+
+      -- Bridged updates leave the publisher into the event loop for
+      -- multi-fabric broadcast. The event loop wraps each
+      -- BridgedAttributeUpdate in a Matter Report message and emits
+      -- it on response_out (which flows to message_out below).
+      c_attr: port publisher.attribute_out -> event_loop.attribute_in;
+  end MatterBridgeProcess.Impl;
+
+end Wohl_Matter;

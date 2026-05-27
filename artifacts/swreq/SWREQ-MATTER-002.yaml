@@ -1,0 +1,39 @@
+artifacts:
+  - id: SWREQ-MATTER-002
+    type: sw-req
+    title: "MATTER-P02: Commissioning via QR code + setup code"
+    status: approved
+    description: >
+      The hub shall accept commissioning from a Matter administrator
+      (Apple Home, Google Home, third-party controller) via the standard
+      Matter setup code presented as a printable QR code and a numeric
+      pairing code.
+
+      The setup code shall be generated per hub at first boot from a
+      cryptographically random discriminator + passcode, persisted in
+      the hub's fabric storage, and surfaced via `wohl-hub --print-qr`
+      / `--print-setup-code` for out-of-band pairing.
+
+      The default commissioning window shall be 60 seconds, opened on
+      explicit operator action (`wohl-hub matter open-commissioning
+      [--seconds N]`); the bridge shall not announce an open
+      commissioning window otherwise.
+
+      Failed PASE attempts shall be rate-limited per Matter spec
+      §5.1.1.7 (max 20 failures per fabric per 24h).
+    tags: [matter, commissioning, pase, setup-code]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Integration: a Matter controller successfully commissions the
+        hub using the printed QR within the open window. The setup
+        code remains stable across hub restarts. Commissioning
+        attempts outside an open window are rejected at the discovery
+        layer (no commissionable advertisement). Rate-limit verified
+        by attempted-failure load test.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-006
+      - type: refines
+        target: SWREQ-MATTER-001
