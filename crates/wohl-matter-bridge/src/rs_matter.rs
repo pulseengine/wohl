@@ -167,7 +167,7 @@ impl RsMatterBridge {
     pub fn start_commissioning(
         &self,
     ) -> std::io::Result<std::thread::JoinHandle<Result<(), rs_matter::error::Error>>> {
-        crate::commissioning::start(self.config.state_dir.clone())
+        crate::commissioning::start(self.config.state_dir.clone(), Arc::clone(&self.cache))
     }
 }
 
