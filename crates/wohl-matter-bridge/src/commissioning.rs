@@ -39,6 +39,7 @@
 use std::net::UdpSocket;
 use std::path::PathBuf;
 use std::pin::pin;
+use std::sync::Arc;
 use std::thread::{Builder as ThreadBuilder, JoinHandle};
 
 use embassy_futures::select::select4;
@@ -46,6 +47,8 @@ use log::{debug, error, info, warn};
 
 use rs_matter::crypto::Crypto;
 use rs_matter::dm::IMBuffer;
+use rs_matter::dm::clusters::decl::boolean_state;
+use rs_matter::dm::clusters::desc::{self, ClusterHandler as _};
 use rs_matter::dm::clusters::net_comm::SharedNetworks;
 use rs_matter::dm::devices::test::{DAC_PRIVKEY, TEST_DEV_ATT, TEST_DEV_COMM, TEST_DEV_DET};
 use rs_matter::dm::endpoints;
@@ -53,7 +56,10 @@ use rs_matter::dm::events::NoEvents;
 use rs_matter::dm::networks::SysNetifs;
 use rs_matter::dm::networks::eth::EthNetwork;
 use rs_matter::dm::subscriptions::Subscriptions;
-use rs_matter::dm::{DataModel, DataModelHandler, Node};
+use rs_matter::dm::{
+    Async, Cluster, DataModel, DataModelHandler, Dataver, DeviceType, Endpoint, EpClMatcher, Node,
+    ReadContext,
+};
 use rs_matter::error::Error;
 use rs_matter::pairing::DiscoveryCapabilities;
 use rs_matter::pairing::qr::QrTextType;
@@ -64,9 +70,29 @@ use rs_matter::transport::MATTER_SOCKET_BIND_ADDR;
 use rs_matter::utils::init::InitMaybeUninit;
 use rs_matter::utils::select::Coalesce;
 use rs_matter::utils::storage::pooled::PooledBuffers;
-use rs_matter::{MATTER_PORT, Matter, crypto::default_crypto, root_endpoint};
+use rs_matter::{MATTER_PORT, Matter, clusters, crypto::default_crypto, devices, root_endpoint};
 
 use static_cell::StaticCell;
+
+use crate::cache::{AttributeCache, AttributeKey, AttributeValue};
+use crate::cluster::MatterCluster;
+
+/// Matter Device Type Library id for a Water Leak Detector
+/// (Matter 1.2+, DTL `0x0043`). This rs-matter revision does not
+/// ship the sensor device-type constants, so we define the ones we
+/// need here. The mandatory server cluster for this device type is
+/// BooleanState (`0x0045`) — see DESIGN.md §2.
+const DEV_TYPE_WATER_LEAK_DETECTOR: DeviceType = DeviceType {
+    dtype: 0x0043,
+    drev: 1,
+};
+
+/// The Matter endpoint id of the single demonstration water-leak
+/// endpoint this slice registers. Endpoint 0 is the root node;
+/// this slice uses endpoint 1 for the water-leak detector. The
+/// general wohl-zone → Matter-endpoint allocation policy is the
+/// next slice (DESIGN.md §7.1).
+const WATER_LEAK_ENDPOINT: u16 = 1;
 
 // BSS-allocated static singletons — see `onoff_light.rs` for the
 // rationale. Each is initialized exactly once via the
@@ -89,7 +115,10 @@ static KV_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
 /// Returns a `JoinHandle` for the dedicated thread; today nothing
 /// joins it — the thread runs for the lifetime of the process. A
 /// future slice may add a shutdown signal.
-pub fn start(state_dir: PathBuf) -> std::io::Result<JoinHandle<Result<(), Error>>> {
+pub fn start(
+    state_dir: PathBuf,
+    cache: Arc<AttributeCache>,
+) -> std::io::Result<JoinHandle<Result<(), Error>>> {
     info!(
         "[wohl-matter] spawning commissioning thread (state_dir={:?})",
         state_dir
@@ -99,7 +128,7 @@ pub fn start(state_dir: PathBuf) -> std::io::Result<JoinHandle<Result<(), Error>
     ThreadBuilder::new()
         .name("wohl-matter".into())
         .stack_size(550 * 1024)
-        .spawn(move || run_matter(state_dir))
+        .spawn(move || run_matter(state_dir, cache))
 }
 
 /// The thread body: initialize the rs-matter stack and run forever.
@@ -107,7 +136,7 @@ pub fn start(state_dir: PathBuf) -> std::io::Result<JoinHandle<Result<(), Error>
 /// Mirrors `examples/src/bin/onoff_light.rs::run` minus the application
 /// clusters. Returns only on a transport / mDNS / responder / data-model
 /// error — steady state is "block forever, serving controllers".
-fn run_matter(state_dir: PathBuf) -> Result<(), Error> {
+fn run_matter(state_dir: PathBuf, cache: Arc<AttributeCache>) -> Result<(), Error> {
     info!("[wohl-matter] commissioning thread up; initializing Matter device");
     info!(
         "[wohl-matter] memory: Matter (BSS)={}B, IM Buffers (BSS)={}B, Subscriptions (BSS)={}B",
@@ -149,10 +178,9 @@ fn run_matter(state_dir: PathBuf) -> Result<(), Error> {
     // a real one when attestation certs ship.
     let crypto = default_crypto(rand::thread_rng(), DAC_PRIVKEY);
 
-    // ── Step 5: Build the data-model handler with NO application clusters.
-    // The root endpoint is the only one we register; commissioning + the
-    // Operational Credentials / Basic Information / General Commissioning
-    // clusters live there.
+    // ── Step 5: Build the data-model handler. The root endpoint
+    // carries the commissioning clusters; the water-leak endpoint
+    // exposes BooleanState served from the attribute cache.
     let rand = crypto.rand()?;
     let events = NoEvents::new();
     let dm = DataModel::new(
@@ -161,7 +189,7 @@ fn run_matter(state_dir: PathBuf) -> Result<(), Error> {
         buffers,
         subscriptions,
         &events,
-        commissioning_only_handler(rand),
+        bridge_handler(rand, cache),
         SharedKvBlobStore::new(kv, kv_buf),
         SharedNetworks::new(EthNetwork::new_default()),
     );
@@ -197,24 +225,123 @@ fn run_matter(state_dir: PathBuf) -> Result<(), Error> {
     futures_lite::future::block_on(all)
 }
 
-/// The Node descriptor for the wohl bridge with only the root endpoint
-/// — no application clusters yet. The root endpoint carries the
-/// Operational Credentials, Basic Information, and General
-/// Commissioning clusters that are required for commissioning.
+/// A cache-backed BooleanState cluster handler.
 ///
-/// Next slice replaces this with the Matter Bridge device type +
-/// per-sensor bridged endpoints driven by the cluster mapping in
-/// `cluster.rs`.
+/// Implements the rs-matter generated `boolean_state::ClusterHandler`
+/// trait. When a commissioned controller reads
+/// `BooleanState::StateValue` on the water-leak endpoint, rs-matter
+/// calls [`Self::state_value`], which reads the latest value the
+/// dispatcher pushed into the [`AttributeCache`]. This is the pull
+/// side of the push/pull mediation (see `cache.rs` doc).
+struct CacheBooleanState {
+    dataver: Dataver,
+    cache: Arc<AttributeCache>,
+    /// The wohl-side endpoint id whose BooleanState this handler
+    /// serves. The cache is keyed by the wohl id; the controller
+    /// reads by Matter endpoint id; this field bridges the two.
+    wohl_endpoint_id: u32,
+}
+
+impl CacheBooleanState {
+    fn new(dataver: Dataver, cache: Arc<AttributeCache>, wohl_endpoint_id: u32) -> Self {
+        Self {
+            dataver,
+            cache,
+            wohl_endpoint_id,
+        }
+    }
+
+    fn adapt(self) -> boolean_state::HandlerAdaptor<Self> {
+        boolean_state::HandlerAdaptor(self)
+    }
+
+    /// Pull the latest pushed value from the cache. If nothing has
+    /// been published yet (no sensor event since boot), report
+    /// `false` — for a WaterLeakDetector device type, false means
+    /// "no leak detected", the safe default.
+    ///
+    /// Pure (no `ReadContext`) so it's unit-testable without the
+    /// rs-matter stack.
+    fn current_state(&self) -> bool {
+        let key = AttributeKey::new(
+            self.wohl_endpoint_id,
+            MatterCluster::BooleanState.cluster_id(),
+            0x0000,
+        );
+        matches!(self.cache.get(key), Some(AttributeValue::Bool(true)))
+    }
+}
+
+impl boolean_state::ClusterHandler for CacheBooleanState {
+    const CLUSTER: Cluster<'static> = boolean_state::FULL_CLUSTER;
+
+    fn dataver(&self) -> u32 {
+        self.dataver.get()
+    }
+
+    fn dataver_changed(&self) {
+        self.dataver.changed();
+    }
+
+    fn state_value(&self, _ctx: impl ReadContext) -> Result<bool, Error> {
+        Ok(self.current_state())
+    }
+}
+
+/// The Node descriptor: the root endpoint (for commissioning) plus a
+/// single Water Leak Detector device-type endpoint exposing
+/// BooleanState. This slice proves the cache → handler → controller
+/// read path end-to-end for one endpoint.
+///
+/// Next slice: the full Matter Bridge topology (aggregator +
+/// dynamically-registered bridged endpoints, one per wohl
+/// zone/contact/circuit) driven by the cluster mapping in
+/// `cluster.rs` and the endpoint-id allocation policy (DESIGN.md §7.1).
 const NODE: Node<'static> = Node {
-    endpoints: &[root_endpoint!(eth)],
+    endpoints: &[
+        root_endpoint!(eth),
+        Endpoint::new(
+            WATER_LEAK_ENDPOINT,
+            devices!(DEV_TYPE_WATER_LEAK_DETECTOR),
+            clusters!(desc::DescHandler::CLUSTER, boolean_state::FULL_CLUSTER),
+        ),
+    ],
 };
 
-fn commissioning_only_handler(rand: impl rand::RngCore + Copy) -> impl DataModelHandler {
+fn bridge_handler(
+    mut rand: impl rand::RngCore + Copy,
+    cache: Arc<AttributeCache>,
+) -> impl DataModelHandler {
     (
         NODE,
         endpoints::EthSysHandlerBuilder::new()
             .netif_diag(&SysNetifs)
-            .build(rand),
+            .build(rand)
+            // The water-leak endpoint's descriptor cluster.
+            .chain(
+                EpClMatcher::new(
+                    Some(WATER_LEAK_ENDPOINT),
+                    Some(desc::DescHandler::CLUSTER.id),
+                ),
+                Async(desc::DescHandler::new(Dataver::new_rand(&mut rand)).adapt()),
+            )
+            // The water-leak endpoint's BooleanState, served from the
+            // attribute cache. wohl endpoint id == Matter endpoint id
+            // for this single-endpoint demonstration.
+            .chain(
+                EpClMatcher::new(
+                    Some(WATER_LEAK_ENDPOINT),
+                    Some(boolean_state::FULL_CLUSTER.id),
+                ),
+                Async(
+                    CacheBooleanState::new(
+                        Dataver::new_rand(&mut rand),
+                        cache,
+                        WATER_LEAK_ENDPOINT as u32,
+                    )
+                    .adapt(),
+                ),
+            ),
     )
 }
 
@@ -333,4 +460,57 @@ fn pick_network_interface() -> Result<(std::net::Ipv4Addr, std::net::Ipv6Addr, u
 
     let (_iname, ip, ipv6, index) = candidate;
     Ok((ip, ipv6, index))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn handler(cache: Arc<AttributeCache>, wohl_endpoint_id: u32) -> CacheBooleanState {
+        CacheBooleanState::new(Dataver::new(1), cache, wohl_endpoint_id)
+    }
+
+    #[test]
+    fn current_state_false_when_cache_empty() {
+        let cache = Arc::new(AttributeCache::new());
+        let h = handler(cache, 1);
+        assert!(
+            !h.current_state(),
+            "no published value → BooleanState false (no leak)"
+        );
+    }
+
+    #[test]
+    fn current_state_true_after_leak_published() {
+        let cache = Arc::new(AttributeCache::new());
+        // Simulate the publish path writing a leak=true into the cache
+        // at wohl endpoint 1, BooleanState cluster, StateValue attr.
+        cache.set(
+            AttributeKey::new(1, MatterCluster::BooleanState.cluster_id(), 0x0000),
+            AttributeValue::Bool(true),
+        );
+        let h = handler(cache, 1);
+        assert!(h.current_state(), "leak published → BooleanState true");
+    }
+
+    #[test]
+    fn current_state_reads_its_own_endpoint_only() {
+        let cache = Arc::new(AttributeCache::new());
+        // Leak published at endpoint 2, but this handler serves
+        // endpoint 1 — it must NOT report the other endpoint's state.
+        cache.set(
+            AttributeKey::new(2, MatterCluster::BooleanState.cluster_id(), 0x0000),
+            AttributeValue::Bool(true),
+        );
+        let h = handler(cache, 1);
+        assert!(
+            !h.current_state(),
+            "handler for ep1 must not leak ep2's state"
+        );
+    }
+
+    #[test]
+    fn dev_type_water_leak_detector_is_0x0043() {
+        assert_eq!(DEV_TYPE_WATER_LEAK_DETECTOR.dtype, 0x0043);
+    }
 }
