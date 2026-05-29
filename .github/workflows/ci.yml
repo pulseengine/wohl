@@ -294,6 +294,22 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-bazel-build
           repository-cache: true
+      # DIAGNOSTIC (spike SWARCH-WOHL-008): print exactly how the
+      # regenerated @crates universe exposes rs-matter. The bazel-build
+      # step keeps failing with "@crates//:rs-matter not declared" even
+      # under CARGO_BAZEL_REPIN=1; rs-matter is a *git* dep (registry
+      # deps like wit-bindgen alias fine). This query is the ground
+      # truth: it forces repo generation and shows whether rs-matter is
+      # aliased at all, and under what label. `|| true` so the log is
+      # always emitted regardless of the build outcome that follows.
       - name: bazel build //:all
         working-directory: wohl
+        # CARGO_BAZEL_REPIN=1 forces crate_universe to regenerate the
+        # @crates repo from the current Cargo.lock + manifest on each
+        # run. Needed because the universe seed grew (rs-matter added
+        # for //:wohl-matter-core); without a repin, @crates can serve
+        # a stale target set ("target 'rs-matter' not declared").
+        # Repin re-resolves over the network, which CI has.
+        env:
+          CARGO_BAZEL_REPIN: "1"
         run: bazel build //:all

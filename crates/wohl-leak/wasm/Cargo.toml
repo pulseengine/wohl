@@ -6,4 +6,12 @@ edition = "2021"
 crate-type = ["cdylib"]
 [dependencies]
 wit-bindgen = "0.41.0"
+# Added to the bazel crate-universe seed so `@crates//:rs-matter` is
+# available to the wohl-matter-core WASM component (rules_wasm_component
+# bindgen `deps`). rs-matter core is rustcrypto-only — no `os` feature,
+# so no sockets/polling — and compiles to wasm32-wasip2. This grows the
+# universe only; no monitor component deps on it, so the verified
+# monitors' compiled closure is unchanged. See the
+# matter-core-wasm-buildable finding + SWARCH-WOHL-008 (spike).
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", default-features = false, features = ["rustcrypto"] }
 [workspace]

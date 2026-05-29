@@ -1,0 +1,30 @@
+package pulseengine:wohl-matter-core@0.1.0;
+
+/// Wohl Matter Core — the Matter protocol logic as a WASM component.
+///
+/// SPIKE (SWARCH-WOHL-008): proves that the rs-matter protocol core
+/// (TLV, exchange, secure channel / PASE-CASE, RustCrypto, data model)
+/// builds into a WebAssembly component via rules_wasm_component, with
+/// only the UDP/mDNS transport left host-side. See the
+/// matter-core-wasm-buildable finding.
+///
+/// This first interface is intentionally tiny — enough to force the
+/// rs-matter dependency into the component's link closure and prove
+/// the bazel build path. The real seam (network / clock / random /
+/// persist imports + a publish/commission export surface) lands in
+/// spike step 2, ideally spar-generated from AADL.
+interface matter-core {
+    /// The IANA-assigned Matter operational port, read from the
+    /// linked rs-matter crate. A non-zero return proves rs-matter is
+    /// actually compiled into and linked by the WASM component.
+    matter-port: func() -> u16;
+
+    /// Whether a Matter fabric is commissioned. Stub for the spike
+    /// (always false — no event loop runs inside the component yet);
+    /// real state arrives with the network seam in step 2.
+    is-commissioned: func() -> bool;
+}
+
+world wohl-matter-core {
+    export matter-core;
+}
