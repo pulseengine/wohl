@@ -296,4 +296,12 @@ jobs:
           repository-cache: true
       - name: bazel build //:all
         working-directory: wohl
+        # CARGO_BAZEL_REPIN=1 forces crate_universe to regenerate the
+        # @crates repo from the current Cargo.lock + manifest on each
+        # run. Needed because the universe seed grew (rs-matter added
+        # for //:wohl-matter-core); without a repin, @crates can serve
+        # a stale target set ("target 'rs-matter' not declared").
+        # Repin re-resolves over the network, which CI has.
+        env:
+          CARGO_BAZEL_REPIN: "1"
         run: bazel build //:all
