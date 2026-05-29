@@ -302,16 +302,21 @@ jobs:
       # truth: it forces repo generation and shows whether rs-matter is
       # aliased at all, and under what label. `|| true` so the log is
       # always emitted regardless of the build outcome that follows.
-      - name: DIAG — how is rs-matter exposed in @crates?
+      # DIAG (spike SWARCH-WOHL-008): confirm rs-matter lives in wohl's
+      # OWN universe @wohl_crates (not the foreign @crates from
+      # rules_wasm_component). Run 26651242532 proved @crates is the
+      # wrong repo. This round verifies @wohl_crates//:rs-matter exists,
+      # which is what BUILD.bazel now references. Removed once green.
+      - name: DIAG — rs-matter exposure (@wohl_crates vs @crates)
         working-directory: wohl
         env:
           CARGO_BAZEL_REPIN: "1"
         run: |
-          echo "::group::all @crates root aliases"
-          bazel query 'kind("alias rule", "@crates//:all")' 2>&1 | sort || true
+          echo "::group::@wohl_crates — does rs-matter exist here?"
+          bazel query '@wohl_crates//...' 2>&1 | grep -i matter || echo "NO @wohl_crates TARGET MENTIONS 'matter'"
           echo "::endgroup::"
-          echo "::group::any target mentioning matter"
-          bazel query '@crates//...' 2>&1 | grep -i matter || echo "NO @crates TARGET MENTIONS 'matter'"
+          echo "::group::@crates (foreign, for contrast)"
+          bazel query '@crates//...' 2>&1 | grep -i matter || echo "NO @crates TARGET MENTIONS 'matter' (expected)"
           echo "::endgroup::"
       - name: bazel build //:all
         working-directory: wohl

@@ -121,8 +121,23 @@ rust_wasm_component_bindgen(
 # Matter Core — rs-matter protocol core as a WASM component (SPIKE)
 # SWARCH-WOHL-008: proves the Matter core (TLV / secure channel /
 # RustCrypto / data model) builds into a component via rules_wasm_component,
-# with rs-matter supplied from the crate universe (@crates//:rs-matter,
-# rustcrypto only, no os/sockets). Transport stays host-side.
+# with rs-matter supplied from wohl's OWN crate universe
+# (@wohl_crates//:rs-matter, rustcrypto only, no os/sockets). Transport
+# stays host-side.
+#
+# IMPORTANT — @wohl_crates, NOT @crates. bzlmod merges every module's
+# usage of the @rules_rust//crate_universe%crate extension. The local
+# `rules_wasm_component` override registers its own universe under the
+# canonical name `crates` (anyhow/clap/tokio/wit-bindgen-0.56…), and
+# wohl's `use_repo(crate, "wohl_crates", "crates")` pulls that foreign
+# repo into scope too. So a bare `@crates//:…` here resolves to
+# rules_wasm_component's universe — which has no rs-matter — yielding
+# "target 'rs-matter' not declared" (CI run 26651242532 confirmed:
+# @crates exposed clap/reqwest/tokio, never matter). Wohl's universe,
+# seeded from //crates/wohl-leak/wasm:Cargo.{toml,lock}, is @wohl_crates
+# and is where rs-matter actually lives. The monitor bindgen rules only
+# appeared to work via @crates because both universes happen to carry
+# wit-bindgen + bitflags.
 # ═══════════════════════════════════════════════════════════════
 
 wit_library(
@@ -136,7 +151,7 @@ rust_wasm_component_bindgen(
     name = "wohl-matter-core",
     srcs = ["crates/wohl-matter-core/src/wasm_component.rs"],
     wit = ":wohl_matter_core_wit",
-    deps = ["@crates//:rs-matter"],
+    deps = ["@wohl_crates//:rs-matter"],
     wasi_version = "p3",
     profiles = ["release"],
 )
