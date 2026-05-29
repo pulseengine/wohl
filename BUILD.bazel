@@ -116,3 +116,27 @@ rust_wasm_component_bindgen(
     wasi_version = "p3",
     profiles = ["release"],
 )
+
+# ═══════════════════════════════════════════════════════════════
+# Matter Core — rs-matter protocol core as a WASM component (SPIKE)
+# SWARCH-WOHL-008: proves the Matter core (TLV / secure channel /
+# RustCrypto / data model) builds into a component via rules_wasm_component,
+# with rs-matter supplied from the crate universe (@crates//:rs-matter,
+# rustcrypto only, no os/sockets). Transport stays host-side.
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "wohl_matter_core_wit",
+    srcs = ["crates/wohl-matter-core/wit/matter-core.wit"],
+    package_name = "pulseengine:wohl-matter-core",
+    world = "wohl-matter-core",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-matter-core",
+    srcs = ["crates/wohl-matter-core/src/wasm_component.rs"],
+    wit = ":wohl_matter_core_wit",
+    deps = ["@crates//:rs-matter"],
+    wasi_version = "p3",
+    profiles = ["release"],
+)
