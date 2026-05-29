@@ -6,6 +6,8 @@ interface matter-ports {
     on-message_in: func() -> option<mattermessage>;
     emit-message_out: func(val: mattermessage);
     emit-announce_out: func(val: bytes);
+    on-clock_in: func() -> option<monotonictime>;
+    on-entropy_in: func() -> option<entropybytes>;
 }
 
 world matter-world {

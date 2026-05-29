@@ -9,6 +9,21 @@
 -- This package models the bridge component set; wohl_nodes.aadl wires
 -- one instance into HubNode.RPi and HubNode.MiniPC alongside the existing
 -- monitors and ota subcomponents.
+--
+-- SWARCH-WOHL-008 (verified-core split): Spike 2 proved the rs-matter
+-- protocol + crypto core (TLV / secure channel / PASE-CASE / RustCrypto /
+-- data model) both COMPILES (PR #35) and RUNS (a full SPAKE2+ PASE
+-- handshake executes under wasmtime, PR #36) as a wasm32-wasip2 component.
+-- The consequence for this model: the protocol+crypto core can live INSIDE
+-- the verified WASM boundary, with only host-bound non-determinism pulled
+-- across an import seam. That seam is three host-provided inputs the core
+-- cannot self-supply in the sandbox: the network transport (already modeled
+-- as message_in / message_out), the monotonic CLOCK (rs-matter calls
+-- embassy-time Instant::now() pervasively, incl. inside PASE), and ENTROPY
+-- (the CSPRNG). clock_in / entropy_in below model that newly-explicit
+-- host seam. This walks back the SWARCH-WOHL-006/007 claim that "the whole
+-- Matter stack is host-side": transport + clock + entropy are host-side;
+-- protocol + crypto are verifiable-in-component.
 
 package Wohl_Matter
 public
@@ -57,6 +72,23 @@ public
       Data_Size => 1280 Bytes; -- IPv6 minimum MTU, typical Matter MTU
   end MatterMessage;
 
+  data MonotonicTime
+    -- Host monotonic time in microseconds, pulled by the verified core to
+    -- drive the embassy-time clock (SWARCH-WOHL-008 seam). The core cannot
+    -- read a clock inside the sandbox; the host transport shell supplies it.
+    -- Spike 2a sourced this from std::time::Instant (wasi monotonic clock).
+    properties
+      Data_Size => 8 Bytes; -- u64 microseconds
+  end MonotonicTime;
+
+  data EntropyBytes
+    -- Host CSPRNG output, pulled by the verified core for Matter's RNG
+    -- (SWARCH-WOHL-008 seam). Entropy is host-bound non-determinism kept
+    -- outside the verified boundary.
+    properties
+      Data_Size => 32 Bytes; -- one 256-bit draw
+  end EntropyBytes;
+
   -- ══════════════════════════════════════════════════════════════
   -- Bridge threads (hub-side, host OS — Linux on the RPi/MiniPC)
   --
@@ -97,6 +129,10 @@ public
       attribute_in: in event data port BridgedAttributeUpdate;
       command_out: out event data port MatterCommand;
       response_out: out event data port MatterMessage;
+      -- SWARCH-WOHL-008 host seam: the verified protocol+crypto core pulls
+      -- monotonic time and entropy from the host shell (Spike 2a evidence).
+      clock_in: in event data port MonotonicTime;
+      entropy_in: in event data port EntropyBytes;
     properties
       Dispatch_Protocol => Sporadic;
       Compute_Execution_Time => 0 ms .. 10 ms;
@@ -170,6 +206,11 @@ public
       message_in: in event data port MatterMessage;
       message_out: out event data port MatterMessage;
       announce_out: out event data port;
+      -- SWARCH-WOHL-008 host seam (clock + entropy) consumed by the
+      -- verified core. Exposed at the process boundary so codegen emits
+      -- the import funcs the wasm component depends on.
+      clock_in: in event data port MonotonicTime;
+      entropy_in: in event data port EntropyBytes;
   end MatterBridgeProcess;
 
   process implementation MatterBridgeProcess.Impl
@@ -186,6 +227,10 @@ public
       -- LAN ↔ event loop
       c_msg_in: port message_in -> event_loop.message_in;
       c_msg_out: port event_loop.response_out -> message_out;
+
+      -- SWARCH-WOHL-008 host seam → verified core (event loop)
+      c_clock: port clock_in -> event_loop.clock_in;
+      c_entropy: port entropy_in -> event_loop.entropy_in;
 
       -- Event loop dispatches Matter cluster commands to the
       -- commissioning handler when they target the General
