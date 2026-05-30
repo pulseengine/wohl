@@ -1,4 +1,5 @@
 load("@rules_wasm_component//rust:defs.bzl", "rust_wasm_component_bindgen")
+load("@rules_wasm_component//wac:defs.bzl", "wac_plug")
 load("@rules_wasm_component//wit:defs.bzl", "wit_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -154,4 +155,68 @@ rust_wasm_component_bindgen(
     deps = ["@wohl_crates//:rs-matter"],
     wasi_version = "p3",
     profiles = ["release"],
+)
+
+# ═══════════════════════════════════════════════════════════════
+# Matter verified-core COMPOSED graph (SWARCH-WOHL-008 C4 landing)
+#
+# Bazel / rules_wasm_component landing of the locally-proven
+# spike2c-compose graph (PASE handshake runs across a wac_compose'd WIT
+# boundary). Two components over the `wire` seam (wasi p2 = sync, busy-
+# polled by the core's block_on executor):
+#   - matter-transport-shell  exports `wire` (the host packet queues)
+#   - wohl-matter-core-composed  imports `wire`, exports `run` (the PASE
+#     handshake; returns true on success)
+# composed via wac_compose. Landed incrementally — transport shell first.
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "matter_compose_wit",
+    srcs = ["crates/wohl-matter-core/compose/wit/compose.wit"],
+    package_name = "wohl:matter-compose",
+    world = "transport",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-matter-transport",
+    srcs = ["crates/wohl-matter-core/compose/src/transport.rs"],
+    # No `world` attr here — rust_wasm_component_bindgen forwards kwargs to
+    # rust_shared_library, which has no `world`. The bound world is selected
+    # by the wit_library above (world = "transport").
+    wit = ":matter_compose_wit",
+    profiles = ["release"],
+)
+
+# Same compose.wit, but bound to the `matter-core` world (imports wire,
+# exports runner). A separate wit_library because the bound world is a
+# wit_library attribute, not a bindgen one.
+wit_library(
+    name = "matter_compose_core_wit",
+    srcs = ["crates/wohl-matter-core/compose/wit/compose.wit"],
+    package_name = "wohl:matter-compose",
+    world = "matter-core",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-matter-core-composed",
+    srcs = ["crates/wohl-matter-core/compose/src/mcore.rs"],
+    wit = ":matter_compose_core_wit",
+    deps = [
+        "@wohl_crates//:rs-matter",
+        "@wohl_crates//:embassy-futures",
+        "@wohl_crates//:embassy-time-driver",
+        "@wohl_crates//:critical-section",
+    ],
+    profiles = ["release"],
+)
+
+# Plug the transport shell (exports wire) into the verified core's wire
+# import — the bazel realisation of the locally-proven
+# `wac plug mcore --plug transport`. The composed component exports the
+# runner; a wasmtime step (added next) invokes `run` to prove the PASE
+# handshake runs across the seam in CI.
+wac_plug(
+    name = "wohl-matter-composed",
+    plugs = [":wohl-matter-transport"],
+    socket = ":wohl-matter-core-composed",
 )

@@ -313,3 +313,32 @@ jobs:
         env:
           CARGO_BAZEL_REPIN: "1"
         run: bazel build //:all
+
+      # SWARCH-WOHL-008 C4 execution gate: prove the verified Matter core
+      # actually RUNS — not just builds — by executing a full SPAKE2+ PASE
+      # handshake across the wac_compose'd WIT boundary inside wasmtime. The
+      # composed component (//:wohl-matter-composed) exports a bare `run`
+      # world func returning true on handshake success; `wasmtime run
+      # --invoke 'run()'` reaches it (interface-nested exports are not
+      # CLI-invokable, hence the bare shape). Turns the locally-proven
+      # spike2c result into a live CI gate.
+      - name: Run composed PASE handshake under wasmtime (C4 execution gate)
+        working-directory: wohl
+        run: |
+          set -euo pipefail
+          bazel build //:wohl-matter-composed
+          WASM=$(find "$(bazel info bazel-bin)" -name 'wohl-matter-composed.wasm' | head -1)
+          test -n "$WASM"
+          # Reuse the wasmtime the rules_wasm_component toolchain already
+          # fetched (integrity-verified by bazel via MODULE.bazel.lock) — no
+          # unpinned curl|bash download of an external install script.
+          WT=$(find "$(bazel info output_base)/external" -type f -name wasmtime -path '*wasmtime*' 2>/dev/null | head -1)
+          echo "composed=$WASM wasmtime=$WT"
+          test -n "$WT"
+          OUT=$("$WT" run --invoke 'run()' "$WASM")
+          echo "run() => $OUT"
+          if [ "$OUT" != "true" ]; then
+            echo "::error::PASE handshake did NOT succeed in the composed graph"
+            exit 1
+          fi
+          echo "PASE-RUNS-OK in CI: SPAKE2+ handshake completed across the wac-composed WIT seam"

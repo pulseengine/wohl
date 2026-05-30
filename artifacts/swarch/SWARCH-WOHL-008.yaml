@@ -2,7 +2,7 @@ artifacts:
   - id: SWARCH-WOHL-008
     type: sw-arch-component
     title: "Matter verified-core split: protocol+crypto in a WASM component"
-    status: proposed
+    status: approved
     description: >
       Architectural decision (0.3.0, next version) that refines the
       SWARCH-WOHL-007 rs-matter integration shape in light of Spike 2.
@@ -45,12 +45,24 @@ artifacts:
       seam added to the AADL (Wohl_Matter::MatterBridgeProcess). The
       host shell and the verified core compose via wac_compose.
 
-      STATUS: proposed. Compile is CI-gated (PR #35). Execution is
-      locally reproduced (PR #36 harness, cargo wasip2 + wasmtime) but
-      not yet a CI gate, and the wac_compose graph + rules_wasm_component
-      landing are not yet built. Promotes to approved when the composed
-      graph builds via rules_wasm_component AND a wasmtime execution of
-      the PASE handshake runs in CI (see SWV-MATTER-002).
+      STATUS: approved. Both promotion criteria are met and CI-gated:
+      (1) the composed graph builds via rules_wasm_component
+      (//:wohl-matter-transport + //:wohl-matter-core-composed plugged via
+      wac_plug into //:wohl-matter-composed), and (2) a wasmtime execution
+      step runs the full SPAKE2+ PASE handshake on the composed component
+      (`wasmtime run --invoke 'run()'` -> true) on every PR — proving the
+      verified protocol+crypto core RUNS across a wac-composed WIT boundary
+      built by the production toolchain. (Compile was already CI-gated by
+      PR #35.)
+
+      REFINEMENT STILL OWED (does not block this decision — the claim is
+      about WHERE the code runs and HOW it is built, not the exact WIT
+      signatures): the landed seam is a simplified channelled `wire`
+      interface, not yet the exact spar-generated matter-world seam
+      (on-message_in/emit-message_out + on-clock_in + on-entropy_in), and
+      clock/entropy are still core-internal rather than crossing their own
+      seam funcs. Binding the faithful spar seam is tracked in
+      SWV-MATTER-002 (C5/refinement).
     tags: [architecture, matter, rs-matter, wasm, verified-core, decision]
     fields:
       interfaces:

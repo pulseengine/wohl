@@ -40,13 +40,26 @@ artifacts:
         stay component-internal — so this proves the architecture is
         runnable; the faithful spar-seam binding is part of C4.
 
+      - C4 "the composed graph builds via rules_wasm_component and a
+        wasmtime execution of the PASE handshake runs in CI" — DONE,
+        CI-GATED. BUILD.bazel defines //:wohl-matter-transport (exports
+        wire) + //:wohl-matter-core-composed (rs-matter, imports wire,
+        exports runner.run), plugged via wac_plug into
+        //:wohl-matter-composed. The bazel-build CI job builds it and runs
+        `wasmtime run --invoke 'run()'` (toolchain wasmtime), asserting
+        true — a full SPAKE2+ PASE handshake across the wac-composed WIT
+        seam, on every PR. This promoted SWARCH-WOHL-008 to approved.
+        FIDELITY: the seam landed is the simplified channelled `wire`
+        interface, not yet the exact spar matter-world seam, and
+        clock/entropy stay core-internal — see the refinement below.
+
       OWED before this artifact can be `approved`:
 
-      - C4 "the composed graph builds via rules_wasm_component (binding
-        the real spar-generated matter-world seam: on-message_in /
-        emit-message_out + on-clock_in + on-entropy_in) and a
-        wasmtime execution of the PASE handshake runs in CI" — turns C2
-        from a local reproduction into a live gate.
+      - C4b spar-seam fidelity: rebind the composed graph to the exact
+        spar-generated matter-world seam (on-message_in / emit-message_out
+        = NetworkReceive / NetworkSend, plus on-clock_in / on-entropy_in)
+        instead of the simplified `wire` interface, routing clock + entropy
+        across their own seam funcs.
 
       - C5 MC/DC: SWV-MATTER-001 scoped out witness MC/DC truth tables
         because "the bridge runs host-side and is not yet

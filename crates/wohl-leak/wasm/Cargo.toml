@@ -14,4 +14,13 @@ wit-bindgen = "0.41.0"
 # monitors' compiled closure is unchanged. See the
 # matter-core-wasm-buildable finding + SWARCH-WOHL-008 (spike).
 rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", default-features = false, features = ["rustcrypto"] }
+# Direct deps so @wohl_crates exposes them as bindgen `deps` for the
+# wohl-matter-core-composed component (SWARCH-WOHL-008 C4). These are already
+# transitive via rs-matter, but crate_universe only aliases DIRECT manifest
+# deps as @wohl_crates//:<name> targets. embassy-time-driver: the wasip2
+# clock driver; embassy-futures: block_on; critical-section/std: the sole
+# critical-section impl in the component (rs-matter without `os` provides none).
+embassy-futures = "0.1"
+embassy-time-driver = "0.2"
+critical-section = { version = "1", features = ["std"] }
 [workspace]
