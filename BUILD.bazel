@@ -179,7 +179,9 @@ wit_library(
 rust_wasm_component_bindgen(
     name = "wohl-matter-transport",
     srcs = ["crates/wohl-matter-core/compose/src/transport.rs"],
+    # No `world` attr here — rust_wasm_component_bindgen forwards kwargs to
+    # rust_shared_library, which has no `world`. The bound world is selected
+    # by the wit_library above (world = "transport").
     wit = ":matter_compose_wit",
-    world = "transport",
     profiles = ["release"],
 )
