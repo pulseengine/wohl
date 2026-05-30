@@ -155,3 +155,31 @@ rust_wasm_component_bindgen(
     wasi_version = "p3",
     profiles = ["release"],
 )
+
+# ═══════════════════════════════════════════════════════════════
+# Matter verified-core COMPOSED graph (SWARCH-WOHL-008 C4 landing)
+#
+# Bazel / rules_wasm_component landing of the locally-proven
+# spike2c-compose graph (PASE handshake runs across a wac_compose'd WIT
+# boundary). Two components over the `wire` seam (wasi p2 = sync, busy-
+# polled by the core's block_on executor):
+#   - matter-transport-shell  exports `wire` (the host packet queues)
+#   - wohl-matter-core-composed  imports `wire`, exports `run` (the PASE
+#     handshake; returns true on success)
+# composed via wac_compose. Landed incrementally — transport shell first.
+# ═══════════════════════════════════════════════════════════════
+
+wit_library(
+    name = "matter_compose_wit",
+    srcs = ["crates/wohl-matter-core/compose/wit/compose.wit"],
+    package_name = "wohl:matter-compose",
+    world = "transport",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-matter-transport",
+    srcs = ["crates/wohl-matter-core/compose/src/transport.rs"],
+    wit = ":matter_compose_wit",
+    world = "transport",
+    profiles = ["release"],
+)

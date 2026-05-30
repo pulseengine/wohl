@@ -1,0 +1,25 @@
+package wohl:matter-compose@0.1.0;
+
+/// Host transport seam, crossed by every Matter packet during the handshake.
+/// Channel 0 = packets to the device, 1 = packets to the controller. Sync
+/// funcs (wasi p2), busy-polled by the core's block_on executor — the bazel /
+/// rules_wasm_component landing of the locally-proven spike2c-compose graph.
+interface wire {
+    push: func(channel: u8, data: list<u8>);
+    pop: func(channel: u8) -> option<list<u8>>;
+    peek: func(channel: u8) -> bool;
+}
+
+/// Host transport shell: owns the queues, exports the seam.
+world transport {
+    export wire;
+}
+
+/// Verified Matter core: imports the seam, exports `run` (library component,
+/// not a command — the rules_wasm_component bindgen rule builds library
+/// components). `run` drives the full PASE handshake and returns true on
+/// success; a CI wasmtime step invokes it on the wac-composed graph.
+world matter-core {
+    import wire;
+    export run: func() -> bool;
+}
