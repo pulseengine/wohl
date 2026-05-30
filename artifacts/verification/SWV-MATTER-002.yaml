@@ -29,14 +29,22 @@ artifacts:
         cargo bin (own [workspace], excluded from the wohl workspace,
         not a bazel target), so CI does not run it yet.
 
+      - C3 "handshake runs across the wac_compose'd WIT boundary" —
+        REPRODUCED, NOT YET CI-GATED. `crates/wohl-matter-core/
+        spike2c-compose` builds two components (mcore + transport shell),
+        `wac plug`s them, and under `wasmtime run` completes a full
+        SPAKE2+ PASE handshake with every packet crossing the WIT seam
+        (`PASE-RUNS-OK across the wac-composed WIT seam`). FIDELITY
+        CAVEAT: the seam used is a hand-written channelled byte pipe, not
+        the exact spar-generated matter-world seam, and clock/entropy
+        stay component-internal — so this proves the architecture is
+        runnable; the faithful spar-seam binding is part of C4.
+
       OWED before this artifact can be `approved`:
 
-      - C3 "handshake runs across the wac_compose'd WIT boundary" — the
-        verified core and a host-shell transport component composed via
-        wac_compose, handshake completing across the spar-generated seam
-        (on-message_in/emit-message_out + on-clock_in + on-entropy_in).
-
-      - C4 "the composed graph builds via rules_wasm_component and a
+      - C4 "the composed graph builds via rules_wasm_component (binding
+        the real spar-generated matter-world seam: on-message_in /
+        emit-message_out + on-clock_in + on-entropy_in) and a
         wasmtime execution of the PASE handshake runs in CI" — turns C2
         from a local reproduction into a live gate.
 
