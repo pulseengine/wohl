@@ -1,0 +1,60 @@
+artifacts:
+  - id: SWV-MATTER-002
+    type: sw-verification
+    title: "Matter verified-core (WASM) SW verification"
+    status: proposed
+    description: >
+      SW-level verification for SWARCH-WOHL-008 — the claim that the
+      rs-matter protocol+crypto core can run as a verified WASM
+      component, with transport/clock/entropy host-imported.
+
+      STATUS NOTE: this artifact is `proposed`, not `approved`, and is
+      deliberately split into evidence that exists today vs. evidence
+      still owed. Following the SWV-MATTER-001 precedent: a verification
+      artifact is not `approved` until its mechanical evidence is wired
+      into CI.
+
+      PROVEN today (reproducible evidence):
+
+      - C1 "core compiles as a WASM component" — CI-GATED. The
+        `bazel build //:all` job builds `//:wohl-matter-core`
+        (rust_wasm_component_bindgen, wasi p3) on every PR. Green as of
+        PR #35 (run 26651676994). This is a live gate.
+
+      - C2 "PASE handshake runs in WASM" — REPRODUCED, NOT YET CI-GATED.
+        `crates/wohl-matter-core/spike2-exec` builds via
+        `cargo build --target wasm32-wasip2` and, under
+        `wasmtime run`, completes a full SPAKE2+ PASE handshake
+        (`PASE-RUNS-OK`, exit 0; PR #36). The harness is a standalone
+        cargo bin (own [workspace], excluded from the wohl workspace,
+        not a bazel target), so CI does not run it yet.
+
+      OWED before this artifact can be `approved`:
+
+      - C3 "handshake runs across the wac_compose'd WIT boundary" — the
+        verified core and a host-shell transport component composed via
+        wac_compose, handshake completing across the spar-generated seam
+        (on-message_in/emit-message_out + on-clock_in + on-entropy_in).
+
+      - C4 "the composed graph builds via rules_wasm_component and a
+        wasmtime execution of the PASE handshake runs in CI" — turns C2
+        from a local reproduction into a live gate.
+
+      - C5 MC/DC: SWV-MATTER-001 scoped out witness MC/DC truth tables
+        because "the bridge runs host-side and is not yet
+        wasm-componentized." SWARCH-WOHL-008 changes that for the core —
+        once the component lands, the new decision points in the seam
+        glue (transport poll/clock/entropy mapping) are in scope for a
+        witness truth table.
+
+      Sigil: the wac_compose'd component is a new build artifact; when it
+      lands it enters the release-signing attestation chain.
+    tags: [verification, matter, wasm, verified-core, swe-6]
+    fields:
+      method: automated-test
+    links:
+      # `verifies` may target only sw-req (rivet schema). SWARCH-WOHL-008 is
+      # traced through the requirement it is allocated-from (SWREQ-MATTER-002),
+      # which this verification verifies — mirroring SWARCH-WOHL-007's pattern.
+      - type: verifies
+        target: SWREQ-MATTER-002
