@@ -1,4 +1,5 @@
 load("@rules_wasm_component//rust:defs.bzl", "rust_wasm_component_bindgen")
+load("@rules_wasm_component//wac:defs.bzl", "wac_plug")
 load("@rules_wasm_component//wit:defs.bzl", "wit_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -207,4 +208,15 @@ rust_wasm_component_bindgen(
         "@wohl_crates//:critical-section",
     ],
     profiles = ["release"],
+)
+
+# Plug the transport shell (exports wire) into the verified core's wire
+# import — the bazel realisation of the locally-proven
+# `wac plug mcore --plug transport`. The composed component exports the
+# runner; a wasmtime step (added next) invokes `run` to prove the PASE
+# handshake runs across the seam in CI.
+wac_plug(
+    name = "wohl-matter-composed",
+    plugs = [":wohl-matter-transport"],
+    socket = ":wohl-matter-core-composed",
 )
