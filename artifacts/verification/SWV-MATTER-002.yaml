@@ -55,8 +55,25 @@ artifacts:
         glue (transport poll/clock/entropy mapping) are in scope for a
         witness truth table.
 
+      Clean-room (loop step 7): a cold verification agent with no inherited
+      context independently reproduced C1 (read main's BUILD.bazel:
+      @wohl_crates//:rs-matter), C2 (rebuilt spike2-exec, ran under wasmtime,
+      PASE-RUNS-OK char-for-char, exit 0), and C5 (rivet validate PASS,
+      artifacts proposed). For C3/C4 it confirmed every reproducible
+      precursor (both 2c components build to the exact filenames; the exact
+      success string is in mcore source; matter.wit carries the exact
+      on-clock_in/on-entropy_in signatures) but its sandbox denied `wac` and
+      `spar codegen` outright, so it could not run the compose/codegen steps
+      themselves — those were executed and captured in the authoring session.
+      No claim was refuted.
+
       Sigil: the wac_compose'd component is a new build artifact; when it
-      lands it enters the release-signing attestation chain.
+      lands it enters the release-signing attestation chain (release.yml
+      already does SLSA build provenance + cosign keyless signing). The
+      `sigil` and `witness` tools are present as sibling repos but are not
+      built in the current environment, so the witness MC/DC truth table
+      (C5 above) and a sigil-specific signature are deferred to the landing
+      PR; the wasm artifact is ready for both.
     tags: [verification, matter, wasm, verified-core, swe-6]
     fields:
       method: automated-test
