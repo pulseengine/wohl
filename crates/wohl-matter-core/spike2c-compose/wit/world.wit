@@ -1,0 +1,25 @@
+package wohl:matter-compose@0.1.0;
+
+/// The host transport seam, crossed by every Matter packet during the
+/// handshake. Channelled byte pipe: channel 0 = packets TO the device,
+/// channel 1 = packets TO the controller. This is the wac_compose
+/// realisation of the spar-generated matter.wit transport seam
+/// (on-message_in / emit-message_out = NetworkReceive / NetworkSend);
+/// sync funcs, busy-polled by the core's block_on executor.
+interface wire {
+    /// Enqueue one Matter packet for delivery on `channel`.
+    push: func(channel: u8, data: list<u8>);
+    /// Non-blocking dequeue of one packet from `channel` (none = empty).
+    pop: func(channel: u8) -> option<list<u8>>;
+    /// Non-destructive: true if a packet is waiting on `channel`. Lets the
+    /// core's wait_available() pend when empty (so sibling select branches
+    /// are not starved) without consuming the packet.
+    peek: func(channel: u8) -> bool;
+}
+
+/// The verified Matter core: imports the transport seam, runs as a
+/// wasi:cli command so wasmtime can execute the PASE handshake directly.
+world matter-core { import wire; }
+
+/// The host transport shell: exports the seam, owns the queues.
+world transport { export wire; }

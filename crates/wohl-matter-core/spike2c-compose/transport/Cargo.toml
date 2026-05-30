@@ -1,0 +1,10 @@
+[package]
+name = "wohl-matter-transport-shell"
+version = "0.1.0"
+edition = "2021"
+publish = false
+[lib]
+crate-type = ["cdylib"]
+[dependencies]
+wit-bindgen = "0.41"
+[workspace]

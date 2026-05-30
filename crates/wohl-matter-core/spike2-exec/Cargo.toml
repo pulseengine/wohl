@@ -1,0 +1,39 @@
+# SPIKE 2a measurement harness — NOT a landed artifact, NOT a workspace member.
+#
+# Purpose: prove that rs-matter's PASE handshake (SPAKE2+ over P256, the full
+# secure-channel exchange) actually EXECUTES when compiled to wasm32-wasip2 and
+# run under wasmtime — the question Spike 1 left open ("compile != run").
+#
+# This uses plain `cargo build --target wasm32-wasip2` + `wasmtime run` as the
+# execution oracle (the local bazel path can't run here — nix + wasi-sdk egress
+# is blocked). Per the build-wasm-via-rules-wasm-component memory, standalone
+# cargo wasm is fine for a one-off "does it run" spike; the LANDED component
+# (Spike 2d) is built via rules_wasm_component. Own [workspace] table so it is
+# isolated from the main wohl workspace.
+[package]
+name = "wohl-matter-pase-exec"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "pase_exec"
+path = "src/main.rs"
+
+[dependencies]
+# rs-matter core only — rustcrypto, NO `os` feature (no sockets / async-io /
+# polling). Same git rev as the rest of the spike.
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", default-features = false, features = ["rustcrypto"] }
+
+# Busy-poll executor (no_std-friendly, no reactor needed for in-memory I/O).
+embassy-futures = "0.1"
+
+# We supply our own embassy-time driver for wasip2 (the `os` feature would have
+# pulled embassy-time/std; we don't use `os`). Must match rs-matter's pin (0.2).
+embassy-time-driver = "0.2"
+
+# Sole critical-section impl in the binary (rs-matter without `os` provides
+# none). The std impl works on wasm32-wasip2 (std is available there).
+critical-section = { version = "1", features = ["std"] }
+
+[workspace]

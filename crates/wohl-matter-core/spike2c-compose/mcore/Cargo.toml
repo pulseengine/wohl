@@ -1,0 +1,15 @@
+[package]
+name = "wohl-matter-core-component"
+version = "0.1.0"
+edition = "2021"
+publish = false
+[[bin]]
+name = "mcore"
+path = "src/main.rs"
+[dependencies]
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", default-features = false, features = ["rustcrypto"] }
+embassy-futures = "0.1"
+embassy-time-driver = "0.2"
+critical-section = { version = "1", features = ["std"] }
+wit-bindgen = "0.41"
+[workspace]

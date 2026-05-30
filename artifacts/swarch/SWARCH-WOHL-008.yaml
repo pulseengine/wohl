@@ -1,0 +1,70 @@
+artifacts:
+  - id: SWARCH-WOHL-008
+    type: sw-arch-component
+    title: "Matter verified-core split: protocol+crypto in a WASM component"
+    status: proposed
+    description: >
+      Architectural decision (0.3.0, next version) that refines the
+      SWARCH-WOHL-007 rs-matter integration shape in light of Spike 2.
+
+      SWARCH-WOHL-006/007 placed the entire Matter stack host-side,
+      outside the verified boundary, on the assumption that rs-matter
+      (sockets, mDNS, crypto, async runtime) could not run in the
+      verified WASM-component world. Spike 2 falsifies that assumption
+      for the protocol+crypto core:
+
+      - Spike 1 (PR #35, CI-green): the rs-matter core (TLV, exchange,
+        secure channel / PASE-CASE, RustCrypto, data model) COMPILES to
+        a wasm32-wasip2 component via rules_wasm_component
+        (`//:wohl-matter-core`), with `default-features = false,
+        features = ["rustcrypto"]` — no `os`, no sockets, no polling.
+
+      - Spike 2a (PR #36, reproducible): a full SPAKE2+ PASE handshake
+        (PBKDFParamReq/Resp -> Pake1/2/3 -> secure session) RUNS
+        end-to-end inside a wasm32-wasip2 component under wasmtime
+        (`PASE-RUNS-OK`, exit 0).
+
+      Revised split. Two parts, one boundary:
+
+      - VERIFIED CORE (in the WASM component): rs-matter protocol +
+        crypto — TLV codec, exchange/MRP, secure channel (PASE/CASE),
+        RustCrypto (P256/AES/SHA2/HKDF), data model + cluster handlers.
+        This is the security-sensitive code; it now lives inside the
+        sandbox/verification boundary.
+
+      - HOST SHELL (outside the component): UDP/TCP sockets, mDNS
+        multicast, durable fabric persistence, and the two host inputs
+        the core cannot self-supply in the sandbox — a monotonic CLOCK
+        (rs-matter calls embassy-time Instant::now() pervasively, incl.
+        inside PASE) and ENTROPY (the CSPRNG).
+
+      The boundary is the spar-generated WIT seam (spar/generated/
+      matter.wit, world `matter-world`): `on-message_in` /
+      `emit-message_out` map rs-matter's NetworkReceive / NetworkSend;
+      `on-clock_in` and `on-entropy_in` are the SWARCH-WOHL-008 host
+      seam added to the AADL (Wohl_Matter::MatterBridgeProcess). The
+      host shell and the verified core compose via wac_compose.
+
+      STATUS: proposed. Compile is CI-gated (PR #35). Execution is
+      locally reproduced (PR #36 harness, cargo wasip2 + wasmtime) but
+      not yet a CI gate, and the wac_compose graph + rules_wasm_component
+      landing are not yet built. Promotes to approved when the composed
+      graph builds via rules_wasm_component AND a wasmtime execution of
+      the PASE handshake runs in CI (see SWV-MATTER-002).
+    tags: [architecture, matter, rs-matter, wasm, verified-core, decision]
+    fields:
+      interfaces:
+        provided:
+          - "WASM component //:wohl-matter-core (rust_wasm_component_bindgen, wasi p3) — Matter protocol+crypto"
+          - "WIT world matter-world (spar-generated) — exports event_loop/commissioning/publisher/mdns/persistor"
+        required:
+          - "on-message_in / emit-message_out — host UDP/mDNS transport (rs-matter NetworkReceive/NetworkSend)"
+          - "on-clock_in — host monotonic time (MonotonicTime, µs); drives the embassy-time driver"
+          - "on-entropy_in — host CSPRNG (EntropyBytes)"
+          - "on-notification_in — verified monitor alert+reading stream"
+      concurrency: "Verified core runs as a wasm component (single async executor, block_on); host shell provides I/O + clock + entropy across the WIT seam; composed via wac_compose"
+    links:
+      - type: refines
+        target: SWARCH-WOHL-007
+      - type: allocated-from
+        target: SWREQ-MATTER-002
