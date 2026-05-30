@@ -185,3 +185,26 @@ rust_wasm_component_bindgen(
     wit = ":matter_compose_wit",
     profiles = ["release"],
 )
+
+# Same compose.wit, but bound to the `matter-core` world (imports wire,
+# exports runner). A separate wit_library because the bound world is a
+# wit_library attribute, not a bindgen one.
+wit_library(
+    name = "matter_compose_core_wit",
+    srcs = ["crates/wohl-matter-core/compose/wit/compose.wit"],
+    package_name = "wohl:matter-compose",
+    world = "matter-core",
+)
+
+rust_wasm_component_bindgen(
+    name = "wohl-matter-core-composed",
+    srcs = ["crates/wohl-matter-core/compose/src/mcore.rs"],
+    wit = ":matter_compose_core_wit",
+    deps = [
+        "@wohl_crates//:rs-matter",
+        "@wohl_crates//:embassy-futures",
+        "@wohl_crates//:embassy-time-driver",
+        "@wohl_crates//:critical-section",
+    ],
+    profiles = ["release"],
+)
