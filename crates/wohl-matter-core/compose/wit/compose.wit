@@ -10,24 +10,17 @@ interface wire {
     peek: func(channel: u8) -> bool;
 }
 
-/// Drives the verified core. `run` completes a full PASE handshake and
-/// returns true on success. An interface (not a bare world func) so the
-/// generated Guest lands at a predictable path, matching the other
-/// components' convention.
-interface runner {
-    run: func() -> bool;
-}
-
 /// Host transport shell: owns the queues, exports the seam.
 world transport {
     export wire;
 }
 
-/// Verified Matter core: imports the seam, exports the runner (library
-/// component — the rules_wasm_component bindgen rule builds library
-/// components, not commands). A CI wasmtime step invokes `run` on the
-/// wac-composed graph.
+/// Verified Matter core: imports the seam, exports `run` as a BARE world
+/// function (not nested in an interface) — `wasmtime run --invoke 'run()'`
+/// only reaches top-level world exports, not interface-instance exports, so
+/// the CI execution step needs the bare shape. `run` completes a full PASE
+/// handshake and returns true on success.
 world matter-core {
     import wire;
-    export runner;
+    export run: func() -> bool;
 }

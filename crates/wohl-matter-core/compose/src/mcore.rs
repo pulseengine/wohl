@@ -33,8 +33,10 @@ use rs_matter::transport::network::{
 use rs_matter::utils::select::Coalesce;
 use rs_matter::Matter;
 
-use wohl_matter_core_composed_bindings::exports::wohl::matter_compose::runner::Guest;
+// Bare world export `run` → the world-level Guest trait at the bindings root
+// (not under `exports::`). Import `wire` interface → free functions.
 use wohl_matter_core_composed_bindings::wohl::matter_compose::wire;
+use wohl_matter_core_composed_bindings::Guest;
 
 // ── embassy-time driver (wasip2; see Spike 2a) ──
 struct WasiDriver;
