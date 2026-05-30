@@ -326,11 +326,15 @@ jobs:
         working-directory: wohl
         run: |
           set -euo pipefail
+          bazel build //:wohl-matter-composed
           WASM=$(find "$(bazel info bazel-bin)" -name 'wohl-matter-composed.wasm' | head -1)
-          echo "composed component: $WASM"
           test -n "$WASM"
-          curl -sSfL https://wasmtime.dev/install.sh | bash
-          WT="$HOME/.wasmtime/bin/wasmtime"
+          # Reuse the wasmtime the rules_wasm_component toolchain already
+          # fetched (integrity-verified by bazel via MODULE.bazel.lock) — no
+          # unpinned curl|bash download of an external install script.
+          WT=$(find "$(bazel info output_base)/external" -type f -name wasmtime -path '*wasmtime*' 2>/dev/null | head -1)
+          echo "composed=$WASM wasmtime=$WT"
+          test -n "$WT"
           OUT=$("$WT" run --invoke 'run()' "$WASM")
           echo "run() => $OUT"
           if [ "$OUT" != "true" ]; then
