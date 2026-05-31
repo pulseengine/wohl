@@ -57,20 +57,28 @@ artifacts:
         emit-message-out (= NetworkSend), and on-clock-in (= spar
         on-clock_in / monotonictime). The verified core's embassy-time
         driver now reads on-clock-in across the WIT boundary, not std::time
-        — so TRANSPORT and CLOCK both cross the seam (2 of the 3 host
-        dependencies). The same CI execution gate (run() -> true) verifies
-        the clock-crossing handshake runs.
+        — so TRANSPORT and CLOCK cross the seam. The same CI execution gate
+        (run() -> true) verifies the clock-crossing handshake runs.
         Recorded two spar findings while doing this: spar's generated
         matter.wit references undefined types (mattermessage / monotonictime
         / entropybytes / bytes) and uses mixed hyphen/underscore identifiers
         (on-message_in), so it is not directly bindable — the seam mirrors
         its shape with valid WIT rather than binding it verbatim.
 
-      OWED before this artifact can be `approved`:
+      - C4c entropy crossing: DONE, CI-gated. A stateless SeamRand (rand_core
+        RngCore + CryptoRng) pulls every draw from on-entropy-in across the
+        WIT boundary; the crypto is built with default_crypto(SeamRand,
+        DAC_PRIVKEY) instead of test_only_crypto, so the core's RNG no longer
+        lives inside the verified component. The host shell provides
+        on-entropy-in from a xorshift64 PRNG. ALL THREE host-bound
+        dependencies — transport, clock, entropy — now cross the wac-composed
+        WIT seam, and the CI execution gate (run() -> true) confirms the
+        handshake still completes. The composed graph now faithfully realizes
+        SWARCH-WOHL-008. The only remaining fidelity gap is binding spar's
+        matter.wit *verbatim*, blocked upstream by spar's own WIT bugs
+        (undefined types + mixed hyphen/underscore identifiers, above).
 
-      - C4c entropy crossing: route rs-matter's RNG through an on-entropy-in
-        seam func (the 3rd host dependency) instead of the internal
-        deterministic test RNG. Needs a custom Rand fed from the seam.
+      OWED before this artifact can be `approved`:
 
       - C5 MC/DC: SWV-MATTER-001 scoped out witness MC/DC truth tables
         because "the bridge runs host-side and is not yet

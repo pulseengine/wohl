@@ -17,6 +17,11 @@ use wohl_matter_transport_bindings::exports::wohl::matter_compose::matter_ports:
 thread_local! {
     static QUEUES: RefCell<[VecDeque<Vec<u8>>; 2]> =
         RefCell::new([VecDeque::new(), VecDeque::new()]);
+    // xorshift64 PRNG state for the entropy seam. A fixed seed keeps the
+    // composed handshake reproducible; the point of C4c is that the bytes
+    // CROSS the WIT boundary, not that they are cryptographically strong
+    // (SPAKE2+ only needs distinct valid scalars to complete).
+    static RNG: RefCell<u64> = const { RefCell::new(0x9E37_79B9_7F4A_7C15) };
 }
 
 static START: OnceLock<Instant> = OnceLock::new();
@@ -35,6 +40,22 @@ impl Guest for Component {
     fn on_clock_in() -> u64 {
         let start = *START.get_or_init(Instant::now);
         start.elapsed().as_micros() as u64
+    }
+
+    fn on_entropy_in(len: u32) -> Vec<u8> {
+        RNG.with(|s| {
+            let mut x = *s.borrow();
+            let mut out = Vec::with_capacity(len as usize);
+            while out.len() < len as usize {
+                x ^= x << 13;
+                x ^= x >> 7;
+                x ^= x << 17;
+                out.extend_from_slice(&x.to_le_bytes());
+            }
+            out.truncate(len as usize);
+            *s.borrow_mut() = x;
+            out
+        })
     }
 }
 
