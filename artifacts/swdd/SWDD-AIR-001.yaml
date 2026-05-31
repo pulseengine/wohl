@@ -2,7 +2,7 @@ artifacts:
   - id: SWDD-AIR-001
     type: sw-detail-design
     title: AirMonitor multi-metric threshold design
-    status: approved
+    status: implemented
     description: >
       The AirMonitor processes stream<air-quality> and emits stream<alert>.
       It evaluates three metrics independently and selects the highest

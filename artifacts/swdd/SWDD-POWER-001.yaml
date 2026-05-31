@@ -2,7 +2,7 @@ artifacts:
   - id: SWDD-POWER-001
     type: sw-detail-design
     title: PowerMonitor overconsumption and spike detection design
-    status: approved
+    status: implemented
     description: >
       The PowerMonitor delegates overconsumption threshold checking to
       relay-lc (verified) and handles spike detection (rate-of-change)

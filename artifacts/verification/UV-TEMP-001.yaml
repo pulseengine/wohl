@@ -2,7 +2,7 @@ artifacts:
   - id: UV-TEMP-001
     type: unit-verification
     title: "Unit tests for SWDD-TEMP-001"
-    status: approved
+    status: implemented
     description: >
       Automated unit tests verifying the detailed design of wohl-temp.
       Run via: cargo test -p wohl-temp

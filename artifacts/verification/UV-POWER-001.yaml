@@ -2,7 +2,7 @@ artifacts:
   - id: UV-POWER-001
     type: unit-verification
     title: "Unit tests for SWDD-POWER-001"
-    status: approved
+    status: implemented
     description: >
       Automated unit tests verifying power monitoring.
       Run via: cargo test -p wohl-power

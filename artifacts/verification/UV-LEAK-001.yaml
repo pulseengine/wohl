@@ -2,7 +2,7 @@ artifacts:
   - id: UV-LEAK-001
     type: unit-verification
     title: "Unit tests for SWDD-LEAK-001"
-    status: approved
+    status: implemented
     description: >
       Automated unit tests verifying the detailed design of wohl-leak.
       Run via: cargo test -p wohl-leak

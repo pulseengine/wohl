@@ -2,7 +2,7 @@ artifacts:
   - id: SWARCH-WOHL-008
     type: sw-arch-component
     title: "Matter verified-core split: protocol+crypto in a WASM component"
-    status: approved
+    status: implemented
     description: >
       Architectural decision (0.3.0, next version) that refines the
       SWARCH-WOHL-007 rs-matter integration shape in light of Spike 2.

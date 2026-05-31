@@ -2,7 +2,7 @@ artifacts:
   - id: UV-AIR-001
     type: unit-verification
     title: "Unit tests for SWDD-AIR-001"
-    status: approved
+    status: implemented
     description: >
       Automated unit tests verifying the detailed design of wohl-air.
       Run via: cargo test -p wohl-air
