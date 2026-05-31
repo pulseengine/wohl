@@ -27,6 +27,10 @@ interface matter-ports {
     emit-message-out: func(channel: u8, data: list<u8>);
     /// Host monotonic time in microseconds. (clock seam)
     on-clock-in: func() -> u64;
+    /// `len` bytes of host entropy. (= spar on-entropy_in / entropybytes)
+    /// Feeds the verified core's CSPRNG across the WIT boundary, so the 3rd
+    /// host-bound dependency no longer lives inside the core.
+    on-entropy-in: func(len: u32) -> list<u8>;
 }
 
 /// Drives the verified core. `run` completes a full PASE handshake and

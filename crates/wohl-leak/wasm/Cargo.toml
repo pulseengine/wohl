@@ -23,4 +23,7 @@ rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a
 embassy-futures = "0.1"
 embassy-time-driver = "0.2"
 critical-section = { version = "1", features = ["std"] }
+# rand_core (0.6, matching rs-matter's rustcrypto stack) so @wohl_crates
+# exposes it for the SeamRand in wohl-matter-core-composed (C4c entropy seam).
+rand_core = "0.6"
 [workspace]

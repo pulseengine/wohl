@@ -20,8 +20,9 @@ use core::task::{Poll, Waker};
 use embassy_futures::block_on;
 use embassy_futures::select::{select, Either};
 
-use rs_matter::crypto::test_only_crypto;
-use rs_matter::dm::devices::test::{TEST_DEV_ATT, TEST_DEV_COMM, TEST_DEV_DET};
+use rand_core::{CryptoRng, Error as RandError, RngCore};
+use rs_matter::crypto::default_crypto;
+use rs_matter::dm::devices::test::{DAC_PRIVKEY, TEST_DEV_ATT, TEST_DEV_COMM, TEST_DEV_DET};
 use rs_matter::error::Error;
 use rs_matter::respond::Responder;
 use rs_matter::sc::pase::{PaseInitiator, MAX_COMM_WINDOW_TIMEOUT_SECS};
@@ -49,6 +50,37 @@ impl embassy_time_driver::Driver for HostClock {
     fn schedule_wake(&self, _at: u64, _waker: &Waker) {}
 }
 embassy_time_driver::time_driver_impl!(static DRIVER: HostClock = HostClock);
+
+// ── entropy crosses the seam (C4c) ──
+// A stateless CSPRNG handle: every draw pulls fresh bytes from the host shell's
+// on-entropy-in across the WIT boundary, so the 3rd host-bound dependency no
+// longer lives inside the verified core. ZST + Copy; the host holds the state.
+#[derive(Clone, Copy)]
+struct SeamRand;
+
+impl RngCore for SeamRand {
+    fn next_u32(&mut self) -> u32 {
+        let mut b = [0u8; 4];
+        self.fill_bytes(&mut b);
+        u32::from_le_bytes(b)
+    }
+    fn next_u64(&mut self) -> u64 {
+        let mut b = [0u8; 8];
+        self.fill_bytes(&mut b);
+        u64::from_le_bytes(b)
+    }
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        let bytes = matter_ports::on_entropy_in(dest.len() as u32);
+        let n = dest.len().min(bytes.len());
+        dest[..n].copy_from_slice(&bytes[..n]);
+    }
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), RandError> {
+        self.fill_bytes(dest);
+        Ok(())
+    }
+}
+
+impl CryptoRng for SeamRand {}
 
 // ── transport endpoint backed by the imported matter-ports seam ──
 // on-message-in consumes (no peek), so wait_available buffers one packet.
@@ -121,7 +153,7 @@ fn addr(port: u16) -> Address {
 async fn run_handshake() -> bool {
     let device_matter = Matter::new(&TEST_DEV_DET, TEST_DEV_COMM, &TEST_DEV_ATT, 0);
     let controller_matter = Matter::new(&TEST_DEV_DET, TEST_DEV_COMM, &TEST_DEV_ATT, 0);
-    let crypto = test_only_crypto();
+    let crypto = default_crypto(SeamRand, DAC_PRIVKEY);
 
     let device_addr = addr(5540);
     let controller_addr = addr(5541);

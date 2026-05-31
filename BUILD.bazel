@@ -206,6 +206,7 @@ rust_wasm_component_bindgen(
         "@wohl_crates//:embassy-futures",
         "@wohl_crates//:embassy-time-driver",
         "@wohl_crates//:critical-section",
+        "@wohl_crates//:rand_core",
     ],
     profiles = ["release"],
 )
