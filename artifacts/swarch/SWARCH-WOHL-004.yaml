@@ -2,7 +2,7 @@ artifacts:
   - id: SWARCH-WOHL-004
     type: sw-arch-component
     title: Alert pipeline architecture (monitors to dispatcher to notifications)
-    status: approved
+    status: implemented
     description: >
       The alert pipeline connects monitor outputs to the notification
       delivery system. Each monitor component emits stream<alert> with

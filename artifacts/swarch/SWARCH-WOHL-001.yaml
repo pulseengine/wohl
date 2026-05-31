@@ -2,7 +2,7 @@ artifacts:
   - id: SWARCH-WOHL-001
     type: sw-arch-component
     title: Component stream architecture (overall data flow)
-    status: approved
+    status: implemented
     description: >
       The Wohl system is composed of stream transformer components following
       the Relay pattern. Sensor nodes publish typed streams which flow into

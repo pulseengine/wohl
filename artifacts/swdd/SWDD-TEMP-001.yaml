@@ -2,7 +2,7 @@ artifacts:
   - id: SWDD-TEMP-001
     type: sw-detail-design
     title: TemperatureMonitor threshold and rate detection design
-    status: approved
+    status: implemented
     description: >
       The TemperatureMonitor processes stream<temperature> and emits
       stream<alert>. It performs two checks per reading:

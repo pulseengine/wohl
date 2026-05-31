@@ -2,7 +2,7 @@ artifacts:
   - id: SWDD-DOOR-001
     type: sw-detail-design
     title: DoorWatch timeout and night-hour design
-    status: approved
+    status: implemented
     description: >
       The DoorWatch processes stream<contact-event> and time ticks, emitting
       stream<alert>. It maintains per-contact state tracking open time.

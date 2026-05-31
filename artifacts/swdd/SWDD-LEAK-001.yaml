@@ -2,7 +2,7 @@ artifacts:
   - id: SWDD-LEAK-001
     type: sw-detail-design
     title: LeakDetector state machine design
-    status: approved
+    status: implemented
     description: >
       The LeakDetector is a stream transformer that processes stream<water-event>
       and emits stream<alert>. It maintains per-zone state in a heapless::FnvIndexMap

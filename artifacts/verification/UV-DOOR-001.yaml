@@ -2,7 +2,7 @@ artifacts:
   - id: UV-DOOR-001
     type: unit-verification
     title: "Unit tests for SWDD-DOOR-001"
-    status: approved
+    status: implemented
     description: >
       Automated unit tests verifying the detailed design of wohl-door.
       Run via: cargo test -p wohl-door
