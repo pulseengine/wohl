@@ -1,21 +1,21 @@
-//! Verified Matter core component (bazel / rules_wasm_component landing of the
-//! locally-proven spike2c-compose `mcore`; SWARCH-WOHL-008 C4).
+//! Verified Matter core component (SWARCH-WOHL-008 C4 + C4b).
 //!
-//! Imports the `wire` seam and exports `runner.run`, which drives the same full
-//! SPAKE2+ PASE handshake as Spike 2a/2c with every packet crossing the
-//! wac-composed WIT boundary into the transport shell. Returns true on success.
-//! A CI wasmtime step invokes `run` on the composed graph.
+//! Imports the host seam (`matter-ports`, modelled on spar's interface) and
+//! exports `runner.run`, which drives the same full SPAKE2+ PASE handshake as
+//! Spike 2a/2c with every packet crossing the wac-composed WIT boundary.
 //!
-//! Uses the rule-generated bindings (`wohl_matter_core_composed_bindings`),
-//! not `wit_bindgen::generate!` — matching the existing components' convention.
-//! wasi p2 (sync seam funcs), so the cross-component calls are ordinary
-//! synchronous imports from inside rs-matter's async `poll_fn`, busy-polled by
-//! `embassy_futures::block_on`.
+//! C4b: the host CLOCK now also crosses the seam. The embassy-time driver's
+//! `now()` reads `on-clock-in` (provided by the host-shell component) instead
+//! of std::time — so two of the three host-bound dependencies (transport +
+//! clock) are genuinely composed across the WIT boundary. Entropy is the
+//! remaining seam (SWV-MATTER-002 C4b).
+//!
+//! Uses the rule-generated bindings (`wohl_matter_core_composed_bindings`).
+//! wasi p2 (sync seam funcs), busy-polled by `embassy_futures::block_on`.
 
+use core::cell::RefCell;
 use core::future::poll_fn;
 use core::task::{Poll, Waker};
-use std::sync::OnceLock;
-use std::time::Instant as StdInstant;
 
 use embassy_futures::block_on;
 use embassy_futures::select::{select, Either};
@@ -33,35 +33,46 @@ use rs_matter::transport::network::{
 use rs_matter::utils::select::Coalesce;
 use rs_matter::Matter;
 
-// Export `runner` interface → Guest at exports::…::runner. Import `wire`
-// interface → free functions. `wasmtime run --invoke 'run()'` reaches the
-// runner.run export in CI.
 use wohl_matter_core_composed_bindings::exports::wohl::matter_compose::runner::Guest;
-use wohl_matter_core_composed_bindings::wohl::matter_compose::wire;
+use wohl_matter_core_composed_bindings::wohl::matter_compose::matter_ports;
 
-// ── embassy-time driver (wasip2; see Spike 2a) ──
-struct WasiDriver;
-static START: OnceLock<StdInstant> = OnceLock::new();
-impl embassy_time_driver::Driver for WasiDriver {
+// ── embassy-time driver: time crosses the seam (C4b) ──
+// now() reads host monotonic µs from the imported on-clock-in, scaled to
+// embassy's selected TICK_HZ. schedule_wake is a no-op: block_on busy-polls
+// and Timer::poll re-checks now() each poll.
+struct HostClock;
+impl embassy_time_driver::Driver for HostClock {
     fn now(&self) -> u64 {
-        let start = *START.get_or_init(StdInstant::now);
-        (start.elapsed().as_nanos() * embassy_time_driver::TICK_HZ as u128 / 1_000_000_000u128)
-            as u64
+        let micros = matter_ports::on_clock_in() as u128;
+        (micros * embassy_time_driver::TICK_HZ as u128 / 1_000_000u128) as u64
     }
     fn schedule_wake(&self, _at: u64, _waker: &Waker) {}
 }
-embassy_time_driver::time_driver_impl!(static DRIVER: WasiDriver = WasiDriver);
+embassy_time_driver::time_driver_impl!(static DRIVER: HostClock = HostClock);
 
-// ── transport endpoint backed by the imported `wire` seam ──
+// ── transport endpoint backed by the imported matter-ports seam ──
+// on-message-in consumes (no peek), so wait_available buffers one packet.
 struct Endpoint {
     send_channel: u8,
     recv_channel: u8,
     peer_addr: Address,
+    buf: RefCell<Option<Vec<u8>>>,
+}
+
+impl Endpoint {
+    fn new(send_channel: u8, recv_channel: u8, peer_addr: Address) -> Self {
+        Self {
+            send_channel,
+            recv_channel,
+            peer_addr,
+            buf: RefCell::new(None),
+        }
+    }
 }
 
 impl NetworkSend for &Endpoint {
     async fn send_to(&mut self, data: &[u8], _addr: Address) -> Result<(), Error> {
-        wire::push(self.send_channel, data); // crosses the WIT boundary
+        matter_ports::emit_message_out(self.send_channel, data); // crosses the WIT seam
         Ok(())
     }
 }
@@ -69,23 +80,35 @@ impl NetworkSend for &Endpoint {
 impl NetworkReceive for &Endpoint {
     async fn wait_available(&mut self) -> Result<(), Error> {
         poll_fn(|_| {
-            if wire::peek(self.recv_channel) {
-                Poll::Ready(Ok(()))
-            } else {
-                Poll::Pending
+            if self.buf.borrow().is_some() {
+                return Poll::Ready(Ok(()));
+            }
+            match matter_ports::on_message_in(self.recv_channel) {
+                Some(d) => {
+                    *self.buf.borrow_mut() = Some(d);
+                    Poll::Ready(Ok(()))
+                }
+                None => Poll::Pending,
             }
         })
         .await
     }
 
     async fn recv_from(&mut self, buffer: &mut [u8]) -> Result<(usize, Address), Error> {
-        poll_fn(|_| match wire::pop(self.recv_channel) {
-            Some(data) => {
-                let n = data.len();
-                buffer[..n].copy_from_slice(&data);
-                Poll::Ready(Ok((n, self.peer_addr)))
+        poll_fn(|_| {
+            let pending = self.buf.borrow_mut().take();
+            let data = match pending {
+                Some(d) => Some(d),
+                None => matter_ports::on_message_in(self.recv_channel),
+            };
+            match data {
+                Some(d) => {
+                    let n = d.len();
+                    buffer[..n].copy_from_slice(&d);
+                    Poll::Ready(Ok((n, self.peer_addr)))
+                }
+                None => Poll::Pending,
             }
-            None => Poll::Pending,
         })
         .await
     }
@@ -102,16 +125,9 @@ async fn run_handshake() -> bool {
 
     let device_addr = addr(5540);
     let controller_addr = addr(5541);
-    let device_ep = Endpoint {
-        send_channel: 1,
-        recv_channel: 0,
-        peer_addr: controller_addr,
-    };
-    let controller_ep = Endpoint {
-        send_channel: 0,
-        recv_channel: 1,
-        peer_addr: device_addr,
-    };
+    // channel 0 = packets to device, channel 1 = packets to controller
+    let device_ep = Endpoint::new(1, 0, controller_addr);
+    let controller_ep = Endpoint::new(0, 1, device_addr);
 
     if device_matter
         .open_basic_comm_window(MAX_COMM_WINDOW_TIMEOUT_SECS, &crypto, &())

@@ -1,13 +1,32 @@
 package wohl:matter-compose@0.1.0;
 
-/// Host transport seam, crossed by every Matter packet during the handshake.
-/// Channel 0 = packets to the device, 1 = packets to the controller. Sync
-/// funcs (wasi p2), busy-polled by the core's block_on executor — the bazel /
-/// rules_wasm_component landing of the locally-proven spike2c-compose graph.
-interface wire {
-    push: func(channel: u8, data: list<u8>);
-    pop: func(channel: u8) -> option<list<u8>>;
-    peek: func(channel: u8) -> bool;
+/// The host-bound seam for the verified Matter core, modelled on the
+/// spar-generated `matter-ports` interface (Wohl_Matter::MatterBridgeProcess
+/// → spar/generated/matter.wit). It carries the two host dependencies the
+/// core cannot self-supply in the sandbox:
+///
+///   - transport (= rs-matter NetworkReceive / NetworkSend): on-message-in
+///     returns the next inbound packet (none = nothing yet, doubling as the
+///     availability check) and emit-message-out sends one. `channel` tags the
+///     two-party loopback (0 = to device, 1 = to controller), which the
+///     single-instance spar port does not need.
+///   - clock (= spar on-clock_in / monotonictime): on-clock-in returns host
+///     monotonic time in microseconds, driving the core's embassy-time driver.
+///     The core no longer reads std::time directly — time crosses the WIT seam.
+///
+/// NOTE on spar fidelity: spar's generated matter.wit references undefined
+/// types (mattermessage / monotonictime / entropybytes / bytes) and uses mixed
+/// hyphen/underscore identifiers (`on-message_in`), so it is not directly
+/// bindable; this seam mirrors its shape with valid WIT (list<u8> for
+/// mattermessage, u64 µs for monotonictime). Entropy (spar on-entropy_in) is
+/// the remaining seam to route across — see SWV-MATTER-002 C4b.
+interface matter-ports {
+    /// Next inbound Matter packet on `channel`, or none. (NetworkReceive)
+    on-message-in: func(channel: u8) -> option<list<u8>>;
+    /// Send one Matter packet on `channel`. (NetworkSend)
+    emit-message-out: func(channel: u8, data: list<u8>);
+    /// Host monotonic time in microseconds. (clock seam)
+    on-clock-in: func() -> u64;
 }
 
 /// Drives the verified core. `run` completes a full PASE handshake and
@@ -19,13 +38,13 @@ interface runner {
     run: func() -> bool;
 }
 
-/// Host transport shell: owns the queues, exports the seam.
+/// Host shell: owns the packet queues + the monotonic clock, exports the seam.
 world transport {
-    export wire;
+    export matter-ports;
 }
 
 /// Verified Matter core: imports the seam, exports the runner.
 world matter-core {
-    import wire;
+    import matter-ports;
     export runner;
 }
