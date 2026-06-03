@@ -78,14 +78,25 @@ artifacts:
         matter.wit *verbatim*, blocked upstream by spar's own WIT bugs
         (undefined types + mixed hyphen/underscore identifiers, above).
 
-      OWED before this artifact can be `approved`:
+      - C5 MC/DC: DONE (structured-evidence finding). SWV-MATTER-001 scoped
+        out witness MC/DC because the bridge ran host-side; SWARCH-WOHL-008
+        wasm-componentized the core, so the seam glue is now in scope. The
+        witness fixture (crates/wohl-matter-core/witness/) instruments the
+        seam availability decision (wait_available / recv_from: ready if
+        buffered OR incoming). FINDING: that decision is a FLAT two-condition
+        OR, which rustc (opt-level=1, wasm32-unknown-unknown) lowers to a
+        branchless bitwise OR — witness recovers 0 multi-condition decisions,
+        so MC/DC there is satisfied by / equivalent to branch coverage.
+        Confirmed against many spellings (||, if/else, black_box, opaque
+        inline-never poll, nested a||(!a&&b)) — all collapse, because the two
+        conditions are simple and mergeable. Per witness's "structured
+        evidence, not a percentage" philosophy this IS the honest result: the
+        seam contains no rich (nested, non-mergeable) decision for MC/DC to
+        report on. The same pipeline reconstructs full MC/DC (masking +
+        unique-cause) on a rich decision (the ISO leap-year rule), proving the
+        tool is wired for the verified-core line (see the fixture README).
 
-      - C5 MC/DC: SWV-MATTER-001 scoped out witness MC/DC truth tables
-        because "the bridge runs host-side and is not yet
-        wasm-componentized." SWARCH-WOHL-008 changes that for the core —
-        once the component lands, the new decision points in the seam
-        glue (transport poll/clock/entropy mapping) are in scope for a
-        witness truth table.
+      OWED before this artifact can be `approved`:
 
       Clean-room (loop step 7): a cold verification agent with no inherited
       context independently reproduced C1 (read main's BUILD.bazel:
