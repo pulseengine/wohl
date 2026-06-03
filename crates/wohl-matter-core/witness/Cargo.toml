@@ -1,0 +1,27 @@
+# Witness MC/DC fixture for the Matter verified-core seam (SWV-MATTER-002 C5).
+#
+# Standalone (own [workspace]); NOT a wohl workspace member. Built for
+# wasm32-unknown-unknown (a CORE module — witness cannot yet instrument the
+# wasip2 Component), then instrumented + run + reported by `witness` to
+# reconstruct the MC/DC truth table for the seam's availability decision.
+[package]
+name = "wohl-matter-seam-mcdc"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+# debuginfo REQUIRED — DWARF is what witness uses to group br_if branches into
+# source-level decisions. opt-level=1 keeps the branches from being dead-
+# stripped; codegen-units=1 + lto=false keep attribution stable.
+[profile.release]
+debug = true
+strip = false
+opt-level = 1
+codegen-units = 1
+lto = false
+panic = "abort"
