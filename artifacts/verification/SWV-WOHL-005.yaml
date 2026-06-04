@@ -2,7 +2,7 @@ artifacts:
   - id: SWV-WOHL-005
     type: sw-verification
     title: Alert dispatcher SW requirement verification
-    status: planned
+    status: proposed
     description: >
       SW-level verification that the AlertDispatcher satisfies alert
       dispatch software requirements. Unit tests for deduplication
