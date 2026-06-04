@@ -110,13 +110,16 @@ artifacts:
       themselves — those were executed and captured in the authoring session.
       No claim was refuted.
 
-      Sigil: the wac_compose'd component is a new build artifact; when it
-      lands it enters the release-signing attestation chain (release.yml
-      already does SLSA build provenance + cosign keyless signing). The
-      `sigil` and `witness` tools are present as sibling repos but are not
-      built in the current environment, so the witness MC/DC truth table
-      (C5 above) and a sigil-specific signature are deferred to the landing
-      PR; the wasm artifact is ready for both.
+      Sigil (step 6): DONE (chain demonstrated). The verified-core wasm is a
+      new build artifact; the sigil attestation chain is shown working on it
+      in crates/wohl-matter-core/attestation/ — `sigil keygen -> sign ->
+      verify` accepts the signed artifact (`Signature is valid.`) and rejects
+      a one-byte-tampered copy (`No valid signatures`), via Ed25519 detached
+      signatures. The remaining productionization is a build-stage attestation
+      in CI (sign //:wohl-matter-composed after the bazel build), alongside
+      release.yml's existing SLSA provenance + cosign keyless signing. The
+      witness MC/DC evidence (C5) feeds the same story: `witness attest`
+      emits a DSSE envelope that sigil's `wsc verify` consumes.
     tags: [verification, matter, wasm, verified-core, swe-6]
     fields:
       method: automated-test
