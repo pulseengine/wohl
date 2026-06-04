@@ -43,11 +43,24 @@ artifacts:
           to absorb the protocol duty cycle. Low retail price reflects
           volume and amortized certification, not cheap engineering.
 
-      The unverified Matter stack lives on the hub (a Linux- or
-      STM32H7-class device), explicitly outside the sensor safety
-      boundary. A standalone Matter-native sensor SKU, if ever pursued,
-      shall be a separate product line and shall not alter the verified
-      line's firmware architecture.
+      The Matter stack lives on the hub (a Linux- or STM32H7-class
+      device), explicitly outside the sensor safety boundary. A
+      standalone Matter-native sensor SKU, if ever pursued, shall be a
+      separate product line and shall not alter the verified line's
+      firmware architecture.
+
+      REFINEMENT (SWARCH-WOHL-008, 0.3.0): "the *unverified* Matter stack
+      lives on the hub" is now too absolute. Spike 2 proved the hub's
+      Matter protocol + crypto core (TLV, secure channel / PASE-CASE,
+      RustCrypto, data model) builds AND runs as a verified
+      wasm32-wasip2 component, with only host-bound non-determinism
+      (UDP/mDNS transport, monotonic clock, entropy) imported across a
+      WIT seam. So the accurate hub split is: Matter *transport I/O* is
+      unverified host-side; Matter *protocol + crypto* is
+      verifiable-in-component. This strengthens — does not weaken — the
+      "Verified. Always on." claim: the most security-sensitive hub code
+      (the commissioning handshake) moves inside the verification
+      boundary. See SWARCH-WOHL-008.
     tags: [architecture, decision, matter, bridge, ccsds, verification]
     fields:
       interfaces:

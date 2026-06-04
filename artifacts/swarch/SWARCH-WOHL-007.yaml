@@ -18,10 +18,20 @@ artifacts:
         feature) — drives the rs-matter library to commission,
         maintain fabrics, and publish cluster attribute updates.
 
-      rs-matter version pin: TBD on first implementation merge.
-      Tracked in `crates/wohl-matter-bridge/DESIGN.md` and bumped via
-      PR when the upstream releases a relevant version. The pin is a
-      hard dependency floor for the `rs-matter-backend` feature.
+      rs-matter version pin: git rev `0030ba4a99` (set in 0.3.0; the
+      crate-universe seed `crates/wohl-leak/wasm/Cargo.toml` and the
+      `rs-matter-backend` feature both pin it). Bumped via PR when
+      upstream releases a relevant version. The pin is a hard dependency
+      floor for the `rs-matter-backend` feature.
+
+      VARIANT (SWARCH-WOHL-008, 0.3.0): besides the host-side
+      `RsMatterBridge` described here, the rs-matter protocol+crypto core
+      can run as a verified `wasm32-wasip2` component built by
+      rules_wasm_component (`//:wohl-matter-core` / `//:wohl-matter-
+      composed`), with transport/clock/entropy imported across a WIT
+      seam. The two are not exclusive: the host bridge owns sockets,
+      mDNS, and fabric persistence; the verified-core component owns the
+      protocol+crypto. See SWARCH-WOHL-008.
 
       The bridge runs as the `matter` subcomponent of HubNode.RPi
       and HubNode.MiniPC (modeled in spar/wohl_nodes.aadl). It
