@@ -110,16 +110,18 @@ artifacts:
       themselves — those were executed and captured in the authoring session.
       No claim was refuted.
 
-      Sigil (step 6): DONE (chain demonstrated). The verified-core wasm is a
-      new build artifact; the sigil attestation chain is shown working on it
-      in crates/wohl-matter-core/attestation/ — `sigil keygen -> sign ->
-      verify` accepts the signed artifact (`Signature is valid.`) and rejects
-      a one-byte-tampered copy (`No valid signatures`), via Ed25519 detached
-      signatures. The remaining productionization is a build-stage attestation
-      in CI (sign //:wohl-matter-composed after the bazel build), alongside
-      release.yml's existing SLSA provenance + cosign keyless signing. The
-      witness MC/DC evidence (C5) feeds the same story: `witness attest`
-      emits a DSSE envelope that sigil's `wsc verify` consumes.
+      Sigil (step 6): DONE + CI-GATED. The verified-core wasm is a new build
+      artifact; the sigil attestation chain is wired as a CI job
+      (`sigil-attest`, needs: bazel-build): it downloads the bazel-built
+      //:wohl-matter-composed, builds pinned sigil (SIGIL_REF), and runs
+      crates/wohl-matter-core/attestation/sign-verify.sh on it — every PR
+      proves `sign -> verify accepts (Signature is valid.) -> tamper rejected
+      (No valid signatures)` via Ed25519 detached signatures. Green as of the
+      verified-core-finalize PR (OK: signed artifact verifies / OK: tampered
+      artifact rejected / PASS: sigil attestation chain intact). This sits
+      alongside release.yml's existing SLSA provenance + cosign keyless
+      signing. The witness MC/DC evidence (C5) feeds the same story: `witness
+      attest` emits a DSSE envelope that sigil's `wsc verify` consumes.
     tags: [verification, matter, wasm, verified-core, swe-6]
     fields:
       method: automated-test

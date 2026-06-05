@@ -28,6 +28,9 @@ env:
   # for local dev; CI checks out the pinned ref into a sibling path so
   # the override resolves.
   RULES_WASM_COMPONENT_REF: fbe20571eee9bd05687c95e7a43f6c236d9b2428
+  # Pinned sigil for the build-stage attestation gate (sigil-attest job
+  # signs the composed Matter component). Bumped via PR.
+  SIGIL_REF: 54518f702a36f5f29a79f0a02859c502dacaa98a
 
 jobs:
   lint:
@@ -342,3 +345,52 @@ jobs:
             exit 1
           fi
           echo "PASE-RUNS-OK in CI: SPAKE2+ handshake completed across the wac-composed WIT seam"
+          # Stage the composed component for the sigil-attest job (bazel-bin
+          # is a symlink tree; copy out a real file for upload-artifact).
+          cp -L "$WASM" "$GITHUB_WORKSPACE/wohl-matter-composed.wasm"
+
+      - name: Upload composed component for attestation
+        uses: actions/upload-artifact@v4
+        with:
+          name: wohl-matter-composed
+          path: wohl-matter-composed.wasm
+          if-no-files-found: error
+
+  sigil-attest:
+    # SWARCH-WOHL-008 step 6: build-stage attestation gate. Signs the
+    # bazel-built composed component with sigil and confirms the detached
+    # verifier accepts it and rejects tampering — the production form of the
+    # locally-demonstrated chain in crates/wohl-matter-core/attestation/.
+    # Separate job so the (heavy) sigil build doesn't lengthen bazel-build's
+    # critical path; depends on bazel-build for the artifact.
+    name: sigil attestation (sign composed component)
+    runs-on: ubuntu-latest
+    needs: bazel-build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/sigil
+          path: sigil
+          ref: ${{ env.SIGIL_REF }}
+          fetch-depth: 0
+      # sigil's rust-toolchain.toml selects its own toolchain; this provides a
+      # base so rustup can resolve it.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sigil
+          key: sigil-attest
+      - uses: actions/download-artifact@v4
+        with:
+          name: wohl-matter-composed
+          path: artifact
+      - name: Build sigil + sign/verify the composed component
+        run: |
+          set -euo pipefail
+          cargo build --release --manifest-path sigil/Cargo.toml --bin sigil
+          SIGIL="$PWD/sigil/target/release/sigil" \
+          ARTIFACT="$PWD/artifact/wohl-matter-composed.wasm" \
+            wohl/crates/wohl-matter-core/attestation/sign-verify.sh
