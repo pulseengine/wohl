@@ -30,7 +30,7 @@ env:
   RULES_WASM_COMPONENT_REF: fbe20571eee9bd05687c95e7a43f6c236d9b2428
   # Pinned sigil for the build-stage attestation gate (sigil-attest job
   # signs the composed Matter component). Bumped via PR.
-  SIGIL_REF: 54518f7
+  SIGIL_REF: 54518f702a36f5f29a79f0a02859c502dacaa98a
 
 jobs:
   lint:
