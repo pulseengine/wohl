@@ -37,6 +37,13 @@ rs-matter-backend = [
     "dep:log",
 ]
 
+# The interop device runner needs the live backend; gate it so
+# `clippy --all-targets` (no features) doesn't try to build it and hit the
+# feature-gated RsMatterBridge/RsMatterConfig imports.
+[[example]]
+name = "matter-device"
+required-features = ["rs-matter-backend"]
+
 [dependencies]
 # Pinned to project-chip/rs-matter @ 0030ba4a99 (HEAD as of 2026-05-26
 # per the rs-matter API exploration agent). MSRV 1.87 declared by

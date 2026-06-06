@@ -16,7 +16,7 @@
 
 use std::path::PathBuf;
 
-use wohl_matter_bridge::{RsMatterConfig, RsMatterBridge};
+use wohl_matter_bridge::{RsMatterBridge, RsMatterConfig};
 
 fn main() -> std::io::Result<()> {
     let state_dir = std::env::var("WOHL_MATTER_STATE_DIR")
