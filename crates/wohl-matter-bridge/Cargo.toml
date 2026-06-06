@@ -37,11 +37,24 @@ rs-matter-backend = [
     "dep:log",
 ]
 
+# The interop device runner needs the live backend; gate it so
+# `clippy --all-targets` (no features) doesn't try to build it and hit the
+# feature-gated RsMatterBridge/RsMatterConfig imports.
+[[example]]
+name = "matter-device"
+required-features = ["rs-matter-backend"]
+
 [dependencies]
 # Pinned to project-chip/rs-matter @ 0030ba4a99 (HEAD as of 2026-05-26
 # per the rs-matter API exploration agent). MSRV 1.87 declared by
 # that revision. License Apache-2.0 (passes deny.toml allowlist).
-rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", optional = true, default-features = false, features = ["std", "async-io", "os"] }
+# `rustcrypto` is REQUIRED: without a crypto-backend feature, rs-matter's
+# default_crypto resolves to DummyCrypto, which panics in DummyCrypto::rand the
+# moment commissioning needs randomness — i.e. the device panics at startup.
+# Caught by the chip-tool interop test (the host device had never actually run;
+# unit tests + compile never exercised the live commissioning path). The wasm
+# component dodged this because it pins features=["rustcrypto"] directly.
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", optional = true, default-features = false, features = ["std", "async-io", "os", "rustcrypto"] }
 
 # Async runtime + socket plumbing for the Matter commissioning loop.
 # Mirrors the upstream `examples/src/bin/onoff_light.rs` skeleton.

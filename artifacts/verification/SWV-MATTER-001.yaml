@@ -21,6 +21,24 @@ artifacts:
       `RsMatterBridge::publish_*` into real calls and adds
       `IV-MATTER-001` integration tests.
 
+      UPDATE (0.3.0, interop gate): "no rs-matter wire integration runs
+      anywhere yet" is no longer true. The `matter-interop` CI job runs the
+      host bridge as a real commissionable device
+      (examples/matter-device.rs, RsMatterBridge) and drives it with the
+      INDEPENDENT CHIP reference controller, chip-tool: PASE (Secure Pairing
+      Success) -> CASE (Sigma1/2/3) -> NOC install -> "Commissioning
+      complete ... success", then an operational read of
+      BooleanState::StateValue on the WaterLeakDetector endpoint
+      ("StateValue: FALSE"). This decisively covers SWREQ-MATTER-002
+      (commissioning) and SWREQ-MATTER-001 (a controller sees sensor state
+      as a bridged endpoint) against a foreign stack — killing the
+      rs-matter-vs-rs-matter self-consistency risk. Running it also caught a
+      real bug the wasm-vs-wasm gate could not: the host bridge lacked the
+      rustcrypto feature, so it panicked at startup in DummyCrypto::rand
+      (the live commissioning loop had never actually executed). Still
+      `proposed` overall — multi-admin (003), persistence (004), and the
+      bridged-update/latency path (005) remain planned.
+
       Verification methods, by requirement:
 
       - SWREQ-MATTER-001 (ecosystem visibility): integration test —

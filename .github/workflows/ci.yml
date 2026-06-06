@@ -394,3 +394,66 @@ jobs:
           SIGIL="$PWD/sigil/target/release/sigil" \
           ARTIFACT="$PWD/artifact/wohl-matter-composed.wasm" \
             wohl/crates/wohl-matter-core/attestation/sign-verify.sh
+
+  matter-interop:
+    # THE falsification test: an INDEPENDENT Matter implementation (the
+    # official CHIP reference controller, chip-tool) commissions the hub and
+    # reads an attribute. The wasmtime gate proves rs-matter agrees with
+    # rs-matter; this proves we are spec-compliant against a foreign stack.
+    # If chip-tool can't commission/read, we've found a real bug CI never
+    # would. NOTE: chip-tool + mDNS in a CI network namespace is fiddly; this
+    # job prints diagnostics and is expected to iterate.
+    name: Matter interop (chip-tool commissions the hub)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+          ref: ${{ env.RELAY_REF }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.87.0"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wohl
+          key: matter-interop
+      - name: Install chip-tool (snap) + mDNS
+        run: |
+          set -x
+          sudo apt-get update && sudo apt-get install -y avahi-daemon avahi-utils libavahi-client3 || true
+          sudo systemctl start avahi-daemon || sudo service avahi-daemon start || true
+          sudo snap install chip-tool
+          chip-tool --version || /snap/bin/chip-tool --version || true
+      - name: Build the commissionable device
+        working-directory: wohl
+        run: cargo build -p wohl-matter-bridge --features rs-matter-backend --example matter-device
+      - name: Interop — chip-tool commissions the hub + reads BooleanState
+        working-directory: wohl
+        run: |
+          set -uo pipefail
+          CT=$(command -v chip-tool || echo /snap/bin/chip-tool)
+          echo "chip-tool: $CT"
+          STATE=$(mktemp -d)
+          WOHL_MATTER_STATE_DIR="$STATE" ./target/debug/examples/matter-device > device.log 2>&1 &
+          DEV=$!
+          echo "device pid=$DEV; waiting for it to advertise…"
+          sleep 10
+          echo "::group::device.log"; cat device.log; echo "::endgroup::"
+          if ! kill -0 "$DEV" 2>/dev/null; then echo "::error::device exited early"; exit 1; fi
+          echo "::group::commission (pairing onnetwork node=1 pin=20202021)"
+          sudo "$CT" pairing onnetwork 1 20202021 --bypass-attestation-verifier true 2>&1 | tee pair.log
+          PR=${PIPESTATUS[0]}
+          echo "::endgroup::"
+          if [ "$PR" -ne 0 ]; then echo "::error::commissioning FAILED (exit $PR)"; echo "---device.log---"; cat device.log; kill "$DEV" 2>/dev/null; exit 1; fi
+          echo "::group::read booleanstate state-value node=1 endpoint=1"
+          sudo "$CT" booleanstate read state-value 1 1 2>&1 | tee read.log
+          RR=${PIPESTATUS[0]}
+          echo "::endgroup::"
+          kill "$DEV" 2>/dev/null || true
+          if [ "$RR" -ne 0 ]; then echo "::error::attribute read FAILED (exit $RR)"; cat device.log; exit 1; fi
+          echo "INTEROP-OK: chip-tool commissioned the hub and read BooleanState::StateValue"
