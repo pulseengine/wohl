@@ -1,0 +1,44 @@
+# First-pass STPA-Sec Step 1b — Security Hazards — wohl. AI-assisted DRAFT for review.
+artifacts:
+  - id: SH-1
+    type: sec-hazard
+    title: Unauthenticated CCSDS sensor stream accepted as genuine
+    status: draft
+    description: >
+      The hub/monitors act on a sensor stream whose origin and integrity are not
+      verified, allowing a spoofed stream to suppress real alerts or inject
+      false ones.
+    fields:
+      cia-impact: [integrity]
+      severity: high
+    links:
+      - type: leads-to-sec-loss
+        target: SL-2
+  - id: SH-2
+    type: sec-hazard
+    title: Presence-revealing streams observable in transit or at rest
+    status: draft
+    description: >
+      Door/contact and power streams are exposed (unencrypted on the home LAN or
+      in storage), enabling an on-network adversary to infer occupancy.
+    fields:
+      cia-impact: [confidentiality]
+      severity: medium
+    links:
+      - type: leads-to-sec-loss
+        target: SL-1
+  - id: SH-3
+    type: sec-hazard
+    title: Hub or notification credentials compromised
+    status: draft
+    description: >
+      An attacker obtains credentials/keys for the hub or notification channel
+      and can disable monitoring or control notification delivery.
+    fields:
+      cia-impact: [integrity, availability]
+      severity: high
+    links:
+      - type: leads-to-sec-loss
+        target: SL-2
+      - type: leads-to-sec-loss
+        target: SL-3

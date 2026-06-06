@@ -1,0 +1,45 @@
+# First-pass STPA Step 3 — Unsafe Control Actions — wohl. AI-assisted DRAFT for review.
+monitor-ucas:
+  control-action: Emit an alert for a detected hazardous condition
+  controller: CTRL-MON
+  not-providing:
+    - id: UCA-MON-1
+      description: Monitor does not emit an alert when its input indicates a hazardous condition.
+      context: A leak/freeze/overheat/bad-air reading crosses the safety threshold.
+      hazards: [H-1]
+      rationale: The occupant receives no warning of a real hazard.
+    - id: UCA-MON-2
+      description: Monitor does not emit because it has no fresh input from a silent node.
+      context: A sensor node has stopped publishing and the gap is not detected.
+      hazards: [H-1, H-2]
+      rationale: Absence of data is treated as absence of hazard.
+  providing:
+    - id: UCA-MON-3
+      description: Monitor emits an alert when no hazardous condition exists.
+      context: Sensor noise or a stale reading is misread as a threshold crossing.
+      hazards: [H-3]
+      rationale: False alerts erode trust and attention.
+  too-early-too-late:
+    - id: UCA-MON-4
+      description: Monitor emits the alert after the safety window has passed.
+      context: A water-leak event (CRITICAL/immediate) is processed with avoidable delay.
+      hazards: [H-5]
+      rationale: A late alert cannot prevent the loss.
+dispatcher-ucas:
+  control-action: Deliver a notification to the occupant
+  controller: CTRL-DISP
+  not-providing:
+    - id: UCA-DISP-1
+      description: Dispatcher suppresses a genuine alert as a duplicate or via rate-limiting.
+      context: A real alert resembles a recently-seen or resolved one.
+      hazards: [H-1]
+      rationale: Dedup/rate-limit logic drops a real warning.
+hub-ucas:
+  control-action: Flag missing node heartbeats
+  controller: CTRL-HUB
+  not-providing:
+    - id: UCA-HUB-1
+      description: Hub continues to present "monitoring" when a node/stream has gone silent.
+      context: A node loses power or connectivity; no heartbeat-timeout is raised.
+      hazards: [H-2]
+      rationale: The occupant is unaware a region is unmonitored.

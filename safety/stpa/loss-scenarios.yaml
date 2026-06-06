@@ -1,0 +1,36 @@
+# First-pass STPA Step 4 — Loss Scenarios — wohl. AI-assisted DRAFT for review.
+loss-scenarios:
+  - id: LS-1
+    title: Silent node leaves a region unmonitored
+    uca: UCA-MON-2
+    type: inadequate-process-model
+    hazards: [H-1, H-2]
+    scenario: >
+      A sensor node loses power/connectivity; the hub does not detect the
+      missing heartbeat (UCA-HUB-1); the monitor has no input and emits nothing;
+      the occupant believes the home is protected.
+  - id: LS-2
+    title: Real leak alert suppressed as a duplicate
+    uca: UCA-DISP-1
+    type: inadequate-control-algorithm
+    hazards: [H-1, H-5]
+    scenario: >
+      A genuine water-leak event arrives but the dispatcher's dedup window
+      classifies it as a duplicate of an earlier, resolved event and drops it.
+  - id: LS-3
+    title: Stale reading masks a developing hazard
+    uca: UCA-MON-1
+    type: inadequate-process-model
+    hazards: [H-4, H-1]
+    scenario: >
+      Clock skew or out-of-order CCSDS frames cause a monitor to evaluate an old
+      reading; the current hazardous value is never assessed.
+  - id: LS-4
+    title: Notification channel down, alert lost
+    uca: UCA-DISP-1
+    type: control-path
+    hazards: [H-1, H-5]
+    scenario: >
+      The dispatcher emits but the notification transport is unavailable with no
+      fallback or unacknowledged-alert escalation; the alert never reaches the
+      occupant.

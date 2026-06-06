@@ -1,0 +1,36 @@
+# First-pass STPA-Sec — Security Constraints — wohl. AI-assisted DRAFT for review.
+artifacts:
+  - id: SSC-1
+    type: sec-constraint
+    title: Sensor streams must be authenticated before a monitor acts on them
+    status: draft
+    description: >
+      Every CCSDS stream the hub routes to a monitor must carry a verifiable
+      origin and integrity check; unauthenticated or tampered streams must be
+      rejected and surfaced as a degraded-monitoring condition, not silently
+      dropped (a silently-dropped stream would leave a region unmonitored).
+    links:
+      - type: prevents-sec-hazard
+        target: SH-1
+  - id: SSC-2
+    type: sec-constraint
+    title: Presence-revealing streams must be confidential in transit and at rest
+    status: draft
+    description: >
+      Door/contact and power streams must be encrypted on the wire and in any
+      persisted form so an on-network or storage-level adversary cannot infer
+      occupancy.
+    links:
+      - type: prevents-sec-hazard
+        target: SH-2
+  - id: SSC-3
+    type: sec-constraint
+    title: Hub and notification credentials must be protected and revocable
+    status: draft
+    description: >
+      Credentials/keys for the hub and notification channel must be stored
+      protected (hardware-backed where available), scoped to least privilege,
+      and revocable; loss of a credential must not silently disable monitoring.
+    links:
+      - type: prevents-sec-hazard
+        target: SH-3

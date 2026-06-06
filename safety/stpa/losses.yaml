@@ -1,0 +1,30 @@
+# First-pass STPA Step 1a — Losses — wohl. AI-assisted DRAFT for review.
+losses:
+  - id: L-1
+    title: Occupant harm or property damage from an undetected home hazard
+    description: >
+      A real hazardous condition (water leak/flood, freeze or overheat,
+      dangerous air quality — CO2/PM2.5/VOC) develops and the system fails to
+      alert the occupant in time to act, leading to injury, health impact, or
+      property damage.
+    stakeholders: [occupants, property-owners, insurers]
+  - id: L-2
+    title: False sense of safety from silent non-protection
+    description: >
+      The occupant relies on wohl believing the home is monitored while the
+      system is offline, degraded, or blind to a sensor, and is unaware that
+      protection has lapsed.
+    stakeholders: [occupants, property-owners]
+  - id: L-3
+    title: Loss of effective protection through alert fatigue
+    description: >
+      Excessive false or duplicate alerts cause the occupant to ignore, mute,
+      or disable the system, so a later genuine alert is missed.
+    stakeholders: [occupants]
+  - id: L-4
+    title: Loss of occupant privacy or home security
+    description: >
+      Sensor streams that reveal occupancy and behaviour (door/contact events,
+      power usage), or the home network itself, are exposed to or abused by an
+      unauthorized party.
+    stakeholders: [occupants, property-owners]

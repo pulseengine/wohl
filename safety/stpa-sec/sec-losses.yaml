@@ -1,0 +1,33 @@
+# First-pass STPA-Sec Step 1a — Security Losses — wohl. AI-assisted DRAFT for review.
+artifacts:
+  - id: SL-1
+    type: sec-loss
+    title: Occupant privacy disclosed via sensor streams
+    status: draft
+    description: >
+      Door/contact and power-usage streams that reveal occupancy and behaviour
+      are observed by an unauthorized party, enabling presence inference
+      (e.g. detecting when the home is empty).
+    fields:
+      cia-impact: [confidentiality]
+      stakeholders: [occupants, property-owners]
+  - id: SL-2
+    type: sec-loss
+    title: Safety function subverted by an adversary
+    status: draft
+    description: >
+      An attacker suppresses or forges alerts so the system reports OK during a
+      real hazard, or floods false alerts to cause fatigue. The security path to the occupant-harm safety loss.
+    fields:
+      cia-impact: [integrity, availability]
+      stakeholders: [occupants, property-owners]
+  - id: SL-3
+    type: sec-loss
+    title: System abused as an intrusion vector
+    status: draft
+    description: >
+      A compromised hub or notification path is used to pivot into the home
+      network or act on the home, beyond the monitoring function.
+    fields:
+      cia-impact: [confidentiality, integrity]
+      stakeholders: [occupants, property-owners]

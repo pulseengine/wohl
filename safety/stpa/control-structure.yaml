@@ -1,0 +1,41 @@
+# First-pass STPA Step 2 — Control Structure — wohl. AI-assisted DRAFT for review.
+controllers:
+  - id: CTRL-MON
+    name: Monitor component (leak / temperature / air-quality / door / power)
+    type: automated
+    description: >
+      A no_std, no_alloc, Kani-verified stream transformer that consumes a typed
+      sensor stream and emits alerts when its safety condition is met.
+    control-actions:
+      - ca: CA-MON-1
+        target: PROC-DISPATCH
+        action: Emit an alert for a detected hazardous condition
+  - id: CTRL-DISP
+    name: Alert Dispatcher
+    type: automated
+    description: >
+      Deduplicates, rate-limits, and delivers alerts as notifications.
+    control-actions:
+      - ca: CA-DISP-1
+        target: PROC-OCCUPANT
+        action: Deliver a notification to the occupant
+  - id: CTRL-HUB
+    name: Hub orchestrator
+    type: automated
+    description: >
+      Routes CCSDS sensor streams from nodes to the six monitors and supervises
+      node/stream liveness.
+    control-actions:
+      - ca: CA-HUB-1
+        target: CTRL-MON
+        action: Route sensor stream and flag missing node heartbeats
+
+controlled-processes:
+  - id: PROC-DISPATCH
+    name: Alert dispatch pipeline
+    description: >
+      The path that carries emitted alerts from monitors toward delivery.
+  - id: PROC-OCCUPANT
+    name: Occupant (notification recipient)
+    description: >
+      The person who must receive and act on alerts about home hazards.

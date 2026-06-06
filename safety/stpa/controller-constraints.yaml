@@ -1,0 +1,40 @@
+# First-pass STPA — Controller Constraints (safety) — wohl. AI-assisted DRAFT for review.
+controller-constraints:
+  - id: CC-MON-1
+    controller: CTRL-MON
+    constraint: >
+      A monitor must emit an alert whenever its input indicates a hazardous
+      condition, and must treat absence of fresh input as a fault (degraded
+      monitoring), never as "no hazard".
+    ucas: [UCA-MON-1, UCA-MON-2]
+    hazards: [H-1, H-2]
+  - id: CC-MON-2
+    controller: CTRL-MON
+    constraint: >
+      A monitor must not emit on noise or stale data, and must process
+      safety-critical events (water leak) within their safety window.
+    ucas: [UCA-MON-3, UCA-MON-4]
+    hazards: [H-3, H-5]
+  - id: CC-DISP-1
+    controller: CTRL-DISP
+    constraint: >
+      Dedup/rate-limit must never suppress a distinct genuine alert; the
+      dispatcher must escalate unacknowledged critical alerts and fall back when
+      a transport is unavailable.
+    ucas: [UCA-DISP-1]
+    hazards: [H-1, H-5]
+  - id: CC-HUB-1
+    controller: CTRL-HUB
+    constraint: >
+      The hub must detect a missing node/stream heartbeat within a bounded time
+      and surface the affected region as unmonitored rather than presenting as
+      fully monitoring.
+    ucas: [UCA-HUB-1]
+    hazards: [H-2]
+  - id: CC-MON-3
+    controller: CTRL-MON
+    constraint: >
+      A monitor must reject stale or out-of-order readings (timestamp +
+      sequence validation) and must not evaluate them as current measurements.
+    ucas: [UCA-MON-1]
+    hazards: [H-4]

@@ -1,0 +1,34 @@
+# First-pass STPA Step 1b — Hazards — wohl. AI-assisted DRAFT for review.
+hazards:
+  - id: H-1
+    title: A hazardous home condition is present and no alert is delivered
+    description: >
+      A monitor's input indicates (or would indicate) a hazardous condition but
+      no alert reaches the occupant — the monitor does not emit, or the
+      dispatcher does not deliver.
+    losses: [L-1, L-2]
+  - id: H-2
+    title: The system is degraded or blind and the occupant is not informed
+    description: >
+      A sensor node, stream, monitor, or the hub is offline/faulted so a region
+      of the home is unmonitored, while the system presents as "monitoring".
+    losses: [L-2]
+  - id: H-3
+    title: Excessive false or duplicate alerts are delivered
+    description: >
+      The system emits alerts when no hazardous condition exists, or
+      repeats/duplicates them, eroding occupant trust and attention.
+    losses: [L-3]
+  - id: H-4
+    title: Stale or incorrect sensor data is treated as current and valid
+    description: >
+      A monitor acts on a reading that is out of date, out of order, or
+      corrupted as though it were a fresh, trustworthy measurement.
+    losses: [L-1, L-2]
+  - id: H-5
+    title: An alert is delivered too late to act
+    description: >
+      End-to-end latency from hazardous condition to delivered notification
+      exceeds the safety window for the hazard class (for water-leak, which is
+      CRITICAL/immediate, any avoidable delay).
+    losses: [L-1]
