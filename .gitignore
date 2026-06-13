@@ -20,3 +20,10 @@ Thumbs.db
 /alert_dedup
 /proofs/verus/alert_dedup
 
+
+# Rivet external project cache + machine-local external pin. The `relay`
+# external is resolved live (CI checks out relay@main as a sibling);
+# rivet.lock would pin a machine-local commit CI cannot match, so it is
+# regenerated locally (`rivet lock`), not committed.
+.rivet/
+rivet.lock

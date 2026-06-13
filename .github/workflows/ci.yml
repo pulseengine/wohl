@@ -222,6 +222,17 @@ jobs:
           path: rivet
           ref: ${{ env.RIVET_REF }}
           fetch-depth: 0
+      # wohl's STPA declares relay as a rivet external (path: ../relay) so the
+      # hazard analysis can `traces-to relay:<ID>` the upstream link-layer
+      # sec-constraints it inherits (see safety/stpa). The path external
+      # resolves live, so relay must sit beside wohl as a sibling checkout;
+      # main carries relay's STPA-Sec (PR #117). If relay renames a referenced
+      # ID, this job goes red — that is the federation guarantee.
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+          ref: main
       # rivet-cli's deps need Rust 1.89+; we don't care about MSRV for tooling.
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2

@@ -1,0 +1,149 @@
+## STPA hazard analysis — wohl home-supervision system (bootstrap seed).
+##
+## Top of the V. These are SEED artifacts (status: draft) that the full
+## hazard analysis fills in; they exist so the trace graph is real and grows
+## closed. Chain: system-constraint --prevents--> hazard --leads-to-loss-->
+## loss. The existing SYSREQ-WOHL-* requirements refine these constraints.
+##
+## Control structure (informal): occupant/operator <-> hub (monitor
+## components + alert dispatcher) <-> sensor nodes (CCSDS) ; and the hub
+## Matter bridge <-> external Matter controllers (analysed in ../stpa-sec).
+##
+## ANALYSIS BOUNDARY (lower edge). The sensor<->hub CCSDS link itself — frame
+## authenticity, anti-replay freshness, and link availability — is NOT
+## re-derived here. It is the subject of relay-sec's STPA-Sec (the `relay`
+## rivet external; see rivet.yaml). wohl's safety constraints below assume
+## relay-sec's link constraints hold: SC-WOHL-001 (alert on a real reading)
+## assumes the reading was authentic + fresh (relay:SSC-AUTH / relay:SSC-FRESH);
+## SC-WOHL-003 (keep monitoring) assumes the link is available (relay:SSC-JAM).
+## These `traces-to relay:*` links make the assumption-of-use machine-checkable.
+artifacts:
+  # ── Losses (stakeholder-level) ──────────────────────────────────────────
+  - id: LOSS-WOHL-001
+    type: loss
+    title: "Undetected hazardous home condition causes harm"
+    status: draft
+    description: >
+      A monitored hazardous condition (water leak, freeze, elevated CO2 /
+      poor air quality, or an open door/window) occurs but the system fails
+      to alert the occupant in time, leading to property damage, health
+      harm, or — for freeze (pipe burst) and air-quality/CO — risk to life.
+    tags: [stpa, loss, safety]
+    fields:
+      stakeholders: [occupant, property-owner, insurer]
+
+  - id: LOSS-WOHL-002
+    type: loss
+    title: "Alarm fatigue causes a real alert to be ignored"
+    status: draft
+    description: >
+      Repeated false or low-value alerts erode occupant trust, so a
+      subsequent genuine alert is ignored or the system is muted/disabled —
+      defeating supervision exactly when it is needed.
+    tags: [stpa, loss, safety, usability]
+    fields:
+      stakeholders: [occupant]
+
+  # ── Hazards ─────────────────────────────────────────────────────────────
+  - id: HAZ-WOHL-001
+    type: hazard
+    title: "Monitor does not raise an alert on a real hazardous condition"
+    status: draft
+    description: >
+      A sensor reading crosses its hazard threshold (or a contact/leak event
+      occurs) but the corresponding monitor does not emit an alert, or the
+      dispatcher drops it — a false negative.
+    tags: [stpa, hazard, false-negative]
+    fields:
+      severity: critical
+    links:
+      - type: leads-to-loss
+        target: LOSS-WOHL-001
+
+  - id: HAZ-WOHL-002
+    type: hazard
+    title: "Monitor raises an alert under normal (non-hazard) conditions"
+    status: draft
+    description: >
+      A monitor emits an alert when no hazardous condition exists (a false
+      positive), or the dispatcher fails to dedup/rate-limit, producing
+      repeated spurious alerts.
+    tags: [stpa, hazard, false-positive]
+    fields:
+      severity: marginal
+    links:
+      - type: leads-to-loss
+        target: LOSS-WOHL-002
+
+  - id: HAZ-WOHL-003
+    type: hazard
+    title: "Hub stops monitoring (crash, hang, or power loss)"
+    status: draft
+    description: >
+      The hub's monitor/dispatcher loop stalls, panics, or the device is
+      unpowered, so no readings are evaluated and no alerts can be raised for
+      the duration — a silent loss of supervision.
+    tags: [stpa, hazard, availability]
+    fields:
+      severity: critical
+    links:
+      - type: leads-to-loss
+        target: LOSS-WOHL-001
+
+  # ── System-level safety constraints (inversions of the hazards) ─────────
+  - id: SC-WOHL-001
+    type: system-constraint
+    title: "Alert within the safety deadline on threshold crossing"
+    status: draft
+    description: >
+      Whenever a monitored value crosses its hazard threshold (or a
+      leak/contact event occurs), the system shall emit the corresponding
+      alert within the function's safety deadline. Realized by the verified
+      monitor engines (Kani BMC) + the alert dispatcher (Verus dedup).
+      Assumes the sensor reading reaching the hub is authentic and fresh —
+      discharged on the link layer by relay-sec (traced below).
+    tags: [stpa, constraint, safety]
+    links:
+      - type: prevents
+        target: HAZ-WOHL-001
+      # Assumption-of-use on relay-sec: a forged or replayed sensor frame would
+      # defeat this constraint regardless of wohl's verified monitors. relay-sec
+      # guarantees frame authenticity (Ascon MAC) and anti-replay freshness.
+      - type: traces-to
+        target: relay:SSC-AUTH
+      - type: traces-to
+        target: relay:SSC-FRESH
+
+  - id: SC-WOHL-002
+    type: system-constraint
+    title: "No spurious alerts under normal conditions"
+    status: draft
+    description: >
+      Under non-hazard conditions the system shall not emit alerts, and the
+      dispatcher shall dedup and rate-limit so a single condition yields at
+      most one active alert. Bounds alarm fatigue.
+    tags: [stpa, constraint, usability]
+    links:
+      - type: prevents
+        target: HAZ-WOHL-002
+
+  - id: SC-WOHL-003
+    type: system-constraint
+    title: "Continue monitoring or fail safe on component failure"
+    status: draft
+    description: >
+      On monitor/dispatcher failure the hub shall restart the failed
+      component and a watchdog shall reset the system if the main loop stalls
+      beyond the availability deadline, so supervision is restored rather than
+      silently lost (cf. SYSREQ-WOHL-008 always-on availability).
+      Hub-local availability only; continuous delivery of readings over the
+      link is relay-sec's concern (traced below).
+    tags: [stpa, constraint, availability]
+    links:
+      - type: prevents
+        target: HAZ-WOHL-003
+      # Assumption-of-use: a jammed / DoS'd sensor link starves the hub of
+      # readings — a loss of supervision wohl cannot restart its way out of.
+      # relay-sec owns link-availability / anti-jam analysis.
+      - type: traces-to
+        target: relay:SSC-JAM

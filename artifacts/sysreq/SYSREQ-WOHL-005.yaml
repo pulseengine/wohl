@@ -20,3 +20,5 @@ artifacts:
     links:
       - type: derives-from
         target: STKH-WOHL-001
+      - type: satisfies
+        target: SC-WOHL-001

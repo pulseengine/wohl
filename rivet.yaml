@@ -4,12 +4,39 @@ project:
   schemas:
     - common
     - aspice
+    # Top of the V — hazard analysis (bootstrap-verification, 0.3.0). wohl had
+    # no STPA: the whole requirement→arch→design→verification chain hung off a
+    # single stakeholder-req with no hazard root. STPA + STPA-Sec seed the
+    # losses/hazards/constraints the requirements derive from; the EU AI Act
+    # lens (+ its STPA bridge) is carried per the product's regulatory framing.
+    - stpa
+    - stpa-sec
+    - eu-ai-act
   description: >
     Home supervision system built on PulseEngine.
     Sensor nodes publish typed streams; hub runs verified monitor components.
     Each monitor is a stream transformer: stream<sensor-data> -> stream<alert>.
 
+# wohl is "built on Relay stream transformers" (CLAUDE.md). The sensor<->hub
+# link layer (CCSDS frames over radio) is OUT of wohl's analysis boundary — it
+# is analysed and constrained by relay-sec's STPA-Sec, which already names wohl
+# as a stakeholder ("default-ON for wohl sensor/occupancy data"). Declaring
+# relay as a rivet external lets wohl's hazard analysis make that inheritance
+# machine-checkable: wohl artifacts `traces-to relay:<ID>` the upstream
+# sec-constraints/hazards they assume. `rivet sync` clones into .rivet/repos/;
+# `rivet lock` pins the commit. See `rivet docs cross-repo`.
+externals:
+  relay:
+    path: ../relay
+    prefix: relay
+
 sources:
+  - path: safety/stpa
+    format: generic-yaml
+  - path: safety/stpa-sec
+    format: generic-yaml
+  - path: safety/ai-act
+    format: generic-yaml
   - path: artifacts/sysreq
     format: generic-yaml
   - path: artifacts/swarch

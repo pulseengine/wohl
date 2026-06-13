@@ -1,0 +1,175 @@
+## STPA-Sec — wohl hub Matter bridge commissioning surface (bootstrap seed).
+##
+## Security pass over the control structure the chip-tool interop test
+## exercises (PR #45): an external Matter administrator commissions the hub
+## and reads/writes bridged attributes. Here we analyse its ADVERSARIAL use.
+## SEED artifacts (status: draft). Chain: sec-constraint --prevents-sec-hazard
+## --> sec-hazard --leads-to-sec-loss--> sec-loss.
+##
+## SCOPE / BOUNDARY. This file covers ONLY the IP-fabric leg: an external Matter
+## controller <-> the hub bridge (commissioning + bridged attribute reads). The
+## OTHER attack surface — the sensor<->hub CCSDS radio link (frame forgery,
+## replay, eavesdrop, jamming) — is analysed by relay-sec's STPA-Sec, not here.
+## That maps relay SH-FORGE/SH-STALE/SH-DISCLOSE/SH-DOS onto link constraints
+## relay SSC-AUTH/SSC-FRESH/SSC-NONCE/SSC-CONF/SSC-JAM. wohl inherits those as
+## assumptions-of-use (the `relay` rivet external). End-to-end confidentiality of
+## sensor/occupancy data needs BOTH legs: the Matter-side ACL here (SECC-WOHL-002)
+## AND relay-sec's link confidentiality (relay:SSC-CONF), cross-linked below.
+artifacts:
+  # ── Control structure ───────────────────────────────────────────────────
+  - id: CTRL-MATTER-ADMIN
+    type: controller
+    title: "External Matter administrator (controller)"
+    status: draft
+    description: >
+      A Matter administrator on the IP fabric (Apple/Google Home, a
+      third-party controller, or chip-tool). May be legitimate or an
+      adversary on the LAN attempting to commission or control the hub.
+    tags: [stpa-sec, matter, controller]
+
+  - id: CP-MATTER-BRIDGE
+    type: controlled-process
+    title: "Hub Matter bridge (commissioning + bridged endpoints)"
+    status: draft
+    description: >
+      The hub's Matter bridge: the commissioning window state machine
+      (PASE/CASE), the persisted fabric set + ACL, and the bridged sensor
+      endpoints (e.g. WaterLeakDetector / BooleanState) exposed to
+      commissioned fabrics.
+    tags: [stpa-sec, matter, controlled-process]
+
+  - id: CA-COMMISSION
+    type: control-action
+    title: "Commission the hub (PASE -> CASE -> NOC)"
+    status: draft
+    description: >
+      The administrator commissions the hub: SPAKE2+ PASE against the setup
+      passcode, CASE, and Node Operational Certificate install, joining a
+      fabric. The legitimate path validated by the chip-tool interop gate.
+    tags: [stpa-sec, matter, commissioning]
+    fields:
+      action: commission
+    links:
+      - type: issued-by
+        target: CTRL-MATTER-ADMIN
+      - type: acts-on
+        target: CP-MATTER-BRIDGE
+
+  - id: CA-READ-ATTR
+    type: control-action
+    title: "Read a bridged attribute"
+    status: draft
+    description: >
+      A commissioned administrator reads a bridged endpoint attribute (e.g.
+      BooleanState::StateValue on the water-leak endpoint) over an
+      operational CASE session.
+    tags: [stpa-sec, matter]
+    fields:
+      action: read-attribute
+    links:
+      - type: issued-by
+        target: CTRL-MATTER-ADMIN
+      - type: acts-on
+        target: CP-MATTER-BRIDGE
+
+  # ── Security losses / hazards / constraints ─────────────────────────────
+  - id: SECLOSS-WOHL-001
+    type: sec-loss
+    title: "Unauthorized control or visibility of the home via Matter"
+    status: draft
+    description: >
+      An adversary gains the ability to read the home's sensor/alert state,
+      or to control/spoof bridged endpoints, through the hub's Matter
+      interface — a breach of the occupant's privacy and of the integrity of
+      the supervision signal.
+    tags: [stpa-sec, sec-loss]
+    fields:
+      cia-impact: [confidentiality, integrity]
+
+  - id: SECHAZ-WOHL-001
+    type: sec-hazard
+    title: "Bridge commissions an unauthorized controller"
+    status: draft
+    description: >
+      The bridge completes commissioning (PASE/CASE) with a controller that
+      should not be authorized — e.g. an attacker who reached the device
+      while a window was (wrongly) open, or who brute-forced the passcode
+      because failed-attempt rate-limiting was absent.
+    tags: [stpa-sec, sec-hazard, commissioning]
+    fields:
+      cia-impact: [integrity, confidentiality]
+    links:
+      - type: leads-to-sec-loss
+        target: SECLOSS-WOHL-001
+
+  - id: SECHAZ-WOHL-002
+    type: sec-hazard
+    title: "Bridged state exposed to a non-commissioned party"
+    status: draft
+    description: >
+      Sensor/alert attribute values or fabric credentials are readable by a
+      party that is not an ACL-authorized member of a commissioned fabric.
+    tags: [stpa-sec, sec-hazard, acl]
+    fields:
+      cia-impact: [confidentiality]
+    links:
+      - type: leads-to-sec-loss
+        target: SECLOSS-WOHL-001
+
+  - id: SECC-WOHL-001
+    type: sec-constraint
+    title: "Commission only in an open, bounded window with the correct code"
+    status: draft
+    description: >
+      The bridge shall accept commissioning ONLY while a commissioning window
+      is explicitly open (operator action, default 60 s, max ~15 min), ONLY
+      with the correct setup passcode, and shall rate-limit failed PASE
+      attempts (Matter spec §5.1.1.7: max 20 failures / fabric / 24h). No
+      commissionable advertisement otherwise.
+    tags: [stpa-sec, sec-constraint, commissioning]
+    links:
+      - type: prevents-sec-hazard
+        target: SECHAZ-WOHL-001
+
+  - id: SECC-WOHL-002
+    type: sec-constraint
+    title: "Enforce per-fabric ACL on bridged endpoints"
+    status: draft
+    description: >
+      The bridge shall expose bridged attributes and fabric material only to
+      ACL-authorized members of a commissioned fabric, and shall isolate
+      subscription/ACL state across distinct fabrics (multi-admin).
+    tags: [stpa-sec, sec-constraint, acl]
+    links:
+      - type: prevents-sec-hazard
+        target: SECHAZ-WOHL-002
+      # Assumption-of-use: the ACL protects bridged state on the IP leg, but the
+      # SAME sensor/occupancy data also crosses the radio leg. End-to-end
+      # confidentiality requires relay-sec's link confidentiality too.
+      - type: traces-to
+        target: relay:SSC-CONF
+
+  # ── Security UCA on the commissioning control action ────────────────────
+  - id: SECUCA-WOHL-001
+    type: sec-uca
+    title: "Bridge accepts commissioning outside an open/authenticated window"
+    status: draft
+    description: >
+      The bridge provides the 'accept commissioning' control action when it
+      should not: no window open, wrong passcode, or the per-fabric failure
+      rate-limit already exceeded.
+    tags: [stpa-sec, sec-uca, commissioning]
+    fields:
+      uca-type: providing
+      context: >
+        No commissioning window is open (or it has expired), OR the offered
+        passcode is incorrect, OR the fabric's failed-attempt budget is spent.
+      adversarial-causation: >
+        An attacker on the LAN repeatedly initiates PASE against the device
+        to brute-force the passcode, or races a just-closed window, exploiting
+        a missing window-state check or absent failed-attempt rate-limit.
+    links:
+      - type: issued-by
+        target: CTRL-MATTER-ADMIN
+      - type: leads-to-sec-hazard
+        target: SECHAZ-WOHL-001

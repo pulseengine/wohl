@@ -19,3 +19,7 @@ artifacts:
     links:
       - type: derives-from
         target: STKH-WOHL-001
+      # STPA closure: this monitor requirement satisfies the safety constraint
+      # that inverts HAZ-WOHL-001 (no missed alert on a real condition).
+      - type: satisfies
+        target: SC-WOHL-001
