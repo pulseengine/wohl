@@ -1,0 +1,212 @@
+## EU AI Act lens — wohl (bootstrap seed).
+##
+## HONEST SCOPING. wohl's monitors are deterministic, formally-verified
+## threshold/rule logic (Kani BMC + proptest + fuzz) — NOT machine-learning
+## inference. Under the AI Act, the runtime system is therefore best classed
+## `limited-risk` today, NOT high-risk: there is no learned model making
+## consequential decisions. We carry this lens for two genuine reasons:
+##   1. Process: the codebase is AI-authored (Claude Code). The Act's
+##      ai-session / ai-found-defect machinery and the ISO 26262-8 §11.4.5.4
+##      tool-error-detection claim apply to *how wohl is built*, not just what
+##      it does. This is PulseEngine's core question: "AI writes the code —
+##      who proves it's safe?"
+##   2. Product (forward-looking): power-meter anomaly detection (SYSREQ-
+##      WOHL-005) is the realistic candidate for a future learned model; if it
+##      becomes ML, the risk-class is revisited to high-risk and the full
+##      Annex IV conformity package (conformity-declaration, post-market-plan,
+##      human-oversight, transparency) is authored then — not faked now.
+##
+## The Art. 9(2a) risk-IDENTIFICATION step is discharged by the STPA hazard
+## analysis (../stpa): each risk-assessment `risk-identified-by-stpa` a hazard,
+## and each risk-mitigation `mitigation-from-constraint` a system-constraint.
+## The AI-Act register reuses the STPA graph rather than duplicating it.
+artifacts:
+  # ── Annex IV §1 — the system ────────────────────────────────────────────
+  - id: ASYS-WOHL-001
+    type: ai-system-description
+    title: "Wohl home-supervision system (AI Act system description)"
+    status: draft
+    description: >
+      Wohl supervises a home via verified monitor components (water leak,
+      temperature/freeze, air quality, door/window, power) that transform
+      sensor streams into alerts, plus an alert dispatcher. Today every monitor
+      is rule-based threshold logic with formal verification; no learned model
+      is in the decision path. Classed limited-risk on that basis; revisited if
+      a learned anomaly detector is introduced (see file header).
+    tags: [eu-ai-act, annex-iv]
+    fields:
+      intended-purpose: >
+        Detect hazardous home conditions (leak, freeze, poor air quality, open
+        door/window, power anomaly) and alert the occupant in time to act. A
+        supervisory aid; it does not actuate or replace human judgement.
+      provider: "PulseEngine (pulseengine.eu)"
+      risk-class: limited-risk
+
+  # ── Art. 9 — the risk-management process ────────────────────────────────
+  - id: RMP-WOHL-001
+    type: risk-management-process
+    title: "Continuous risk management via STPA + verified-core floor"
+    status: draft
+    description: >
+      wohl's risk management is the STPA hazard analysis (losses -> hazards ->
+      constraints) kept live in ../stpa, realised by the verification floor
+      (Kani BMC + proptest + cargo-fuzz on all six components, Verus planned for
+      the dispatcher dedup invariant). Risks are re-identified whenever a
+      monitor, threshold, or the Matter bridge surface changes.
+    tags: [eu-ai-act, art-9]
+    fields:
+      scope: >
+        The wohl hub monitors + alert dispatcher + Matter bridge, and the
+        AI-authored development process that produces them.
+      methodology: >
+        STPA (System-Theoretic Process Analysis) for hazard identification,
+        STPA-Sec for the adversarial/Matter surface, inverted into system
+        constraints that the verification floor discharges mechanically.
+    links:
+      - type: manages-risk-for
+        target: ASYS-WOHL-001
+
+  # ── Art. 9(2a) — risk register (reuses the STPA hazards) ────────────────
+  - id: RA-WOHL-001
+    type: risk-assessment
+    title: "Missed alert on a real hazardous condition (false negative)"
+    status: draft
+    description: >
+      A genuine hazardous condition occurs but no alert reaches the occupant
+      in time — the safety-critical failure. Identified by the STPA analysis
+      as HAZ-WOHL-001.
+    tags: [eu-ai-act, art-9, false-negative]
+    fields:
+      risk-description: >
+        A monitor fails to emit, or the dispatcher drops, an alert for a real
+        threshold crossing / leak / contact event.
+      likelihood: unlikely
+      severity: catastrophic
+      risk-level: high
+      affected-rights: >
+        Health and safety; property. For freeze (pipe burst) and air-quality/CO,
+        a risk to life.
+    links:
+      - type: leads-to
+        target: ASYS-WOHL-001
+      - type: risk-identified-by-stpa
+        target: HAZ-WOHL-001
+
+  - id: RA-WOHL-002
+    type: risk-assessment
+    title: "Alarm fatigue from spurious alerts (false positive)"
+    status: draft
+    description: >
+      Repeated false/low-value alerts erode trust so a real alert is later
+      ignored or the system is muted. Identified by STPA as HAZ-WOHL-002.
+    tags: [eu-ai-act, art-9, false-positive]
+    fields:
+      risk-description: >
+        A monitor alerts under normal conditions, or the dispatcher fails to
+        dedup/rate-limit, producing repeated spurious alerts.
+      likelihood: possible
+      severity: moderate
+      risk-level: medium
+      affected-rights: >
+        Health and safety, indirectly — a muted system defeats supervision when
+        a genuine hazard later occurs.
+    links:
+      - type: leads-to
+        target: ASYS-WOHL-001
+      - type: risk-identified-by-stpa
+        target: HAZ-WOHL-002
+
+  - id: RA-WOHL-003
+    type: risk-assessment
+    title: "Silent loss of supervision (hub stops monitoring)"
+    status: draft
+    description: >
+      The hub crashes, hangs, or loses power and no readings are evaluated for
+      the duration. Identified by STPA as HAZ-WOHL-003.
+    tags: [eu-ai-act, art-9, availability]
+    fields:
+      risk-description: >
+        The monitor/dispatcher loop stalls or the device is unpowered; no
+        alerts can be raised until supervision is restored.
+      likelihood: possible
+      severity: major
+      risk-level: high
+      affected-rights: >
+        Health and safety; property — supervision is absent exactly when a
+        hazard may occur undetected.
+    links:
+      - type: leads-to
+        target: ASYS-WOHL-001
+      - type: risk-identified-by-stpa
+        target: HAZ-WOHL-003
+
+  # ── Art. 9(4) — mitigations (reuse the STPA system constraints) ─────────
+  - id: RM-WOHL-001
+    type: risk-mitigation
+    title: "Verified monitor engines + bounded alert deadline"
+    status: draft
+    description: >
+      Each monitor's threshold/leak logic is verified by Kani BMC + proptest +
+      cargo-fuzz, and emits within the function's safety deadline — the
+      realisation of SC-WOHL-001. Mitigates the missed-alert risk.
+    tags: [eu-ai-act, art-9, verification]
+    fields:
+      measure-description: >
+        Kani bounded model checking + proptest + cargo-fuzz on every component's
+        engine; deadline budget enforced; the sensor link is assumed authentic
+        and fresh (relay-sec, see ../stpa boundary note).
+      residual-risk: >
+        BMC is bounded (depth-limited) and the link-layer assumption is
+        inherited from relay-sec, not re-proven here; residual is low but
+        non-zero. Verus dedup proof for the dispatcher still planned (#7).
+    links:
+      - type: mitigates
+        target: RA-WOHL-001
+      - type: mitigation-from-constraint
+        target: SC-WOHL-001
+
+  - id: RM-WOHL-002
+    type: risk-mitigation
+    title: "Dispatcher dedup + rate-limit"
+    status: draft
+    description: >
+      The alert dispatcher dedups and rate-limits so one condition yields at
+      most one active alert — the realisation of SC-WOHL-002. Mitigates alarm
+      fatigue.
+    tags: [eu-ai-act, art-9, usability]
+    fields:
+      measure-description: >
+        Dedup window + per-source rate limit in the dispatcher; critical alerts
+        are never suppressed (SYSREQ-WOHL-006).
+      residual-risk: >
+        Dedup invariant is not yet deductively proven (Verus planned, #7);
+        until then it rests on proptest + unit coverage. Residual: medium.
+    links:
+      - type: mitigates
+        target: RA-WOHL-002
+      - type: mitigation-from-constraint
+        target: SC-WOHL-002
+
+  - id: RM-WOHL-003
+    type: risk-mitigation
+    title: "Watchdog + component restart (fail-safe availability)"
+    status: draft
+    description: >
+      On monitor/dispatcher failure the hub restarts the component, and a
+      watchdog resets the system if the main loop stalls past the availability
+      deadline — the realisation of SC-WOHL-003. Mitigates silent loss of
+      supervision.
+    tags: [eu-ai-act, art-9, availability]
+    fields:
+      measure-description: >
+        Per-component restart + hardware/software watchdog on the main loop;
+        always-on availability target (SYSREQ-WOHL-008).
+      residual-risk: >
+        A wedged sensor link or total power loss is outside hub-local recovery
+        (link availability is relay-sec's concern; mains/battery is deployment).
+        Residual: medium.
+    links:
+      - type: mitigates
+        target: RA-WOHL-003
+      - type: mitigation-from-constraint
+        target: SC-WOHL-003
