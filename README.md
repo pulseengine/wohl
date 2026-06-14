@@ -68,7 +68,7 @@ The `relay` and `rivet` repositories must be cloned as siblings of `wohl/` for p
 | Kani BMC (all components) | gated by CI |
 | proptest suites | gated by CI |
 | cargo-fuzz | smoke gated by CI; coverage expansion tracked via issues |
-| Verus deductive proofs | planned for `wohl-alert` dispatcher dedup invariant |
+| Verus deductive proofs | `wohl-alert` dedup + rate-limit invariants proven; gated by CI, tied to `engine.rs` by a conformance test |
 | AADL system model | active in `spar/` |
 | Rivet ASPICE validation | gated by CI |
 

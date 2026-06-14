@@ -3,8 +3,9 @@
 ## Security pass over the control structure the chip-tool interop test
 ## exercises (PR #45): an external Matter administrator commissions the hub
 ## and reads/writes bridged attributes. Here we analyse its ADVERSARIAL use.
-## SEED artifacts (status: draft). Chain: sec-constraint --prevents-sec-hazard
-## --> sec-hazard --leads-to-sec-loss--> sec-loss.
+## Seeded by the bootstrap, now APPROVED (architect sign-off, v0.4.0). Chain:
+## sec-constraint --prevents-sec-hazard--> sec-hazard --leads-to-sec-loss-->
+## sec-loss.
 ##
 ## SCOPE / BOUNDARY. This file covers ONLY the IP-fabric leg: an external Matter
 ## controller <-> the hub bridge (commissioning + bridged attribute reads). The
@@ -20,7 +21,7 @@ artifacts:
   - id: CTRL-MATTER-ADMIN
     type: controller
     title: "External Matter administrator (controller)"
-    status: draft
+    status: approved
     description: >
       A Matter administrator on the IP fabric (Apple/Google Home, a
       third-party controller, or chip-tool). May be legitimate or an
@@ -30,7 +31,7 @@ artifacts:
   - id: CP-MATTER-BRIDGE
     type: controlled-process
     title: "Hub Matter bridge (commissioning + bridged endpoints)"
-    status: draft
+    status: approved
     description: >
       The hub's Matter bridge: the commissioning window state machine
       (PASE/CASE), the persisted fabric set + ACL, and the bridged sensor
@@ -41,7 +42,7 @@ artifacts:
   - id: CA-COMMISSION
     type: control-action
     title: "Commission the hub (PASE -> CASE -> NOC)"
-    status: draft
+    status: approved
     description: >
       The administrator commissions the hub: SPAKE2+ PASE against the setup
       passcode, CASE, and Node Operational Certificate install, joining a
@@ -58,7 +59,7 @@ artifacts:
   - id: CA-READ-ATTR
     type: control-action
     title: "Read a bridged attribute"
-    status: draft
+    status: approved
     description: >
       A commissioned administrator reads a bridged endpoint attribute (e.g.
       BooleanState::StateValue on the water-leak endpoint) over an
@@ -76,7 +77,7 @@ artifacts:
   - id: SECLOSS-WOHL-001
     type: sec-loss
     title: "Unauthorized control or visibility of the home via Matter"
-    status: draft
+    status: approved
     description: >
       An adversary gains the ability to read the home's sensor/alert state,
       or to control/spoof bridged endpoints, through the hub's Matter
@@ -89,7 +90,7 @@ artifacts:
   - id: SECHAZ-WOHL-001
     type: sec-hazard
     title: "Bridge commissions an unauthorized controller"
-    status: draft
+    status: approved
     description: >
       The bridge completes commissioning (PASE/CASE) with a controller that
       should not be authorized — e.g. an attacker who reached the device
@@ -105,7 +106,7 @@ artifacts:
   - id: SECHAZ-WOHL-002
     type: sec-hazard
     title: "Bridged state exposed to a non-commissioned party"
-    status: draft
+    status: approved
     description: >
       Sensor/alert attribute values or fabric credentials are readable by a
       party that is not an ACL-authorized member of a commissioned fabric.
@@ -119,7 +120,7 @@ artifacts:
   - id: SECC-WOHL-001
     type: sec-constraint
     title: "Commission only in an open, bounded window with the correct code"
-    status: draft
+    status: approved
     description: >
       The bridge shall accept commissioning ONLY while a commissioning window
       is explicitly open (operator action, default 60 s, max ~15 min), ONLY
@@ -134,7 +135,7 @@ artifacts:
   - id: SECC-WOHL-002
     type: sec-constraint
     title: "Enforce per-fabric ACL on bridged endpoints"
-    status: draft
+    status: approved
     description: >
       The bridge shall expose bridged attributes and fabric material only to
       ACL-authorized members of a commissioned fabric, and shall isolate
@@ -153,7 +154,7 @@ artifacts:
   - id: SECUCA-WOHL-001
     type: sec-uca
     title: "Bridge accepts commissioning outside an open/authenticated window"
-    status: draft
+    status: approved
     description: >
       The bridge provides the 'accept commissioning' control action when it
       should not: no window open, wrong passcode, or the per-fabric failure

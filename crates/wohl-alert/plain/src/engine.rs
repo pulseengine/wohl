@@ -367,6 +367,177 @@ mod proptests {
     }
 }
 
+// ── Verus model ↔ executable conformance oracle ──────────────────────────
+//
+// The Verus deductive proof (`proofs/verus/alert_dedup.rs`) proves the dedup
+// and rate-limit invariants over a *ghost model* (`ghost_process_alert`),
+// reasoning over unbounded `nat`. That unbounded guarantee only transfers to
+// THIS executable engine if the ghost model faithfully mirrors
+// `AlertDispatcher::process_alert`. The Verus file asserts that correspondence
+// only in comments — this module makes it a mechanical oracle: an executable
+// transliteration of `ghost_process_alert` is run in lock-step with the real
+// dispatcher over random call sequences, and their `DispatchAction`s must
+// agree at every step. If the engine and the proven model ever diverge, this
+// test fails — closing the model↔code gap the proof alone cannot.
+#[cfg(test)]
+mod verus_conformance {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Executable mirror of `proofs/verus/alert_dedup.rs::ghost_process_alert`
+    /// (phases 1 + 2; phase-0 subscription routing is relay-to's verified
+    /// concern and is held constant by subscribing every key under test).
+    /// Kept in lock-step with the Verus `spec const`s and transition function.
+    struct GhostDispatcher {
+        recent: [(u32, u8, u64); MAX_RECENT_ALERTS], // (zone_id, alert_type, time)
+        recent_len: usize,
+        minute_count: u32,
+        minute_start: u64,
+    }
+
+    impl GhostDispatcher {
+        fn new() -> Self {
+            GhostDispatcher {
+                recent: [(0, 0, 0); MAX_RECENT_ALERTS],
+                recent_len: 0,
+                minute_count: 0,
+                minute_start: 0,
+            }
+        }
+
+        fn process(&mut self, zone_id: u32, alert_type: u8, t: u64) -> DispatchAction {
+            // after_minute_reset
+            if t >= self.minute_start.saturating_add(MINUTE_SEC) {
+                self.minute_count = 0;
+                self.minute_start = t;
+            }
+            // would_dedup
+            let dedup = self.recent[..self.recent_len].iter().any(|&(z, a, time)| {
+                z == zone_id && a == alert_type && t < time.saturating_add(DEDUP_COOLDOWN_SEC)
+            });
+            if dedup {
+                return DispatchAction::Deduplicated;
+            }
+            // rate-limit gate
+            if self.minute_count >= MAX_ALERTS_PER_MINUTE {
+                return DispatchAction::RateLimited;
+            }
+            // record + count
+            if self.recent_len < MAX_RECENT_ALERTS {
+                self.recent[self.recent_len] = (zone_id, alert_type, t);
+                self.recent_len += 1;
+            }
+            self.minute_count += 1;
+            DispatchAction::Send
+        }
+    }
+
+    const MINUTE_SEC: u64 = 60;
+
+    proptest! {
+        /// The executable engine and the Verus-proven ghost model agree on the
+        /// dispatched action for every call in an arbitrary subscribed sequence.
+        #[test]
+        fn engine_matches_proven_ghost_model(
+            // (zone, type, time) triples; small domains keep the cooldown and
+            // minute windows reachable so all four actions actually occur.
+            calls in proptest::collection::vec(
+                (0u32..4, 0u8..3, 0u64..400),
+                1..40,
+            ),
+        ) {
+            let mut engine = AlertDispatcher::new();
+            // Hold phase-0 constant: subscribe every key the model assumes live.
+            for z in 0u32..4 {
+                for a in 0u8..3 {
+                    engine.subscribe(z, a, 1);
+                }
+            }
+            let mut ghost = GhostDispatcher::new();
+
+            for (z, a, t) in calls {
+                let engine_action = engine.process_alert(z, a, t).action;
+                let ghost_action = ghost.process(z, a, t);
+                prop_assert_eq!(
+                    engine_action, ghost_action,
+                    "engine/ghost divergence at (zone={}, type={}, t={})", z, a, t
+                );
+            }
+        }
+
+        /// Saturated-buffer regime — the corner the dedup *theorem* excludes
+        /// (its `recent.len() < MAX_RECENT_ALERTS` precondition) and the
+        /// small-domain test above never reaches. Here ≥ MAX_RECENT_ALERTS
+        /// distinct keys are driven across many minute windows so the engine's
+        /// `recent` buffer fills to 64 and the no-record branch
+        /// (`recent_count == MAX_RECENT_ALERTS`) is exercised. The Verus proof
+        /// does not cover this regime; this test confirms the executable engine
+        /// still tracks the ghost model byte-for-byte there, so any divergence
+        /// in the saturated path is caught even though it is not *proven* safe.
+        #[test]
+        fn engine_matches_ghost_under_buffer_saturation(
+            // 68 distinct (zone) keys > MAX_RECENT_ALERTS (64); wide time span
+            // (20 min) so the 10-per-minute rate limit still lets recent fill.
+            calls in proptest::collection::vec(
+                (0u32..68, 0u8..1, 0u64..1200),
+                64..220,
+            ),
+        ) {
+            let mut engine = AlertDispatcher::new();
+            for z in 0u32..68 {
+                engine.subscribe(z, 0, 1); // 68 <= MAX_SUBSCRIPTIONS (128)
+            }
+            let mut ghost = GhostDispatcher::new();
+            for (z, a, t) in calls {
+                let engine_action = engine.process_alert(z, a, t).action;
+                let ghost_action = ghost.process(z, a, t);
+                prop_assert_eq!(
+                    engine_action, ghost_action,
+                    "saturation divergence at (zone={}, type={}, t={})", z, a, t
+                );
+            }
+        }
+    }
+
+    /// Deterministic companion to the saturation proptest: drives the engine
+    /// PAST a full `recent` buffer and asserts (a) the engine tracks the ghost
+    /// model step-for-step, and (b) the regime is genuinely reached — the
+    /// no-record branch fires (`recent_count` pins at MAX_RECENT_ALERTS while
+    /// distinct keys keep arriving). This nails down the corner the dedup
+    /// theorem's precondition excludes.
+    #[test]
+    fn saturation_regime_is_reached_and_tracks_model() {
+        let mut engine = AlertDispatcher::new();
+        // 80 distinct keys, all subscribed (80 <= MAX_SUBSCRIPTIONS).
+        for z in 0u32..80 {
+            engine.subscribe(z, 0, 1);
+        }
+        let mut ghost = GhostDispatcher::new();
+
+        // 80 distinct keys, one per call, spread 60s apart so the per-minute
+        // rate limit never blocks recording (1 Send per window) — recent fills
+        // to 64, then the next 16 distinct keys hit the no-record branch.
+        for z in 0u32..80 {
+            let t = (z as u64) * 60;
+            let engine_action = engine.process_alert(z, 0, t).action;
+            let ghost_action = ghost.process(z, 0, t);
+            assert_eq!(engine_action, ghost_action, "divergence at key {z}");
+            assert_eq!(engine_action, DispatchAction::Send);
+        }
+        // Buffer saturated at 64; the last 16 Sends did NOT record.
+        assert_eq!(engine.recent_count, MAX_RECENT_ALERTS as u32);
+        assert_eq!(ghost.recent_len, MAX_RECENT_ALERTS);
+
+        // A duplicate of key 70 (never recorded — arrived after saturation)
+        // within cooldown is NOT deduplicated, by both engine and model. This
+        // is the documented bound: dedup only covers the most-recent 64 keys.
+        let t = 80 * 60;
+        let engine_dup = engine.process_alert(70, 0, t).action;
+        let ghost_dup = ghost.process(70, 0, t);
+        assert_eq!(engine_dup, ghost_dup);
+    }
+}
+
 // ── Kani bounded model checking harnesses ────────────────────
 
 #[cfg(kani)]

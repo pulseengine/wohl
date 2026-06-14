@@ -37,5 +37,5 @@ rivet validate                # ASPICE artifact traceability
 - All components are no_std, no alloc
 - Verified core logic in `crates/wohl-*/plain/src/lib.rs` (Kani BMC harnesses on `engine.rs`)
 - Verification floor: Kani BMC + proptest + cargo-fuzz on all 6 components
-- Verus deductive proofs planned for `wohl-alert` dispatcher dedup invariant — see [#7](https://github.com/pulseengine/wohl/issues/7)
+- Verus deductive proofs prove the `wohl-alert` dispatcher dedup + rate-limit invariants (`proofs/verus/alert_dedup.rs`, Bazel-gated); a conformance proptest (`verus_conformance` in `engine.rs`) ties the proven ghost model to the executable engine — see [#7](https://github.com/pulseengine/wohl/issues/7) (closed)
 - Use `rivet validate` for artifact YAML files

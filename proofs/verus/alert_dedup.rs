@@ -25,6 +25,24 @@
 //! prove about (`t < u64::MAX - DEDUP_COOLDOWN_SEC`, which is the same
 //! assumption the Kani harness makes via `kani::assume`).
 //!
+//! The model↔code correspondence below is no longer comment-only: the
+//! `verus_conformance` proptest module in
+//! `crates/wohl-alert/plain/src/engine.rs` runs an executable transliteration
+//! of `ghost_process_alert` in lock-step with the real `AlertDispatcher` over
+//! random call sequences — including a saturated-buffer regime — and asserts
+//! the `DispatchAction`s agree at every step. If the engine and this proven
+//! model diverge, that test fails.
+//!
+//! Scope, stated honestly (do not overclaim): `theorem_dedup_invariant`
+//! carries the precondition `recent.len() < MAX_RECENT_ALERTS`, so the
+//! *proof* covers the unsaturated-buffer regime, over unbounded time. The
+//! conformance tests confirm engine ≡ model in BOTH the unsaturated and the
+//! saturated regimes — but the saturated case (a duplicate of a key already
+//! evicted from the most-recent-64 window can re-Send) is *matched to the
+//! model*, not *proven safe*: it is the documented, intended bound of a
+//! 64-entry window, not an invariant. `clear_expired` and phase-0 subscription
+//! routing are out of scope here (the latter is relay-to's verified concern).
+//!
 //! Correspondence (Verus ghost -> Rust):
 //!   - `GhostDispatcher.recent`        ~ `AlertDispatcher.recent[0..recent_count]`
 //!   - `GhostDispatcher.minute_count`  ~ `AlertDispatcher.minute_count`

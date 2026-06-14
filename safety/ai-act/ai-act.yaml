@@ -50,8 +50,8 @@ artifacts:
     description: >
       wohl's risk management is the STPA hazard analysis (losses -> hazards ->
       constraints) kept live in ../stpa, realised by the verification floor
-      (Kani BMC + proptest + cargo-fuzz on all six components, Verus planned for
-      the dispatcher dedup invariant). Risks are re-identified whenever a
+      (Kani BMC + proptest + cargo-fuzz on all six components, Verus deductive
+      proof on the dispatcher dedup invariant). Risks are re-identified whenever a
       monitor, threshold, or the Matter bridge surface changes.
     tags: [eu-ai-act, art-9]
     fields:
@@ -158,7 +158,8 @@ artifacts:
       residual-risk: >
         BMC is bounded (depth-limited) and the link-layer assumption is
         inherited from relay-sec, not re-proven here; residual is low but
-        non-zero. Verus dedup proof for the dispatcher still planned (#7).
+        non-zero. The dispatcher dedup invariant is now Verus-proven (#7 closed,
+        FV-ALERT-001).
     links:
       - type: mitigates
         target: RA-WOHL-001
@@ -179,8 +180,11 @@ artifacts:
         Dedup window + per-source rate limit in the dispatcher; critical alerts
         are never suppressed (SYSREQ-WOHL-006).
       residual-risk: >
-        Dedup invariant is not yet deductively proven (Verus planned, #7);
-        until then it rests on proptest + unit coverage. Residual: medium.
+        Dedup + rate-limit invariants are now deductively proven over unbounded
+        time (proofs/verus/alert_dedup.rs, FV-ALERT-001), and a conformance
+        proptest ties the proven ghost model to the executable engine.rs.
+        Residual: low — the proof covers phases 1+2; phase-0 subscription
+        routing is relay-to's verified concern.
     links:
       - type: mitigates
         target: RA-WOHL-002

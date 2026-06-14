@@ -1,9 +1,9 @@
 ## STPA hazard analysis — wohl home-supervision system (bootstrap seed).
 ##
-## Top of the V. These are SEED artifacts (status: draft) that the full
-## hazard analysis fills in; they exist so the trace graph is real and grows
-## closed. Chain: system-constraint --prevents--> hazard --leads-to-loss-->
-## loss. The existing SYSREQ-WOHL-* requirements refine these constraints.
+## Top of the V. Seeded by the bootstrap and now APPROVED (architect sign-off,
+## v0.4.0); the full hazard analysis continues to refine them. Chain:
+## system-constraint --prevents--> hazard --leads-to-loss--> loss. The existing
+## SYSREQ-WOHL-* requirements `satisfies` these constraints (trace graph closed).
 ##
 ## Control structure (informal): occupant/operator <-> hub (monitor
 ## components + alert dispatcher) <-> sensor nodes (CCSDS) ; and the hub
@@ -22,7 +22,7 @@ artifacts:
   - id: LOSS-WOHL-001
     type: loss
     title: "Undetected hazardous home condition causes harm"
-    status: draft
+    status: approved
     description: >
       A monitored hazardous condition (water leak, freeze, elevated CO2 /
       poor air quality, or an open door/window) occurs but the system fails
@@ -35,7 +35,7 @@ artifacts:
   - id: LOSS-WOHL-002
     type: loss
     title: "Alarm fatigue causes a real alert to be ignored"
-    status: draft
+    status: approved
     description: >
       Repeated false or low-value alerts erode occupant trust, so a
       subsequent genuine alert is ignored or the system is muted/disabled —
@@ -48,7 +48,7 @@ artifacts:
   - id: HAZ-WOHL-001
     type: hazard
     title: "Monitor does not raise an alert on a real hazardous condition"
-    status: draft
+    status: approved
     description: >
       A sensor reading crosses its hazard threshold (or a contact/leak event
       occurs) but the corresponding monitor does not emit an alert, or the
@@ -63,7 +63,7 @@ artifacts:
   - id: HAZ-WOHL-002
     type: hazard
     title: "Monitor raises an alert under normal (non-hazard) conditions"
-    status: draft
+    status: approved
     description: >
       A monitor emits an alert when no hazardous condition exists (a false
       positive), or the dispatcher fails to dedup/rate-limit, producing
@@ -78,7 +78,7 @@ artifacts:
   - id: HAZ-WOHL-003
     type: hazard
     title: "Hub stops monitoring (crash, hang, or power loss)"
-    status: draft
+    status: approved
     description: >
       The hub's monitor/dispatcher loop stalls, panics, or the device is
       unpowered, so no readings are evaluated and no alerts can be raised for
@@ -94,7 +94,7 @@ artifacts:
   - id: SC-WOHL-001
     type: system-constraint
     title: "Alert within the safety deadline on threshold crossing"
-    status: draft
+    status: approved
     description: >
       Whenever a monitored value crosses its hazard threshold (or a
       leak/contact event occurs), the system shall emit the corresponding
@@ -117,7 +117,7 @@ artifacts:
   - id: SC-WOHL-002
     type: system-constraint
     title: "No spurious alerts under normal conditions"
-    status: draft
+    status: approved
     description: >
       Under non-hazard conditions the system shall not emit alerts, and the
       dispatcher shall dedup and rate-limit so a single condition yields at
@@ -130,7 +130,7 @@ artifacts:
   - id: SC-WOHL-003
     type: system-constraint
     title: "Continue monitoring or fail safe on component failure"
-    status: draft
+    status: approved
     description: >
       On monitor/dispatcher failure the hub shall restart the failed
       component and a watchdog shall reset the system if the main loop stalls
