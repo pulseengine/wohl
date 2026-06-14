@@ -1,0 +1,52 @@
+artifacts:
+  - id: FV-ALERT-001
+    type: sw-verification
+    title: "Verus deductive proof of the AlertDispatcher dedup + rate-limit invariants"
+    status: implemented
+    description: >
+      Formal (deductive) verification of the wohl-alert dispatcher's
+      domain-specific invariants — the obligation tracked by issue #7 and the
+      residual-risk closer for SC-WOHL-002 (no spurious alerts / dedup).
+
+      Proof: proofs/verus/alert_dedup.rs proves, over UNBOUNDED nat timestamps:
+        - theorem_dedup_invariant — for any two process_alert calls with the
+          same (zone_id, alert_type) and t1 <= t2 < t1 + DEDUP_COOLDOWN_SEC, if
+          the first returns Send the second returns Deduplicated.
+        - theorem_rate_limit_invariant — once MAX_ALERTS_PER_MINUTE distinct
+          alerts are recorded within a minute window, the next non-deduplicated
+          alert returns RateLimited.
+        - supporting lemmas (lemma_send_records_entry, lemma_first_alert_sends).
+      Gated in CI by `bazel test //proofs/verus` (hermetic Verus toolchain).
+
+      Model<->code correspondence (the gap a model proof alone leaves): the
+      proof reasons over a ghost model `ghost_process_alert`. The
+      `verus_conformance` module in crates/wohl-alert/plain/src/engine.rs runs
+      an executable transliteration of that ghost model in lock-step with the
+      real AlertDispatcher and asserts the DispatchAction agrees at every step,
+      across both the unsaturated and the saturated `recent`-buffer regimes
+      (small-domain proptest, wide-domain saturation proptest, and a
+      deterministic test that drives recent_count to MAX_RECENT_ALERTS).
+
+      SCOPE / RESIDUALS (clean-room reviewed, do not overclaim):
+        - theorem_dedup_invariant has the precondition recent.len() <
+          MAX_RECENT_ALERTS, so the PROOF covers the unsaturated regime over
+          unbounded time. The saturated regime (a duplicate of a key already
+          evicted from the most-recent-64 window can re-Send) is MATCHED to the
+          model by the conformance tests but is NOT proven safe — it is the
+          intended bound of a 64-entry window, not an invariant.
+        - clear_expired() is not modelled by the ghost or exercised here.
+        - phase-0 subscription routing is held constant (subscribed); it is
+          relay-to's verified concern (TO-P0x), not re-verified here.
+
+      Relationship to the other oracles on this seam:
+        - Kani BMC (engine.rs kani_proofs): same properties, real code, BOUNDED.
+        - Verus (this artifact): same properties, ghost model, UNBOUNDED time,
+          unsaturated buffer.
+        - conformance tests: tie the two — ghost model == executable engine,
+          across both buffer regimes.
+    tags: [verification, formal, verus, swe-6, dedup]
+    fields:
+      method: formal-verification
+    links:
+      - type: verifies
+        target: SWREQ-ALERT-001
