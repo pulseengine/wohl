@@ -346,3 +346,45 @@ mod kani_proofs {
         let _ = w.check_timeouts(current);
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    fn contact() -> ContactConfig {
+        ContactConfig {
+            contact_id: 1,
+            zone_id: 1,
+            max_open_sec: 300,
+            night_start_hour: 22,
+            night_end_hour: 6,
+            enabled: true,
+        }
+    }
+
+    proptest! {
+        /// Any contact event yields no more alerts than the fixed buffer holds.
+        #[test]
+        fn alert_count_always_bounded(
+            open in proptest::bool::ANY,
+            time in 0u64..1_000_000,
+        ) {
+            let mut w = DoorWatch::new();
+            w.register_contact(contact());
+            let r = w.process_event(1, open, time);
+            prop_assert!(r.alert_count as usize <= MAX_ALERTS_PER_CHECK);
+        }
+
+        /// A close event (contact returning to closed) never raises an alert.
+        #[test]
+        fn closing_never_alerts(
+            time in 0u64..1_000_000,
+        ) {
+            let mut w = DoorWatch::new();
+            w.register_contact(contact());
+            let r = w.process_event(1, false, time);
+            prop_assert_eq!(r.alert_count, 0);
+        }
+    }
+}

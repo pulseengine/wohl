@@ -13,5 +13,8 @@ crate-type = ["rlib"]
 [dependencies]
 relay-lc.workspace = true
 
+[dev-dependencies]
+proptest.workspace = true
+
 [lints]
 workspace = true

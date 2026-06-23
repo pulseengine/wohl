@@ -10,5 +10,8 @@ rust-version = "1.87.0"
 path = "plain/src/lib.rs"
 crate-type = ["rlib"]
 
+[dev-dependencies]
+proptest.workspace = true
+
 [lints]
 workspace = true
