@@ -20,7 +20,11 @@ artifacts:
 
       All components are no_std, no_alloc. Composition is stream wiring
       via the Relay scheduler. No shared mutable state between components.
-    tags: [architecture, stream, data-flow]
+
+      The logical thread architecture — 7 priority-scheduled monitor threads
+      plus the dispatcher, water-leak highest (safety-critical) — is modeled
+      in spar/wohl_system.aadl; this artifact is its requirement-side view.
+    tags: [architecture, stream, data-flow, aadl]
     fields:
       interfaces:
         provided:
@@ -32,7 +36,13 @@ artifacts:
           - "pulseengine:relay-common-types/types — stream transport"
           - "pulseengine:relay-time/time — scheduler and timestamps"
           - "pulseengine:relay-events/events — event bus"
-      concurrency: "single-threaded cooperative scheduling via Relay Scheduler"
+      concurrency: >
+        Multi-threaded, priority-scheduled — NOT single-threaded. Seven monitor
+        threads plus the dispatcher, priority-ordered with water-leak highest
+        (safety-critical), per spar/wohl_system.aadl. Realized as rate-monotonic
+        preemption on Gale/STM32H743 and POSIX highest-priority-first on RPi4.
+        The Relay Scheduler is the dispatch abstraction; components hold no
+        shared mutable state, so wiring is data-flow, not lock-based.
     links:
       - type: allocated-from
         target: SWREQ-LEAK-001

@@ -2,6 +2,15 @@
 -- Specific parts from the starter shopping list. Each declaration maps
 -- 1:1 to a buyable part and carries a Zephyr_Binding for Gale/Zephyr
 -- devicetree generation.
+--
+-- This is a PARTS LIBRARY: not every declaration is instantiated by a
+-- current node in wohl_nodes.aadl. Some are provisioned for planned
+-- transports/sensors and are intentionally not yet wired —
+--   * LoRa_Link (SX1262 sub-GHz): the planned sub-GHz field-link tier.
+--   * BH1750 / VEML7700 (lux): optional ambient-light sensors, no node yet.
+-- They are kept here so a node that adopts them references a vetted part,
+-- not so they imply dead wiring. (wohl#5: documented as a parts library
+-- rather than deleted; UART_Bus is in use by the bench door firmware.)
 
 package Wohl_Hardware
 public
