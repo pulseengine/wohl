@@ -345,3 +345,45 @@ mod kani_proofs {
         let _ = m.check_idle(circuit_id, watts);
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    fn circuit() -> CircuitConfig {
+        CircuitConfig {
+            circuit_id: 1,
+            max_watts: 3000,
+            idle_watts: 50,
+            spike_threshold: 2000,
+            enabled: true,
+        }
+    }
+
+    proptest! {
+        /// Any single reading yields no more alerts than the fixed buffer holds.
+        #[test]
+        fn alert_count_always_bounded(
+            watts in 0u32..20_000,
+            time in 0u64..1_000_000,
+        ) {
+            let mut m = PowerMonitor::new();
+            m.register_circuit(circuit());
+            let r = m.process_reading(1, watts, time);
+            prop_assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
+        }
+
+        /// A first reading above idle, below max, and under the spike delta
+        /// raises no alert.
+        #[test]
+        fn within_limits_no_alert(
+            watts in 100u32..2_000,
+        ) {
+            let mut m = PowerMonitor::new();
+            m.register_circuit(circuit());
+            let r = m.process_reading(1, watts, 100);
+            prop_assert_eq!(r.alert_count, 0);
+        }
+    }
+}

@@ -390,3 +390,50 @@ mod kani_proofs {
         let _ = m.process_reading(reading);
     }
 }
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    fn zone() -> AirConfig {
+        AirConfig {
+            zone_id: 1,
+            co2_warn: 1000,
+            co2_critical: 2000,
+            pm25_warn: 35,
+            pm25_critical: 150,
+            voc_warn: 200,
+            voc_critical: 400,
+            enabled: true,
+        }
+    }
+
+    proptest! {
+        /// The monitor never emits more alerts than its fixed result buffer holds.
+        #[test]
+        fn alert_count_always_bounded(
+            co2 in 0u32..10_000,
+            pm25 in 0u32..1_000,
+            voc in 0u32..1_000,
+        ) {
+            let mut m = AirMonitor::new();
+            m.register_zone(zone());
+            let r = m.process_reading(AirReading { zone_id: 1, co2_ppm: co2, pm25, voc_index: voc, time: 100 });
+            prop_assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
+        }
+
+        /// Strictly below every warn threshold, no alert is raised.
+        #[test]
+        fn clean_air_no_alerts(
+            co2 in 0u32..1_000,
+            pm25 in 0u32..35,
+            voc in 0u32..200,
+        ) {
+            let mut m = AirMonitor::new();
+            m.register_zone(zone());
+            let r = m.process_reading(AirReading { zone_id: 1, co2_ppm: co2, pm25, voc_index: voc, time: 100 });
+            prop_assert_eq!(r.alert_count, 0);
+        }
+    }
+}
