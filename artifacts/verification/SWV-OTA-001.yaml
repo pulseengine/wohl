@@ -1,0 +1,19 @@
+artifacts:
+  - id: SWV-OTA-001
+    type: sw-verification
+    title: "Kani verification of the dual-bank OTA state machine"
+    status: implemented
+    description: >
+      Bounded model checking (Kani) of the wohl-ota engine state machine,
+      verifying the SWREQ-OTA-001 safety invariants on `crates/wohl-ota`:
+        - OTA-P01 — a download never targets the active slot.
+        - OTA-P02 — only Ready -> Swapping transitions are accepted.
+        - OTA-P03 — bytes_received never exceeds total_bytes.
+        - rollback restores the prior active slot; no-panic over symbolic input.
+      Gated in CI by the "Kani: wohl-ota" job.
+    tags: [verification, ota, kani, swe-6]
+    fields:
+      method: formal-verification
+    links:
+      - type: verifies
+        target: SWREQ-OTA-001

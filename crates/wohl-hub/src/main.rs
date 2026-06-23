@@ -864,6 +864,18 @@ fn run_ccsds_mode(hub: &mut WohlHub) {
         match stdin.read_exact(&mut buf) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+            // EAGAIN (WouldBlock) / EINTR (Interrupted) on a pipe are transient,
+            // not a reason to stop supervising. Back off briefly and retry
+            // rather than terminating the hub on a hiccup. (wohl#5)
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted
+                ) =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
+            }
             Err(e) => {
                 eprintln!("[wohl-hub] stdin error: {}", e);
                 break;
