@@ -1,0 +1,32 @@
+artifacts:
+  - id: SWREQ-OTA-001
+    type: sw-req
+    title: "OTA-P01: Safe dual-bank firmware update"
+    status: approved
+    description: >
+      The OTA subsystem shall update node firmware using a dual-bank (A/B)
+      slot scheme such that, at all times:
+        - a download never targets the currently-active slot (the running
+          firmware is never overwritten in place);
+        - the standby slot is only promoted to active via an explicit,
+          verified Ready -> Swapping transition;
+        - rollback restores the immediately-prior active slot;
+        - received-byte progress never exceeds the declared image size.
+      The OTA state machine is the verified core in `crates/wohl-ota`
+      (engine.rs); the threads that drive it are modeled in
+      `spar/wohl_firmware.aadl` (NodeBootloader, OTAManager,
+      OTAManagerProcess). This requirement closes the traceability gap noted
+      in wohl#5 (the OTA design and verified core existed with no
+      requirement above them).
+    tags: [ota, firmware, dual-bank, availability, kani]
+    fields:
+      req-type: safety
+      priority: must
+      verification-criteria: >
+        Kani bounded model checking on the OTA engine: OTA-P01 (downloads
+        never target the active slot), OTA-P02 (only Ready -> Swapping
+        transitions accepted), OTA-P03 (bytes_received <= total_bytes), and
+        the rollback/no-panic harnesses. CI job "Kani: wohl-ota" gates these.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-008
