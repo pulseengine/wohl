@@ -16,6 +16,10 @@ artifacts:
       stream processing. Components are wired at build time by Meld
       (stream composition tool). Loom optimizes stream access patterns.
 
+      The deployment thread model is in spar/wohl_system.aadl
+      (WohlEmbedded.Deployed = STM32H743.Gale; WohlDev.Deployed =
+      RaspberryPi4) and the processors in spar/wohl_hardware.aadl.
+
       The hub receives typed streams from sensor nodes, routes each to its
       corresponding monitor component, collects alert outputs, and feeds
       them to the AlertDispatcher for notification delivery.
@@ -30,7 +34,12 @@ artifacts:
           - "Sensor node streams (all types)"
           - "Notification channels (push, email, buzzer)"
           - "Relay Scheduler, Meld, Loom"
-      concurrency: "cooperative single-threaded (Relay Scheduler)"
+      concurrency: >
+        Multi-threaded, priority-scheduled per target (the 7-thread monitor
+        model in spar/wohl_system.aadl), NOT cooperative single-threaded:
+        rate-monotonic preemption on STM32H743.Gale, POSIX highest-priority-
+        first on RaspberryPi4. Safety-priority ordering (water-leak highest)
+        holds on both; the Relay Scheduler is the dispatch abstraction.
       resource-budgets:
         ram-kiln: "64 MB (RPi target)"
         ram-gale: "512 KB (STM32H7 target)"
