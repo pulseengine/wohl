@@ -9,6 +9,8 @@ artifacts:
     tags: [testing, unit]
     fields:
       method: automated-test
+      steps:
+        - run: cargo test -p wohl-air
     links:
       - type: verifies
         target: SWDD-AIR-001

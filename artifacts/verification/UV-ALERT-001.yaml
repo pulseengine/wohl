@@ -9,6 +9,8 @@ artifacts:
     tags: [testing, unit]
     fields:
       method: automated-test
+      steps:
+        - run: cargo test -p wohl-alert
     links:
       - type: verifies
         target: SWDD-ALERT-001

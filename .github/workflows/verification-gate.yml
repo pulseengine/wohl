@@ -1,0 +1,84 @@
+name: Verification Gate
+
+# Rivet-driven verification gate (wohl#50, Track E). Extracts the executable
+# `fields.steps[].run` from wohl's rivet verification artifacts and runs them,
+# so the right side of the V is *driven*, not narrated. Mirrors relay's
+# verification-gate.yml. Steps whose shape needs infra this runner lacks
+# (Kani, Verus/bazel, spar, wasmtime, sigil) are skipped here — they have
+# their own dedicated CI jobs — and reported as bench-only.
+#
+# Locally:  python3 tools/run-wohl-verification.py --markdown
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: verify-gate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  RELAY_REF: 178ffd479ad863c91ece4f580379a9207c36a530
+  RIVET_REF: 78f001e23d595ba816f7a7be59282194dedfdc12
+
+jobs:
+  gate:
+    name: Verification gate (rivet-driven)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      # relay sibling: wohl crates have path-deps like relay-lc = "../relay/...",
+      # so `cargo test -p wohl-*` needs relay co-located.
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+          ref: ${{ env.RELAY_REF }}
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/rivet
+          path: rivet
+          ref: ${{ env.RIVET_REF }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wohl
+          key: verification-gate
+      - name: Install rivet-cli
+        run: cargo install --locked --path rivet/rivet-cli
+      - name: Run verification gate
+        id: gate
+        working-directory: wohl
+        run: |
+          set -o pipefail
+          python3 tools/run-wohl-verification.py --markdown | tee "$GITHUB_WORKSPACE/gate.out"
+          # Extract just the Markdown summary (from its header to EOF) for the comment.
+          awk '/^## .* Rivet verification gate/{p=1} p' "$GITHUB_WORKSPACE/gate.out" \
+            > "$GITHUB_WORKSPACE/gate.md"
+      - name: Post/update PR comment
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test -s "$GITHUB_WORKSPACE/gate.md" || echo "## Rivet verification gate — wohl (no summary produced)" > "$GITHUB_WORKSPACE/gate.md"
+          MARKER='<!-- wohl-verification-gate -->'
+          BODY="$MARKER"$'\n'"$(cat "$GITHUB_WORKSPACE/gate.md")"
+          ID=$(gh api "repos/$REPO/issues/$PR/comments" --jq \
+            "[.[] | select(.body | contains(\"$MARKER\")) | .id] | first // empty")
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$ID" -f body="$BODY" >/dev/null
+          else
+            gh api -X POST "repos/$REPO/issues/$PR/comments" -f body="$BODY" >/dev/null
+          fi
