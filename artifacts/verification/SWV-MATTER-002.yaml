@@ -95,6 +95,11 @@ artifacts:
         report on. The same pipeline reconstructs full MC/DC (masking +
         unique-cause) on a rich decision (the ISO leap-year rule), proving the
         tool is wired for the verified-core line (see the fixture README).
+        CI-GATED (0.6.0, wohl#50 Track C2): `.github/workflows/witness-gate.yml`
+        builds witness from source and runs the fixture pipeline
+        (`crates/wohl-matter-core/witness/run-witness.sh`) on every PR,
+        failing on any unresolved MC/DC gap row — the finding above is now a
+        no-regression guard, no longer a manual step.
 
       OWED before this artifact can be `approved`:
 
