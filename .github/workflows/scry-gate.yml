@@ -1,0 +1,53 @@
+name: Scry Robustness Gate
+
+# Sound abstract interpretation over the Matter verified-core seam wasm
+# (wohl#50, Track C3) — the DO-333 leg of the verification chain. Builds
+# scry-viz from source (the `check` mode over-approximates the reachable
+# behaviour and asserts a structurally well-formed result), then runs it on the
+# fixture core module. Red on any malformed result or analyzer crash. Mirrors
+# the witness-gate / sigil-attest build-tool-from-source pattern.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: scry-gate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+permissions:
+  contents: read
+
+env:
+  # Pinned to the scry release tested against. Bump via PR.
+  SCRY_REF: v3.1.0
+
+jobs:
+  scry:
+    name: Scry sound-AI (Matter seam)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/scry
+          path: scry
+          ref: ${{ env.SCRY_REF }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: scry
+          key: scry-build
+      - name: Build scry-viz
+        run: cargo build --release -p scry-sai-viz --bin scry-viz --manifest-path scry/Cargo.toml
+      - name: Scry robustness gate on the Matter seam
+        working-directory: wohl
+        env:
+          SCRY: ${{ github.workspace }}/scry/target/release/scry-viz
+        run: crates/wohl-matter-core/witness/run-scry.sh
