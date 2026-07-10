@@ -100,6 +100,12 @@ artifacts:
         (`crates/wohl-matter-core/witness/run-witness.sh`) on every PR,
         failing on any unresolved MC/DC gap row — the finding above is now a
         no-regression guard, no longer a manual step.
+      - C6 sound abstract interpretation (DO-333 leg): CI-GATED (0.6.0, wohl#50
+        Track C3). `.github/workflows/scry-gate.yml` builds scry-viz from
+        source and runs `scry-viz check` (sound over-approximating AI) on the
+        seam fixture core wasm (`run-scry.sh`) every PR, red on any malformed
+        analysis result or analyzer crash. Adds the third verification
+        technique-class (proofs/MC-DC/sound-AI) over the verified-core seam.
 
       OWED before this artifact can be `approved`:
 
