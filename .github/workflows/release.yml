@@ -34,6 +34,9 @@ env:
   # on the checkout below covers force-pushes of relay (sibling repo
   # is routinely rebased; see ci.yml comment + issue #8).
   RELAY_REF: 178ffd479ad863c91ece4f580379a9207c36a530
+  # Pinned rules_wasm_component for the Bazel wasm build (build-wasm job),
+  # in lock-step with ci.yml's RULES_WASM_COMPONENT_REF — bump together.
+  RULES_WASM_COMPONENT_REF: fbe20571eee9bd05687c95e7a43f6c236d9b2428
 
 jobs:
   # ── Cross-platform binary builds ──────────────────────────────────────
@@ -127,10 +130,62 @@ jobs:
           path: wohl/${{ env.ARCHIVE }}
           retention-days: 7
 
+  # ── Build the verified Matter core wasm as a release artifact ─────────
+  # The composed component //:wohl-matter-composed is built + signed in CI
+  # (bazel-build + sigil-attest) but never shipped — it "died at the release
+  # boundary" (issue #50, Track C). Rebuild it here so create-release can put
+  # it through the same supply chain as the binaries (SHA256SUMS + cosign +
+  # SLSA). Mirrors ci.yml's bazel-build job.
+  build-wasm:
+    name: Build composed Matter wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+          ref: ${{ env.RELAY_REF }}
+          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/rules_wasm_component
+          path: rules_wasm_component
+          ref: ${{ env.RULES_WASM_COMPONENT_REF }}
+          fetch-depth: 0
+      # rules_rocq_rust's module extension needs nix-build on PATH at Bazel
+      # analysis time (same pin as ci.yml's bazel jobs).
+      - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-build-wasm
+          repository-cache: true
+      - name: bazel build //:wohl-matter-composed
+        working-directory: wohl
+        env:
+          CARGO_BAZEL_REPIN: "1"
+        run: |
+          set -euo pipefail
+          bazel build //:wohl-matter-composed
+          WASM=$(find "$(bazel info bazel-bin)" -name 'wohl-matter-composed.wasm' | head -1)
+          test -n "$WASM"
+          # bazel-bin is a symlink tree; copy out a real file for upload.
+          cp -L "$WASM" "$GITHUB_WORKSPACE/wohl-matter-composed.wasm"
+          ls -la "$GITHUB_WORKSPACE/wohl-matter-composed.wasm"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-composed
+          path: wohl-matter-composed.wasm
+          retention-days: 7
+
   # ── Create the GitHub Release: checksums, provenance, signing ─────────
   create-release:
     name: Create GitHub Release
-    needs: [build-binaries]
+    needs: [build-binaries, build-wasm]
     runs-on: ubuntu-latest
     permissions:
       # Keyless signing + provenance need an OIDC token; release-asset
@@ -166,6 +221,9 @@ jobs:
           set -euo pipefail
           mkdir -p release-assets
           find artifacts -type f -name "*.tar.gz" -exec cp {} release-assets/ \;
+          # The composed Matter wasm (from build-wasm) ships too — it flows
+          # through the same SHA256SUMS + cosign + SLSA chain as the binaries.
+          find artifacts -type f -name "*.wasm" -exec cp {} release-assets/ \;
           ls -la release-assets/
 
       # CycloneDX SBOM for wohl-hub. Generated *before* SHA256SUMS so
@@ -213,7 +271,9 @@ jobs:
       - name: Generate SLSA build provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: "release-assets/*.tar.gz"
+          subject-path: |
+            release-assets/*.tar.gz
+            release-assets/*.wasm
 
       # ── Sigstore keyless signing (cosign) ──────────────────────────────
       # Signs SHA256SUMS.txt so a consumer can verify the checksum file
