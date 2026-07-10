@@ -1,0 +1,52 @@
+name: Witness MC/DC Gate
+
+# Wires the Matter verified-core seam MC/DC fixture (crates/wohl-matter-core/
+# witness/) into CI (wohl#50, Track C2) — previously run manually. Builds
+# witness from source (no release CLI binary ships), then instrument -> run ->
+# report on the fixture and fails on any unresolved MC/DC gap row. The seam is
+# a flat OR (0 recoverable decisions today), so this is a no-regression guard.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: witness-gate-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+permissions:
+  contents: read
+
+env:
+  # Pinned to the witness release tested against (v0.38.0). Bump via PR.
+  WITNESS_REF: v0.38.0
+
+jobs:
+  witness:
+    name: Witness MC/DC (Matter seam)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: wohl
+      - uses: actions/checkout@v4
+        with:
+          repository: pulseengine/witness
+          path: witness
+          ref: ${{ env.WITNESS_REF }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: witness
+          key: witness-build
+      - name: Build witness
+        run: cargo build --release -p witness-mcdc --bin witness --manifest-path witness/Cargo.toml
+      - name: Witness MC/DC gate on the Matter seam
+        working-directory: wohl
+        env:
+          WITNESS: ${{ github.workspace }}/witness/target/release/witness
+        run: crates/wohl-matter-core/witness/run-witness.sh
