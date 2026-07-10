@@ -27,3 +27,8 @@ Thumbs.db
 # regenerated locally (`rivet lock`), not committed.
 .rivet/
 rivet.lock
+
+# Claude Code machine-local settings (e.g. env.TMPDIR → /Volumes/devcache);
+# machine-specific, must not be committed. settings.json (shared) is fine.
+.claude/settings.local.json
+.claude/worktrees/

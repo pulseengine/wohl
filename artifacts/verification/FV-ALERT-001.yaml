@@ -47,6 +47,12 @@ artifacts:
     tags: [verification, formal, verus, swe-6, dedup]
     fields:
       method: formal-verification
+      steps:
+        # The conformance oracle ties the Verus-proven ghost model to the
+        # executable engine — runnable in the gate.
+        - run: cargo test -p wohl-alert verus_conformance
+        # The Verus proof itself has its own dedicated CI job (bench-only here).
+        - run: bazel test //proofs/verus:alert_dedup_verify
     links:
       - type: verifies
         target: SWREQ-ALERT-001
