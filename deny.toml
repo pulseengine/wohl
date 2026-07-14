@@ -53,33 +53,16 @@ deny = []
 skip = []
 
 [advisories]
-# RUSTSEC IDs we explicitly accept, each with a load-bearing reason.
-#
-# RUSTSEC-2026-0110 — `bare-metal` deprecated. Transitive via
-#   wohl-fw-door-bench → stm32g0xx-hal 0.2.0 → cortex-m 0.7.x →
-#   bare-metal {0.2.5, 1.0.0}. The advisory's own "Solution" reads
-#   "No safe upgrade is available!" — the upstream migration target
-#   (`critical-section`) is not yet reflected in the cortex-m 0.7.x
-#   release line that the entire embedded Rust ecosystem still pins.
-#   Re-evaluate when cortex-m 0.8 stabilises and stm32g0xx-hal cuts a
-#   release against it.
-#
-# RUSTSEC-2026-0009 — `time 0.3.45` stack-exhaustion DoS via RFC 2822
-#   parser. Transitive via wohl-matter-bridge → rs-matter → domain
-#   0.10.4 (which pins time). The wohl bridge never calls RFC 2822
-#   parsing — rs-matter only uses `time` for cert validity intervals.
-#   `cargo update -p time` declines to bump because of `domain`'s
-#   pinned requirement. Re-evaluate when rs-matter (or domain) bumps
-#   time to >= 0.3.47.
-#
-# RUSTSEC-2024-0436 — `paste 1.0.15` no longer maintained. Transitive
-#   via wohl-matter-bridge → rs-matter → pinned-init → paste. The
-#   crate still functions; rs-matter upstream tracks migration off
-#   pinned-init. Re-evaluate when rs-matter drops the dependency.
+# RUSTSEC IDs we explicitly accept. Each ignore is STRUCTURED with an owner
+# and a re-evaluate-by date in `reason` (wohl#30). cargo-deny 0.16 has no
+# per-ignore `expires` field, so the date lives in the reason (greppable) and
+# this cargo-deny job — which runs on every PR — is the standing alert: if the
+# advisory situation changes (a fix lands, or a NEW advisory appears on these
+# dep chains), the job surfaces it. Owner is the embedded/supply-chain line.
 ignore = [
-    "RUSTSEC-2026-0110",
-    "RUSTSEC-2026-0009",
-    "RUSTSEC-2024-0436",
+    { id = "RUSTSEC-2026-0110", reason = "bare-metal deprecated; transitive via wohl-fw-door-bench -> stm32g0xx-hal 0.2 -> cortex-m 0.7.x. Advisory's own Solution is 'No safe upgrade available' — the migration target (critical-section) is not in the cortex-m 0.7.x line the ecosystem pins. OWNER: PulseEngine embedded. RE-EVALUATE BY 2026-10-01 (or when cortex-m 0.8 stabilises + stm32g0xx-hal releases against it)." },
+    { id = "RUSTSEC-2026-0009", reason = "time 0.3.45 RFC-2822 stack-exhaustion DoS; transitive via wohl-matter-bridge -> rs-matter -> domain 0.10.4 (pins time). wohl never calls RFC-2822 parsing (rs-matter uses time only for cert validity intervals). OWNER: PulseEngine. RE-EVALUATE BY 2026-10-01 (or when rs-matter/domain bumps time >= 0.3.47)." },
+    { id = "RUSTSEC-2024-0436", reason = "paste 1.0.15 unmaintained; transitive via wohl-matter-bridge -> rs-matter -> pinned-init -> paste. Crate still functions; rs-matter upstream tracks migration off pinned-init. OWNER: PulseEngine. RE-EVALUATE BY 2026-10-01 (or when rs-matter drops the dependency)." },
 ]
 # Yanked crates in the lockfile: warn, don't fail — yanks can happen
 # mid-CI run.
