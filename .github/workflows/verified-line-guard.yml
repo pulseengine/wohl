@@ -1,0 +1,48 @@
+name: Verified-line guard
+
+# Mechanical guard (wohl#30): a PR that touches the verified core — the plain/
+# engines under crates/wohl-{leak,temp,air,door,power,alert,ota}/ or the Verus
+# proofs — must carry the `verified-line-change` label, which a maintainer
+# applies after reviewing the change to the verified line. Until now this was
+# enforced by human review alone. Not a substitute for the Kani/Verus/proptest
+# gates; a tripwire so a verified-core edit can't slip through unexamined.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  guard:
+    name: Verified-line guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Guard the verified line
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+          verified="$(printf '%s\n' "$changed" \
+            | grep -E '^crates/wohl-(leak|temp|air|door|power|alert|ota)/plain/|^proofs/verus/' || true)"
+          if [ -z "$verified" ]; then
+            echo "No verified-line files touched — OK."
+            exit 0
+          fi
+          echo "This PR touches the verified line:"
+          printf '%s\n' "$verified" | sed 's/^/  /'
+          if gh pr view "$PR" --json labels -q '.labels[].name' | grep -qx 'verified-line-change'; then
+            echo "Label 'verified-line-change' present — allowed."
+            exit 0
+          fi
+          echo "::error::This PR changes the verified core (a wohl-*/plain engine or proofs/verus) without the 'verified-line-change' label. A maintainer must review the verified-line change and apply the label."
+          exit 1
