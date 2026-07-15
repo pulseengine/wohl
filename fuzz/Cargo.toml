@@ -11,6 +11,11 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 wohl-leak = { path = "../crates/wohl-leak" }
 wohl-temp = { path = "../crates/wohl-temp" }
+wohl-air = { path = "../crates/wohl-air" }
+wohl-door = { path = "../crates/wohl-door" }
+wohl-power = { path = "../crates/wohl-power" }
+wohl-alert = { path = "../crates/wohl-alert" }
+wohl-ota = { path = "../crates/wohl-ota" }
 relay-lc = { path = "../../relay/crates/relay-lc" }
 
 [workspace]
@@ -22,3 +27,23 @@ path = "fuzz_targets/fuzz_leak.rs"
 [[bin]]
 name = "fuzz_temp"
 path = "fuzz_targets/fuzz_temp.rs"
+
+[[bin]]
+name = "fuzz_air"
+path = "fuzz_targets/fuzz_air.rs"
+
+[[bin]]
+name = "fuzz_door"
+path = "fuzz_targets/fuzz_door.rs"
+
+[[bin]]
+name = "fuzz_power"
+path = "fuzz_targets/fuzz_power.rs"
+
+[[bin]]
+name = "fuzz_alert"
+path = "fuzz_targets/fuzz_alert.rs"
+
+[[bin]]
+name = "fuzz_ota"
+path = "fuzz_targets/fuzz_ota.rs"

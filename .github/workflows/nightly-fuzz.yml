@@ -41,6 +41,11 @@ jobs:
         target:
           - fuzz_leak
           - fuzz_temp
+          - fuzz_air
+          - fuzz_door
+          - fuzz_power
+          - fuzz_alert
+          - fuzz_ota
     steps:
       - uses: actions/checkout@v4
         with:
