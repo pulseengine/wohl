@@ -116,7 +116,22 @@ jobs:
           workspaces: wohl
       - name: cargo test
         working-directory: wohl
+        # NOT --locked (wohl#30): wohl has path-deps to the sibling `relay` repo,
+        # which CI checks out at a pinned RELAY_REF that is routinely rebased
+        # independently of wohl's Cargo.lock. `--locked` then fails with "lock
+        # needs updating" because the committed lock was resolved against a
+        # different relay commit. The drift surfacing below is the viable guard;
+        # true lock-pinning would require pinning relay's commit INTO the lock,
+        # which the moving-sibling design precludes.
         run: cargo test --workspace --all-features
+      - name: Lockfile drift surfacing (informational)
+        working-directory: wohl
+        # The --locked tests above PIN the surface; this surfaces WHEN that
+        # pinned surface has newer compatible versions available upstream, so
+        # drift is visible on the PR instead of silent. Non-gating. wohl#30.
+        run: |
+          echo "Dependencies with newer compatible versions available:"
+          cargo update --dry-run --workspace 2>&1 | grep -iE 'updating|latest' || echo "  (lockfile is current with the registry)"
 
   kani:
     # Matrix split (was a single serial bash loop): each component gets
@@ -175,6 +190,8 @@ jobs:
           cargo kani setup
       - name: Run Kani on ${{ matrix.crate }}
         working-directory: wohl
+        # NOT --locked — same reason as the cargo test job (moving relay sibling
+        # vs the committed Cargo.lock; see that comment). wohl#30.
         run: cargo kani -p "${{ matrix.crate }}"
 
   fuzz-smoke:
