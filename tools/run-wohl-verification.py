@@ -22,6 +22,8 @@ Usage:
     python3 tools/run-wohl-verification.py --filter '(has-tag "matter")'
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import re
