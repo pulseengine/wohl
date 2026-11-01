@@ -71,7 +71,7 @@ jobs:
             os: macos-latest
             archive: tar.gz
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
           ref: ${{ inputs.tag || github.ref }}
@@ -79,7 +79,7 @@ jobs:
       # relay sibling checkout: wohl's Cargo.toml has path-deps like
       # `relay-lc = { path = "../relay/crates/relay-lc" }`. The build
       # needs relay co-located at the workspace's parent dir.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
@@ -90,7 +90,7 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wohl
           key: release-${{ matrix.target }}
@@ -124,7 +124,7 @@ jobs:
           tar -czf "$ARCHIVE" -C staging .
           echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: binary-${{ matrix.target }}
           path: wohl/${{ env.ARCHIVE }}
@@ -140,17 +140,17 @@ jobs:
     name: Build composed Matter wasm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
           ref: ${{ inputs.tag || github.ref }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
           ref: ${{ env.RELAY_REF }}
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/rules_wasm_component
           path: rules_wasm_component
@@ -176,7 +176,7 @@ jobs:
           # bazel-bin is a symlink tree; copy out a real file for upload.
           cp -L "$WASM" "$GITHUB_WORKSPACE/wohl-matter-composed.wasm"
           ls -la "$GITHUB_WORKSPACE/wohl-matter-composed.wasm"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wasm-composed
           path: wohl-matter-composed.wasm
@@ -197,14 +197,14 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
           ref: ${{ inputs.tag || github.ref }}
 
       # relay sibling needed because cargo-cyclonedx walks workspace
       # path-deps when generating the SBOM.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
@@ -212,7 +212,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
@@ -269,7 +269,7 @@ jobs:
       # and records it in the Rekor transparency log. Consumers verify
       # with `gh attestation verify <file> --repo pulseengine/wohl`.
       - name: Generate SLSA build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: |
             release-assets/*.tar.gz
@@ -282,7 +282,7 @@ jobs:
       # plain checksum file). Mirrors the pulseengine/synth and
       # pulseengine/rivet cosign sign-blob pattern.
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
         with:
           cosign-release: 'v2.4.1'
 
