@@ -37,10 +37,10 @@ jobs:
     name: fmt + clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
@@ -50,7 +50,7 @@ jobs:
         with:
           toolchain: "1.87.0"
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wohl
       - name: cargo fmt --check (per workspace member)
@@ -76,10 +76,10 @@ jobs:
     name: cargo-deny (supply-chain)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
@@ -90,7 +90,7 @@ jobs:
       # If we want SHA-pinning parity with the rest of this workflow,
       # bump to a sha256 in a follow-up — for now @v2 keeps us on
       # security patches in the v2 major automatically.
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
         with:
           manifest-path: wohl/Cargo.toml
           command: check bans licenses advisories sources
@@ -99,10 +99,10 @@ jobs:
     name: cargo test (workspace, incl. proptest)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
@@ -111,7 +111,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.87.0"
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wohl
       - name: cargo test
@@ -154,10 +154,10 @@ jobs:
           - wohl-alert
           - wohl-ota
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
@@ -166,12 +166,12 @@ jobs:
       # Kani-verifier (the installer) needs newer Rust than our MSRV.
       # Kani itself uses an internal nightly for the proofs.
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wohl
           key: kani-${{ matrix.crate }}
       - name: Cache Kani install
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.cargo/bin/cargo-kani
@@ -198,10 +198,10 @@ jobs:
     name: cargo-fuzz smoke (60s/target)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
@@ -210,7 +210,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wohl
           key: fuzz
@@ -230,10 +230,10 @@ jobs:
     name: rivet validate (ASPICE artifacts)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/rivet
           path: rivet
@@ -245,14 +245,14 @@ jobs:
       # resolves live, so relay must sit beside wohl as a sibling checkout;
       # main carries relay's STPA-Sec (PR #117). If relay renames a referenced
       # ID, this job goes red — that is the federation guarantee.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
           ref: main
       # rivet-cli's deps need Rust 1.89+; we don't care about MSRV for tooling.
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: rivet
           key: rivet-cli
@@ -266,10 +266,10 @@ jobs:
     name: Verus (bazel test //proofs/verus)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/rules_wasm_component
           path: rules_wasm_component
@@ -299,16 +299,16 @@ jobs:
     name: Bazel build (//:all — exercises WASM component glue)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
           ref: ${{ env.RELAY_REF }}
           fetch-depth: 0
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/rules_wasm_component
           path: rules_wasm_component
@@ -378,7 +378,7 @@ jobs:
           cp -L "$WASM" "$GITHUB_WORKSPACE/wohl-matter-composed.wasm"
 
       - name: Upload composed component for attestation
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wohl-matter-composed
           path: wohl-matter-composed.wasm
@@ -395,10 +395,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: bazel-build
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/sigil
           path: sigil
@@ -407,11 +407,11 @@ jobs:
       # sigil's rust-toolchain.toml selects its own toolchain; this provides a
       # base so rustup can resolve it.
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: sigil
           key: sigil-attest
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: wohl-matter-composed
           path: artifact
@@ -434,10 +434,10 @@ jobs:
     name: Matter interop (chip-tool commissions the hub)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: wohl
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
           path: relay
@@ -446,7 +446,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.87.0"
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wohl
           key: matter-interop
@@ -496,7 +496,7 @@ jobs:
     name: Script portability (shellcheck + Python 3.9 floor)
     runs-on: ubuntu-24.04  # setup-python has no 3.9 build for 26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # SHELLCHECK_SHA256 is the release asset's `digest` for
       # shellcheck-v0.11.0.linux.x86_64.tar.gz from
