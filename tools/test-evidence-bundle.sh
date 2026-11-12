@@ -10,6 +10,7 @@
 #   red 2:  a tampered evidence file               -> verify.sh fails
 #   red 3:  witness report with non-zero gap rows  -> verify.sh fails
 #   red 4:  verifier that rejects the signature    -> verify.sh fails
+#   red 5:  verifier exits non-zero despite phrase -> verify.sh fails
 #
 # The stub verifier exercises the wiring, not the crypto. The real
 # signature path runs with the sigil binary in the release workflow and
@@ -38,6 +39,11 @@ chmod +x "$BIN_OK/sigil"
 BIN_BAD="$WORK/bin-bad"; mkdir -p "$BIN_BAD"
 printf '#!/bin/sh\necho "Signature is INVALID"\n' > "$BIN_BAD/sigil"
 chmod +x "$BIN_BAD/sigil"
+# Perverse verifier: prints the success phrase but exits non-zero — pins the
+# exit-code gate independently of the phrase gate.
+BIN_EXIT1="$WORK/bin-exit1"; mkdir -p "$BIN_EXIT1"
+printf '#!/bin/sh\necho "Signature is valid"\nexit 1\n' > "$BIN_EXIT1/sigil"
+chmod +x "$BIN_EXIT1/sigil"
 
 assemble() { # $1 = witness report file, $2 = out dir
     tools/evidence-bundle.sh --version vTEST \
@@ -89,4 +95,8 @@ expect_fail "rejects non-zero witness gap rows" "gap row" run_gap
 run_badsig() { PATH="$BIN_BAD:$BASE_PATH" "$G/wohl-vTEST-evidence/verify.sh"; }
 expect_fail "rejects a bad signature verdict" "did not verify" run_badsig
 
-echo "PASS: evidence-bundle machinery — 1 green, 4 red controls"
+# ── red 5: verifier exits non-zero despite printing the phrase ────────
+run_exit1() { PATH="$BIN_EXIT1:$BASE_PATH" "$G/wohl-vTEST-evidence/verify.sh"; }
+expect_fail "rejects a non-zero verifier exit" "exited non-zero" run_exit1
+
+echo "PASS: evidence-bundle machinery — 1 green, 5 red controls"
