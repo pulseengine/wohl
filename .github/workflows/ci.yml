@@ -546,3 +546,10 @@ jobs:
           "$PY39" -c 'import sys; assert sys.version_info[:2] == (3, 9), sys.version'
           "$PY39" tools/check-py-floor.py --self-test
           git ls-files -z '*.py' | xargs -0 -r "$PY39" tools/check-py-floor.py
+
+      # SWV-REL-001: the evidence-bundle packager + verifier, exercised with
+      # one green and four red fixture controls (tamper, gap rows, missing
+      # verifier, rejected signature). The real producer tools run in the
+      # release workflow; this gates the machinery on every PR.
+      - name: Evidence-bundle machinery (SWV-REL-001)
+        run: tools/test-evidence-bundle.sh

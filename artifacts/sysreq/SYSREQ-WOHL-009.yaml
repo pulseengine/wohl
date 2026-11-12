@@ -1,0 +1,28 @@
+artifacts:
+  - id: SYSREQ-WOHL-009
+    type: system-req
+    title: "Re-checkable release evidence"
+    status: approved
+    description: >
+      Every published wohl release shall carry the verification evidence an
+      assessor needs to re-check the release's claims without access to the
+      build environment: the rivet traceability state, the witness MC/DC
+      result for the Matter seam, and the attestation over the composed
+      component. The evidence shall be generated for every release however
+      it is published — a release cut by automation carries the same
+      evidence as one cut by hand (wohl#64 documents the failure mode:
+      bot-published releases silently skipped the compliance lane because
+      GITHUB_TOKEN-raised events start no workflows).
+    tags: [release, evidence, compliance, o2]
+    fields:
+      req-type: constraint
+      priority: must
+      verification-criteria: >
+        A published release's asset list contains the evidence bundle and
+        the compliance report. The evidence lane runs for bot-published
+        releases (wohl#64 closed). Verified per release by the release
+        workflow's own gate; the bundle machinery is verified on every PR
+        by the evidence-bundle verification measure.
+    links:
+      - type: derives-from
+        target: STKH-WOHL-001

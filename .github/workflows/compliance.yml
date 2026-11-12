@@ -17,6 +17,17 @@ on:
         description: 'Existing release tag to (re)generate the report for (e.g. v1.2.3)'
         required: true
         type: string
+  # wohl#64: GITHUB_TOKEN-raised events start no workflows, so `on: release`
+  # never fires for the bot-published releases release.yml creates. release.yml
+  # calls this workflow directly after create-release; the release assets are
+  # already uploaded by then, so a compliance failure still cannot take a
+  # release down — it reddens the run instead of failing silently.
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag to generate the report for'
+        required: true
+        type: string
 
 permissions:
   contents: write

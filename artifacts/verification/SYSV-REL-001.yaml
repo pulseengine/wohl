@@ -1,0 +1,24 @@
+artifacts:
+  - id: SYSV-REL-001
+    type: sys-verification
+    title: "Release carries the evidence bundle and compliance report"
+    status: implemented
+    description: >
+      Verifies SYSREQ-WOHL-009 at the system boundary, per release: the
+      release workflow assembles the evidence bundle from real producer
+      outputs, runs the bundle's own verify.sh as a gate before any
+      upload, and the compliance lane is invoked from the release
+      workflow itself (workflow_call), so it runs for bot-published
+      releases — the wohl#64 failure mode cannot recur by trigger
+      wiring. Checked on a published release by listing its assets:
+      wohl-vX.Y.Z-evidence-bundle.tar.gz and
+      wohl-vX.Y.Z-compliance-report.tar.gz are both present, and the
+      bundle appears in the cosign-signed SHA256SUMS.txt.
+    tags: [release, evidence, system-verification]
+    fields:
+      method: automated-test
+      steps:
+        - run: gh release view vX.Y.Z --json assets
+    links:
+      - type: verifies
+        target: SYSREQ-WOHL-009
