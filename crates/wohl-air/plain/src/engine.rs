@@ -362,7 +362,6 @@ mod kani_proofs {
         let co2_warn: u32 = kani::any();
         let pm25_warn: u32 = kani::any();
         let voc_warn: u32 = kani::any();
-        kani::assume(co2_warn > 1 && pm25_warn > 1 && voc_warn > 1);
         let config = AirConfig {
             zone_id: 1,
             co2_warn,

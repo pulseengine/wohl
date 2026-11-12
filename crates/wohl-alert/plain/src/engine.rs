@@ -551,7 +551,6 @@ mod kani_proofs {
         let zone_id: u32 = kani::any();
         let alert_type: u8 = kani::any();
         let time1: u64 = kani::any();
-        kani::assume(time1 < u64::MAX - DEDUP_COOLDOWN_SEC);
         // Subscribe first (required for routing via relay-to)
         d.subscribe(zone_id, alert_type, 1);
         // First alert should be Send
@@ -559,7 +558,12 @@ mod kani_proofs {
         assert_eq!(r1.action, DispatchAction::Send);
         // Same zone+type within cooldown should be Deduplicated
         let time2: u64 = kani::any();
-        kani::assume(time2 >= time1 && time2 < time1 + DEDUP_COOLDOWN_SEC);
+        // Overflow-free form of time2 < time1 + DEDUP_COOLDOWN_SEC. Precise
+        // precondition: the property fails only at time2 == u64::MAX, where
+        // the engine's saturating cooldown window (`time < last.saturating_add
+        // (DEDUP_COOLDOWN_SEC)`) clips to u64::MAX and excludes that single
+        // timestamp (saturation, not a bug).
+        kani::assume(time2 >= time1 && time2 - time1 < DEDUP_COOLDOWN_SEC && time2 < u64::MAX);
         let r2 = d.process_alert(zone_id, alert_type, time2);
         assert_eq!(r2.action, DispatchAction::Deduplicated);
     }
@@ -569,7 +573,10 @@ mod kani_proofs {
     fn verify_rate_limit() {
         let mut d = AlertDispatcher::new();
         let time: u64 = kani::any();
-        kani::assume(time < u64::MAX - 60);
+        // Precise precondition: the property fails only at time == u64::MAX,
+        // where saturating_add empties the minute window and the limiter is
+        // off for that single value (saturation, not a bug).
+        kani::assume(time < u64::MAX);
         // Subscribe and send MAX_ALERTS_PER_MINUTE alerts with distinct zone_ids
         let mut i: u32 = 0;
         while i < MAX_ALERTS_PER_MINUTE {

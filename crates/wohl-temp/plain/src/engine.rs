@@ -411,12 +411,10 @@ mod kani_proofs {
         // First reading to establish baseline for rate detection
         let v1: i32 = kani::any();
         let t1: u64 = kani::any();
-        kani::assume(t1 < u64::MAX / 2);
         m.process_reading(1, v1, t1);
         // Second reading may trigger rate-of-change alerts too
         let v2: i32 = kani::any();
         let t2: u64 = kani::any();
-        kani::assume(t2 > t1);
         let r = m.process_reading(1, v2, t2);
         assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
     }
@@ -426,7 +424,6 @@ mod kani_proofs {
     fn verify_freeze_detection() {
         let mut m = TemperatureMonitor::new();
         let freeze_thr: i32 = kani::any();
-        kani::assume(freeze_thr > i32::MIN + 100 && freeze_thr < i32::MAX - 100);
         let config = ZoneConfig {
             zone_id: 1,
             freeze_threshold: freeze_thr,
@@ -455,7 +452,6 @@ mod kani_proofs {
     fn verify_no_panic() {
         let mut m = TemperatureMonitor::new();
         let zone_id: u32 = kani::any();
-        kani::assume(zone_id < 100);
         let config = ZoneConfig {
             zone_id,
             freeze_threshold: kani::any(),
