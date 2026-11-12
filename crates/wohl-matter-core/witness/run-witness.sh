@@ -34,9 +34,14 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 REPORT="$("$WITNESS" report --input "$WORK/r.json" --format mcdc)"
 echo "$REPORT"
 
-# Report line shape: "... conditions: N proved, G gap, D dead". Gate on G.
-GAP="$(printf '%s\n' "$REPORT" | grep -oE '[0-9]+ gap' | grep -oE '[0-9]+' | head -1)"
-GAP="${GAP:-0}"
+# Report line shape: "... conditions: N proved, G gap, D dead" (one line per
+# decision; none when 0 decisions are recovered). Gate on the SUM of all gap
+# counts — head -1 would let a clean first decision mask gaps in a later one.
+GAP="$(printf '%s\n' "$REPORT" | grep -oE '[0-9]+ gap' | grep -oE '[0-9]+' | { total=0; while read -r n; do total=$((total + n)); done; echo "$total"; })"
+# Machine-readable contract line. The evidence bundle's verify.sh gates on
+# exactly this line (SWREQ-REL-001) — one parse of witness's wording, here,
+# instead of a second copy of the regex that drifts on a WITNESS_REF bump.
+echo "gap-total: $GAP"
 if [ "$GAP" -ne 0 ]; then
     echo "::error::witness reports $GAP unresolved MC/DC gap row(s) on the Matter seam"
     exit 1

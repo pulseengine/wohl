@@ -24,7 +24,9 @@ trap 'rm -rf "$WORK"' EXIT
 F="$WORK/fixtures"; mkdir -p "$F"
 printf '{"artifacts": 70, "coverage": "fixture"}\n' > "$F/coverage.json"
 printf 'artifacts:\n  - id: FIXTURE-001\n'          > "$F/trace-export.yaml"
-printf 'seam fixture — conditions: 3 proved, 0 gap, 0 dead\n' > "$F/mcdc-report.txt"
+# Mirrors run-witness.sh output: the human report line(s) plus the
+# machine-readable 'gap-total: N' contract line verify.sh gates on.
+printf 'seam fixture — conditions: 3 proved, 0 gap, 0 dead\ngap-total: 0\n' > "$F/mcdc-report.txt"
 printf 'not-really-wasm-but-signed-bytes\n'         > "$F/signed.wasm"
 printf 'fixture-public-key\n'                       > "$F/signing.pub"
 printf 'fixture tooling: this is a test bundle\n'   > "$F/TOOLING.txt"
@@ -54,32 +56,37 @@ PATH="$BIN_OK:$BASE_PATH" "$G/wohl-vTEST-evidence/verify.sh" >/dev/null \
     || { echo "FAIL: intact bundle did not verify"; exit 1; }
 echo "ok: intact bundle verifies"
 
+# Each red control must fail AND fail at ITS check — a non-zero exit for an
+# unrelated earlier reason would leave the control vacuous.
+expect_fail() { # $1 = label, $2 = expected FAIL-message fragment; stdin-less run via $3...
+    local label="$1" frag="$2"; shift 2
+    local out
+    if out="$("$@" 2>&1)"; then
+        echo "FAIL: $label — verify.sh passed"; exit 1
+    fi
+    printf '%s\n' "$out" | grep -q "$frag" \
+        || { echo "FAIL: $label — failed, but not at the expected check (wanted '$frag', got: $out)"; exit 1; }
+    echo "ok: $label"
+}
+
 # ── red 1: no verifier available ──────────────────────────────────────
-if PATH="$BASE_PATH" SIGIL='' "$G/wohl-vTEST-evidence/verify.sh" >/dev/null 2>&1; then
-    echo "FAIL: verify.sh passed with no signature verifier (fail-open)"; exit 1
-fi
-echo "ok: refuses without a signature verifier"
+run_noverifier() { PATH="$BASE_PATH" SIGIL='' "$G/wohl-vTEST-evidence/verify.sh"; }
+expect_fail "refuses without a signature verifier" "no signature verifier" run_noverifier
 
 # ── red 2: tampered evidence file ─────────────────────────────────────
 T="$WORK/tamper"; mkdir -p "$T"; assemble "$F/mcdc-report.txt" "$T"
 printf 'tampered\n' >> "$T/wohl-vTEST-evidence/trace/trace-export.yaml"
-if PATH="$BIN_OK:$BASE_PATH" "$T/wohl-vTEST-evidence/verify.sh" >/dev/null 2>&1; then
-    echo "FAIL: verify.sh passed on a tampered file"; exit 1
-fi
-echo "ok: rejects a tampered file"
+run_tampered() { PATH="$BIN_OK:$BASE_PATH" "$T/wohl-vTEST-evidence/verify.sh"; }
+expect_fail "rejects a tampered file" "checksum mismatch" run_tampered
 
-# ── red 3: witness gap rows ───────────────────────────────────────────
-printf 'seam fixture — conditions: 1 proved, 2 gap, 0 dead\n' > "$F/mcdc-gap.txt"
+# ── red 3: witness gap rows (first decision clean — head -1 must not mask it)
+printf 'conditions: 2 proved, 0 gap, 0 dead\nconditions: 1 proved, 2 gap, 0 dead\ngap-total: 2\n' > "$F/mcdc-gap.txt"
 P="$WORK/gap"; mkdir -p "$P"; assemble "$F/mcdc-gap.txt" "$P"
-if PATH="$BIN_OK:$BASE_PATH" "$P/wohl-vTEST-evidence/verify.sh" >/dev/null 2>&1; then
-    echo "FAIL: verify.sh passed with 2 MC/DC gap rows"; exit 1
-fi
-echo "ok: rejects non-zero witness gap rows"
+run_gap() { PATH="$BIN_OK:$BASE_PATH" "$P/wohl-vTEST-evidence/verify.sh"; }
+expect_fail "rejects non-zero witness gap rows" "gap row" run_gap
 
 # ── red 4: verifier rejects the signature ─────────────────────────────
-if PATH="$BIN_BAD:$BASE_PATH" "$G/wohl-vTEST-evidence/verify.sh" >/dev/null 2>&1; then
-    echo "FAIL: verify.sh passed although the verifier rejected the signature"; exit 1
-fi
-echo "ok: rejects a bad signature verdict"
+run_badsig() { PATH="$BIN_BAD:$BASE_PATH" "$G/wohl-vTEST-evidence/verify.sh"; }
+expect_fail "rejects a bad signature verdict" "did not verify" run_badsig
 
 echo "PASS: evidence-bundle machinery — 1 green, 4 red controls"

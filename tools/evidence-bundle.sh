@@ -97,10 +97,14 @@ else
 fi
 echo "OK: all files match MANIFEST.sha256"
 
-# 2. witness MC/DC gap rows (same line shape run-witness.sh gates on)
-GAP="$(grep -oE '[0-9]+ gap' witness/mcdc-report.txt | grep -oE '[0-9]+' | head -1 || true)"
-[ -n "$GAP" ] || fail "witness/mcdc-report.txt has no 'N gap' line — not a witness MC/DC report"
-[ "$GAP" -eq 0 ] || fail "witness reports $GAP unresolved MC/DC gap row(s)"
+# 2. witness MC/DC gap rows. run-witness.sh (the producer) emits the
+# machine-readable 'gap-total: N' line — the single parse of witness's
+# report wording. Every such line must be exactly 0.
+grep -E '^gap-total: [0-9]+$' witness/mcdc-report.txt >/dev/null \
+    || fail "witness/mcdc-report.txt has no 'gap-total: N' line — not a run-witness.sh report"
+if grep -E '^gap-total:' witness/mcdc-report.txt | grep -vE '^gap-total: 0$' >/dev/null; then
+    fail "witness reports unresolved MC/DC gap row(s): $(grep -E '^gap-total:' witness/mcdc-report.txt | tr '\n' ' ')"
+fi
 echo "OK: witness MC/DC report shows 0 gap rows"
 
 # 3. trace files
@@ -124,9 +128,13 @@ if [ -z "$VERIFIER" ]; then
     done
 fi
 [ -n "$VERIFIER" ] || fail "no signature verifier found: put sigil or wsc on PATH (github.com/pulseengine/sigil), or set \$SIGIL"
-"$VERIFIER" verify --input-file attestation/wohl-matter-composed.signed.wasm \
-                   --public-key attestation/signing.pub \
-    | grep -q "Signature is valid" \
+# Gate on the success phrase, not the exit code: wsc 0.12.0 exits 0 even on
+# "No valid signatures" (measured 2026-11-12), so the exit code fails open.
+# The command must still succeed — a crashed verifier is not a verdict.
+VERDICT="$("$VERIFIER" verify --input-file attestation/wohl-matter-composed.signed.wasm \
+                              --public-key attestation/signing.pub 2>&1)" \
+    || fail "signature verifier exited non-zero (verifier: $VERIFIER)"
+printf '%s\n' "$VERDICT" | grep -q "Signature is valid" \
     || fail "attestation signature did not verify (verifier: $VERIFIER)"
 echo "OK: attestation signature verifies (verifier: $VERIFIER)"
 

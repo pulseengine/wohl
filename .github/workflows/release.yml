@@ -241,9 +241,11 @@ jobs:
             witness
           key: evidence-bundle
       - name: Build producer tools (rivet-cli, sigil, witness)
+        # cargo build (not cargo install) for all three: install builds in a
+        # private temp target dir that Swatinem/rust-cache cannot cache.
         run: |
           set -euo pipefail
-          cargo install --locked --path rivet/rivet-cli
+          cargo build --release --locked --manifest-path rivet/rivet-cli/Cargo.toml --bin rivet
           cargo build --release --manifest-path sigil/Cargo.toml --bin sigil
           cargo build --release -p witness-mcdc --bin witness --manifest-path witness/Cargo.toml
       - name: Download composed Matter wasm
@@ -258,10 +260,11 @@ jobs:
           set -euo pipefail
           VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
           EV="$RUNNER_TEMP/evidence"; mkdir -p "$EV"
+          RIVET="$GITHUB_WORKSPACE/rivet/target/release/rivet"
 
           # rivet trace evidence
-          (cd wohl && rivet coverage --format json > "$EV/coverage.json")
-          (cd wohl && rivet export -f generic-yaml -o "$EV/trace-export.yaml")
+          (cd wohl && "$RIVET" coverage --format json > "$EV/coverage.json")
+          (cd wohl && "$RIVET" export -f generic-yaml -o "$EV/trace-export.yaml")
 
           # witness MC/DC report (same gate script CI runs on every PR)
           WITNESS="$GITHUB_WORKSPACE/witness/target/release/witness" \
@@ -275,10 +278,13 @@ jobs:
                         -k "$RUNNER_TEMP/sk.key"
           rm -f "$RUNNER_TEMP/sk.key"
 
-          # tooling record: the exact producing refs and versions
+          # tooling record: the exact producing refs and versions. The wohl
+          # commit is the CHECKED-OUT one — on a workflow_dispatch re-run
+          # GITHUB_SHA is the dispatching branch's head, not the tag.
+          WOHL_SHA="$(git -C wohl rev-parse HEAD)"
           {
-            echo "wohl: $VERSION ($GITHUB_SHA)"
-            echo "rivet: $RIVET_REF ($(rivet --version))"
+            echo "wohl: $VERSION ($WOHL_SHA)"
+            echo "rivet: $RIVET_REF ($("$RIVET" --version))"
             echo "sigil: $SIGIL_REF"
             echo "witness: $WITNESS_REF"
             echo "relay sibling: $RELAY_REF"

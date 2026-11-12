@@ -1,9 +1,13 @@
 name: Compliance report
 
 # Publishes wohl-vX.Y.Z-compliance-report.tar.gz to each GitHub Release so
-# pulseengine.eu's fetch-reports surfaces it on the Reports page. Decoupled
-# from release.yml on purpose: triggers on release publish, is additive, and
-# cannot affect the existing release flow if it fails.
+# pulseengine.eu's fetch-reports surfaces it on the Reports page. Primary
+# trigger is the workflow_call from release.yml after create-release (wohl#64:
+# `on: release` never fires for the bot-published releases release.yml
+# creates). The release assets are already uploaded by that point, so a
+# failure here reddens the release run but cannot take the release down.
+# `on: release` is kept for user-published releases, and workflow_dispatch
+# backfills a tag by hand.
 #
 # NOTE: rivet-version pins the rivet binary used to validate/export wohl's
 # artifacts. Bump it if a future schema needs a newer rivet.
