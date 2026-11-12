@@ -37,11 +37,17 @@ env:
   # Pinned rules_wasm_component for the Bazel wasm build (build-wasm job),
   # in lock-step with ci.yml's RULES_WASM_COMPONENT_REF — bump together.
   RULES_WASM_COMPONENT_REF: fbe20571eee9bd05687c95e7a43f6c236d9b2428
-  # Evidence-bundle producer pins (SWREQ-REL-001). RIVET_REF and SIGIL_REF in
-  # lock-step with ci.yml, WITNESS_REF with witness-gate.yml — bump together.
+  # Evidence-bundle producer pins (SWREQ-REL-001). RIVET_REF in lock-step
+  # with ci.yml, WITNESS_REF with witness-gate.yml — bump together.
   RIVET_REF: 78f001e23d595ba816f7a7be59282194dedfdc12
-  SIGIL_REF: 54518f702a36f5f29a79f0a02859c502dacaa98a
   WITNESS_REF: v0.38.0
+  # sigil ships its binary as `wsc`. Installed from the sigil release
+  # (cosign-verified against the tag identity) instead of built from git, so
+  # the bundle is signed by the same binary an assessor installs
+  # (`cargo install wsc-cli`, or the release asset). One pin, bumped via PR,
+  # in lock-step with ci.yml's WSC_VERSION. sigil main carries post-v0.12.0
+  # security fixes — bump when v0.12.1 is cut.
+  WSC_VERSION: v0.12.0
 
 jobs:
   # ── Cross-platform binary builds ──────────────────────────────────────
@@ -220,12 +226,6 @@ jobs:
           fetch-depth: 0
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: pulseengine/sigil
-          path: sigil
-          ref: ${{ env.SIGIL_REF }}
-          fetch-depth: 0
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
           repository: pulseengine/witness
           path: witness
           ref: ${{ env.WITNESS_REF }}
@@ -237,17 +237,31 @@ jobs:
         with:
           workspaces: |
             rivet
-            sigil
             witness
           key: evidence-bundle
-      - name: Build producer tools (rivet-cli, sigil, witness)
-        # cargo build (not cargo install) for all three: install builds in a
+      - name: Build producer tools (rivet-cli, witness)
+        # cargo build (not cargo install) for both: install builds in a
         # private temp target dir that Swatinem/rust-cache cannot cache.
         run: |
           set -euo pipefail
           cargo build --release --locked --manifest-path rivet/rivet-cli/Cargo.toml --bin rivet
-          cargo build --release --manifest-path sigil/Cargo.toml --bin sigil
           cargo build --release -p witness-mcdc --bin witness --manifest-path witness/Cargo.toml
+      - name: Install wsc from the sigil release (cosign-verified)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wsc" && cd "$RUNNER_TEMP/wsc"
+          gh release download "$WSC_VERSION" --repo pulseengine/sigil \
+            -p wsc-linux-x86_64 -p SHA256SUMS.txt -p SHA256SUMS.txt.cosign.bundle
+          cosign verify-blob \
+            --bundle SHA256SUMS.txt.cosign.bundle \
+            --certificate-identity "https://github.com/pulseengine/sigil/.github/workflows/release.yml@refs/tags/$WSC_VERSION" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            SHA256SUMS.txt
+          grep 'wsc-linux-x86_64$' SHA256SUMS.txt | sha256sum -c -
+          chmod +x wsc-linux-x86_64
+          ./wsc-linux-x86_64 --version
       - name: Download composed Matter wasm
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -271,7 +285,7 @@ jobs:
             wohl/crates/wohl-matter-core/witness/run-witness.sh | tee "$EV/mcdc-report.txt"
 
           # attestation: ephemeral keypair, sign the composed component
-          SIGIL="$GITHUB_WORKSPACE/sigil/target/release/sigil"
+          SIGIL="$RUNNER_TEMP/wsc/wsc-linux-x86_64"
           "$SIGIL" keygen -k "$RUNNER_TEMP/sk.key" -K "$EV/signing.pub"
           "$SIGIL" sign -i wasm/wohl-matter-composed.wasm \
                         -o "$EV/wohl-matter-composed.signed.wasm" \
@@ -285,7 +299,7 @@ jobs:
           {
             echo "wohl: $VERSION ($WOHL_SHA)"
             echo "rivet: $RIVET_REF ($("$RIVET" --version))"
-            echo "sigil: $SIGIL_REF"
+            echo "sigil (wsc): $WSC_VERSION"
             echo "witness: $WITNESS_REF"
             echo "relay sibling: $RELAY_REF"
             echo "workflow: $GITHUB_WORKFLOW_REF"

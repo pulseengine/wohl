@@ -127,7 +127,7 @@ if [ -z "$VERIFIER" ]; then
         if command -v "$c" >/dev/null 2>&1; then VERIFIER="$c"; break; fi
     done
 fi
-[ -n "$VERIFIER" ] || fail "no signature verifier found: put sigil or wsc on PATH (github.com/pulseengine/sigil), or set \$SIGIL"
+[ -n "$VERIFIER" ] || fail "no signature verifier found: install wsc (cargo install wsc-cli, or a github.com/pulseengine/sigil release asset) or set \$SIGIL"
 # Gate on the success phrase, not the exit code: wsc 0.12.0 exits 0 even on
 # "No valid signatures" (measured 2026-11-12), so the exit code fails open.
 # The command must still succeed — a crashed verifier is not a verdict.
