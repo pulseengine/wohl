@@ -387,3 +387,139 @@ mod proptests {
         }
     }
 }
+
+/// Unit tests pinning behaviors a cargo-mutants pass reported untested.
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+
+    fn cfg(circuit_id: u32, idle_watts: u32) -> CircuitConfig {
+        CircuitConfig {
+            circuit_id,
+            max_watts: 30000,
+            idle_watts,
+            spike_threshold: 10000,
+            enabled: true,
+        }
+    }
+
+    // process_reading: loop bound < circuit_count (vs <=) with a full table
+    #[test]
+    fn full_table_unknown_circuit_no_panic() {
+        let mut m = PowerMonitor::new();
+        for id in 1..=(MAX_CIRCUITS as u32) {
+            assert!(m.register_circuit(cfg(id, 100)));
+        }
+        let r = m.process_reading(999, 50000, 100);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    // process_reading: id match && enabled (vs ||)
+    #[test]
+    fn unknown_circuit_does_not_touch_other_circuit_state() {
+        let mut m = PowerMonitor::new();
+        assert!(m.register_circuit(cfg(1, 100)));
+        let r1 = m.process_reading(99, 1000, 100);
+        assert_eq!(r1.alert_count, 0);
+        let r2 = m.process_reading(99, 20000, 200);
+        assert_eq!(r2.alert_count, 0);
+    }
+
+    #[test]
+    fn reading_for_other_circuit_does_not_update_first_circuit_baseline() {
+        let mut m = PowerMonitor::new();
+        for id in 1..=2u32 {
+            m.register_circuit(cfg(id, 100));
+        }
+        m.process_reading(1, 1000, 100);
+        // reading for circuit 2 must not alter circuit 1's baseline
+        m.process_reading(2, 20000, 150);
+        // circuit 1 still has baseline 1000, so 2000 is no spike
+        let r = m.process_reading(1, 2000, 200);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    // process_reading: spike only with a baseline (> vs >=)
+    #[test]
+    fn first_reading_never_spikes() {
+        let mut m = PowerMonitor::new();
+        m.register_circuit(cfg(1, 100));
+        let r = m.process_reading(1, 15000, 100);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    // process_reading: strictly over spike_threshold (> vs >=)
+    #[test]
+    fn spike_exactly_at_threshold_no_alert() {
+        let mut m = PowerMonitor::new();
+        m.register_circuit(cfg(1, 100));
+        m.process_reading(1, 1000, 100);
+        let r = m.process_reading(1, 11000, 200);
+        assert_eq!(r.alert_count, 0);
+        let r2 = m.process_reading(1, 21001, 300);
+        assert_eq!(r2.alert_count, 1);
+        assert_eq!(r2.alerts[0].alert_type, PowerAlertType::Spike);
+    }
+
+    // process_reading: has-baseline && over-threshold (vs ||)
+    #[test]
+    fn no_spike_alert_for_small_change() {
+        let mut m = PowerMonitor::new();
+        m.register_circuit(cfg(1, 100));
+        let r1 = m.process_reading(1, 1000, 100);
+        assert_eq!(r1.alert_count, 0);
+        let r2 = m.process_reading(1, 1500, 200);
+        assert_eq!(r2.alert_count, 0);
+    }
+
+    // process_reading: alert_count += 1 (vs -=) on a non-first circuit
+    #[test]
+    fn spike_detected_on_second_circuit() {
+        let mut m = PowerMonitor::new();
+        assert!(m.register_circuit(cfg(1, 100)));
+        assert!(m.register_circuit(cfg(2, 100)));
+        let r0 = m.process_reading(2, 1000, 100);
+        assert_eq!(r0.alert_count, 0);
+        let r = m.process_reading(2, 15000, 200);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].alert_type, PowerAlertType::Spike);
+        assert_eq!(r.alerts[0].circuit_id, 2);
+        assert_eq!(r.alerts[0].value, 15000);
+    }
+
+    // check_idle: loop bound < circuit_count (vs <=)
+    #[test]
+    fn check_idle_unregistered_zero_id_is_false() {
+        let m = PowerMonitor::new();
+        assert!(!m.check_idle(0, 0));
+    }
+
+    #[test]
+    fn check_idle_unknown_circuit_with_registered_is_false() {
+        let mut m = PowerMonitor::new();
+        m.register_circuit(cfg(1, 100));
+        assert!(!m.check_idle(0, 0));
+        assert!(m.check_idle(1, 50));
+    }
+
+    // check_idle: index += 1 (vs -=), non-first circuits reachable
+    #[test]
+    fn check_idle_finds_non_first_circuit() {
+        let mut m = PowerMonitor::new();
+        assert!(m.register_circuit(cfg(1, 100)));
+        assert!(m.register_circuit(cfg(2, 500)));
+        assert!(m.register_circuit(cfg(3, 10)));
+        assert!(m.check_idle(2, 400));
+        assert!(!m.check_idle(2, 600));
+        assert!(m.check_idle(3, 10));
+        assert!(!m.check_idle(3, 11));
+    }
+
+    #[test]
+    fn check_idle_unknown_circuit_is_false() {
+        let mut m = PowerMonitor::new();
+        assert!(m.register_circuit(cfg(1, 100)));
+        assert!(m.register_circuit(cfg(2, 100)));
+        assert!(!m.check_idle(99, 0));
+    }
+}

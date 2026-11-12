@@ -253,3 +253,61 @@ mod kani_proofs {
         let _ = det.any_wet();
     }
 }
+
+/// Unit tests pinning behaviors a cargo-mutants pass reported untested.
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+
+    // process_event: loop bound < zone_count (vs <=) with a full table
+    #[test]
+    fn unknown_zone_with_full_detector() {
+        let mut d = LeakDetector::new();
+        for id in 1..=(MAX_ZONES as u32) {
+            assert!(d.register_zone(id));
+        }
+        assert_eq!(d.process_event(999, true, 5), LeakAction::Unknown);
+        assert_eq!(d.process_event(1000, false, 6), LeakAction::Unknown);
+    }
+
+    // process_event: id match && registered (vs ||)
+    #[test]
+    fn unknown_zone_with_registered_zone_is_unknown() {
+        let mut d = LeakDetector::new();
+        assert!(d.register_zone(1));
+        assert_eq!(d.process_event(99, true, 100), LeakAction::Unknown);
+        assert!(!d.any_wet());
+    }
+
+    #[test]
+    fn event_affects_only_matching_zone() {
+        let mut d = LeakDetector::new();
+        d.register_zone(1);
+        d.register_zone(2);
+        assert_eq!(d.process_event(2, true, 100), LeakAction::NewLeak);
+        assert_eq!(d.process_event(1, false, 150), LeakAction::AlreadyDry);
+        assert_eq!(d.process_event(2, true, 200), LeakAction::AlreadyWet);
+    }
+
+    // any_wet: loop bound < zone_count (vs <=) with a full table
+    #[test]
+    fn any_wet_full_detector_all_dry() {
+        let mut d = LeakDetector::new();
+        for z in 0..MAX_ZONES as u32 {
+            assert!(d.register_zone(z));
+        }
+        assert!(!d.any_wet());
+    }
+
+    #[test]
+    fn any_wet_full_detector_last_wet() {
+        let mut d = LeakDetector::new();
+        for z in 0..MAX_ZONES as u32 {
+            assert!(d.register_zone(z));
+        }
+        assert_eq!(d.process_event(31, true, 5), LeakAction::NewLeak);
+        assert!(d.any_wet());
+        assert_eq!(d.process_event(31, false, 6), LeakAction::Cleared);
+        assert!(!d.any_wet());
+    }
+}

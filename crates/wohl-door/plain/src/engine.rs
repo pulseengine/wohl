@@ -388,3 +388,192 @@ mod proptests {
         }
     }
 }
+
+/// Unit tests pinning behaviors a cargo-mutants pass reported untested.
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+
+    fn cfg_same_day(contact_id: u32) -> ContactConfig {
+        ContactConfig {
+            contact_id,
+            zone_id: 10,
+            max_open_sec: 300,
+            night_start_hour: 1,
+            night_end_hour: 5,
+            enabled: true,
+        }
+    }
+
+    fn cfg_wrapped(contact_id: u32) -> ContactConfig {
+        ContactConfig {
+            contact_id,
+            zone_id: 10,
+            max_open_sec: 300,
+            night_start_hour: 22,
+            night_end_hour: 6,
+            enabled: true,
+        }
+    }
+
+    // is_night_hour, same-day window: >= start, && , < end (vs <, ||, ==, >)
+    #[test]
+    fn non_wrapping_night_window() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_same_day(1));
+        let r = w.process_event(1, true, 3 * 3600);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].alert_type, DoorAlertType::OpenedAtNight);
+        let r = w.process_event(1, true, 12 * 3600);
+        assert_eq!(r.alert_count, 0);
+        let r = w.process_event(1, true, 5 * 3600);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    // is_night_hour: end hour exclusive (< vs <=), asserted directly too
+    #[test]
+    fn night_window_end_hour_is_exclusive() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_same_day(1));
+        let r = w.process_event(1, true, 3 * 3600);
+        assert_eq!(r.alert_count, 1);
+        let r = w.process_event(1, true, 5 * 3600);
+        assert_eq!(r.alert_count, 0);
+        assert!(!DoorWatch::is_night_hour(5, 1, 5));
+        assert!(DoorWatch::is_night_hour(1, 1, 5));
+    }
+
+    // is_night_hour, wrapped window: end hour exclusive (< vs <=)
+    #[test]
+    fn night_end_hour_is_exclusive_in_wrapped_window() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_wrapped(1));
+        let r = w.process_event(1, true, 6 * 3600);
+        assert_eq!(r.alert_count, 0);
+        let r2 = w.process_event(1, true, 5 * 3600 + 3599);
+        assert_eq!(r2.alert_count, 1);
+    }
+
+    // is_night_hour, wrapped window: hour < end (vs ==)
+    #[test]
+    fn early_morning_is_night_in_wrapping_window() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_wrapped(1));
+        let r = w.process_event(1, true, 3 * 3600);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].alert_type, DoorAlertType::OpenedAtNight);
+    }
+
+    // process_event: loop bound < contact_count (vs <=) with a full table
+    #[test]
+    fn unknown_contact_with_full_table_does_not_overrun() {
+        let mut w = DoorWatch::new();
+        for i in 0..MAX_CONTACTS as u32 {
+            assert!(w.register_contact(cfg_wrapped(i + 1)));
+        }
+        let r = w.process_event(9999, true, 43200);
+        assert_eq!(r.alert_count, 0);
+        let r = w.process_event(9999, false, 43200);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    // check_timeouts: loop bound < contact_count (vs <=) with a full table
+    #[test]
+    fn check_timeouts_with_full_contact_table() {
+        let mut w = DoorWatch::new();
+        for i in 0..MAX_CONTACTS as u32 {
+            let mut c = cfg_wrapped(i + 1);
+            c.zone_id = 7;
+            assert!(w.register_contact(c));
+        }
+        w.process_event(1, true, 43200);
+        let r = w.check_timeouts(43200 + 400);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].contact_id, 1);
+        assert_eq!(r.alerts[0].open_duration_sec, 400);
+    }
+
+    // check_timeouts: is_open && over-limit (vs ||)
+    #[test]
+    fn closed_contact_never_times_out() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_wrapped(1));
+        let r = w.check_timeouts(100_000);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    #[test]
+    fn closed_after_open_never_times_out() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_wrapped(1));
+        w.process_event(1, true, 43200);
+        w.process_event(1, false, 43210);
+        let r = w.check_timeouts(43200 + 5000);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    // check_timeouts: duration is now - opened_at (vs +)
+    #[test]
+    fn no_alert_before_timeout() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_wrapped(1));
+        w.process_event(1, true, 43200);
+        let r = w.check_timeouts(43300);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    #[test]
+    fn alert_reports_duration() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_wrapped(1));
+        w.process_event(1, true, 43200);
+        let r = w.check_timeouts(43600);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].open_duration_sec, 400);
+    }
+
+    // check_timeouts: strictly over max_open_sec (> vs >=)
+    #[test]
+    fn no_alert_when_open_exactly_max_duration() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_wrapped(1));
+        w.process_event(1, true, 43200);
+        let r = w.check_timeouts(43200 + 300);
+        assert_eq!(r.alert_count, 0);
+        let r = w.check_timeouts(43200 + 301);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].open_duration_sec, 301);
+    }
+
+    // check_timeouts: open && over-limit (vs ||) for a short open
+    #[test]
+    fn short_open_no_timeout_alert() {
+        let mut w = DoorWatch::new();
+        w.register_contact(cfg_wrapped(1));
+        w.process_event(1, true, 43200);
+        let r = w.check_timeouts(43200 + 100);
+        assert_eq!(r.alert_count, 0);
+        let r = w.check_timeouts(43200 + 300);
+        assert_eq!(r.alert_count, 0);
+        let r = w.check_timeouts(43200 + 301);
+        assert_eq!(r.alert_count, 1);
+    }
+
+    // check_timeouts: alert array bound < MAX_ALERTS_PER_CHECK (vs <=)
+    #[test]
+    fn alerts_capped_at_max_per_check() {
+        let mut w = DoorWatch::new();
+        let mut id: u32 = 1;
+        while id <= 5 {
+            let mut c = cfg_wrapped(id);
+            c.zone_id = id * 10;
+            assert!(w.register_contact(c));
+            w.process_event(id, true, 43200);
+            id += 1;
+        }
+        let r = w.check_timeouts(43200 + 400);
+        assert_eq!(r.alert_count as usize, MAX_ALERTS_PER_CHECK);
+        assert_eq!(r.alerts[0].contact_id, 1);
+        assert_eq!(r.alerts[3].contact_id, 4);
+    }
+}

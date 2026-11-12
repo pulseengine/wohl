@@ -1045,3 +1045,31 @@ mod kani_proofs {
         assert!(core.active_slot() == init_slot);
     }
 }
+
+/// Unit tests pinning behaviors a cargo-mutants pass reported untested.
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+
+    // pending_manifest: must return the stored manifest (vs always None)
+    #[test]
+    fn pending_manifest_visible_during_update() {
+        let m = OtaManifest {
+            version: 7,
+            size_bytes: 64,
+            sha256: [0x5Au8; 32],
+            signature: [0u8; 64],
+        };
+        let mut core = OtaCore::new(Slot::A);
+        assert_eq!(core.pending_manifest(), None);
+        core.start_download(m).unwrap();
+        assert_eq!(core.pending_manifest(), Some(m));
+        core.write_chunk(64).unwrap();
+        core.finish_download().unwrap();
+        assert_eq!(core.pending_manifest(), Some(m));
+        core.verify(&AlwaysAccept, &[0x5Au8; 32]).unwrap();
+        assert_eq!(core.pending_manifest(), Some(m));
+        core.swap().unwrap();
+        assert_eq!(core.pending_manifest(), None);
+    }
+}

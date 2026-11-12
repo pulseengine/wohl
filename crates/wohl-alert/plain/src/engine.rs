@@ -611,3 +611,111 @@ mod kani_proofs {
         d.clear_expired(clear_time);
     }
 }
+
+/// Unit tests pinning behaviors a cargo-mutants pass reported untested.
+/// All target `clear_expired`: loop bound, expiry comparison, compaction.
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+
+    // loop bound < recent_count (vs <=)
+    #[test]
+    fn clear_expired_does_not_read_past_count() {
+        let mut d = AlertDispatcher::new();
+        d.clear_expired(0);
+        assert_eq!(d.recent_count, 0);
+
+        let mut d2 = AlertDispatcher::new();
+        d2.subscribe(1, 1, 1);
+        d2.process_alert(1, 1, 1000);
+        assert_eq!(d2.recent_count, 1);
+        d2.clear_expired(100);
+        assert_eq!(d2.recent_count, 1);
+    }
+
+    // expiry comparison < (vs ==)
+    #[test]
+    fn clear_expired_keeps_unexpired_entries() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.process_alert(1, 1, 1000);
+        assert_eq!(d.recent_count, 1);
+        d.clear_expired(1100);
+        assert_eq!(d.recent_count, 1);
+        let r = d.process_alert(1, 1, 1150);
+        assert_eq!(r.action, DispatchAction::Deduplicated);
+    }
+
+    #[test]
+    fn clear_expired_mixed_entries() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.subscribe(2, 1, 1);
+        d.process_alert(1, 1, 1000);
+        d.process_alert(2, 1, 1200);
+        d.clear_expired(1400);
+        assert_eq!(d.recent_count, 1);
+    }
+
+    #[test]
+    fn clear_expired_on_empty_stays_empty() {
+        let mut d = AlertDispatcher::new();
+        d.clear_expired(0);
+        assert_eq!(d.recent_count, 0);
+    }
+
+    #[test]
+    fn clear_expired_nothing_expired_keeps_all() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.process_alert(1, 1, 1000);
+        d.clear_expired(1200);
+        assert_eq!(d.recent_count, 1);
+    }
+
+    // compaction: surviving entry moved to the front (!= vs ==)
+    #[test]
+    fn clear_expired_compacts_surviving_entries() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.subscribe(2, 1, 1);
+        assert_eq!(d.process_alert(1, 1, 1000).action, DispatchAction::Send);
+        assert_eq!(d.process_alert(2, 1, 1200).action, DispatchAction::Send);
+        assert_eq!(d.recent_count, 2);
+        d.clear_expired(1400);
+        assert_eq!(d.recent_count, 1);
+        let r = d.process_alert(2, 1, 1400);
+        assert_eq!(r.action, DispatchAction::Deduplicated);
+    }
+
+    // kept += 1 (vs *=): a single surviving entry must still be counted
+    #[test]
+    fn clear_expired_keeps_single_live_entry() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.process_alert(1, 1, 1000);
+        assert_eq!(d.recent_count, 1);
+        d.clear_expired(1200);
+        assert_eq!(d.recent_count, 1);
+        let r = d.process_alert(1, 1, 1200);
+        assert_eq!(r.action, DispatchAction::Deduplicated);
+    }
+
+    // kept += 1 (vs -=): survivor retained, expired entry dispatchable again
+    #[test]
+    fn clear_expired_retains_live_entries() {
+        let mut d = AlertDispatcher::new();
+        d.subscribe(1, 1, 1);
+        d.subscribe(2, 1, 1);
+        assert_eq!(d.process_alert(1, 1, 1000).action, DispatchAction::Send);
+        assert_eq!(d.process_alert(2, 1, 1200).action, DispatchAction::Send);
+        assert_eq!(d.recent_count, 2);
+        d.clear_expired(1400);
+        assert_eq!(d.recent_count, 1);
+        assert_eq!(
+            d.process_alert(2, 1, 1400).action,
+            DispatchAction::Deduplicated
+        );
+        assert_eq!(d.process_alert(1, 1, 1400).action, DispatchAction::Send);
+    }
+}
