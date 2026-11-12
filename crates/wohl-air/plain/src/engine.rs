@@ -112,12 +112,14 @@ impl AirMonitor {
     }
 
     /// Register a zone. Creates 6 relay-lc watchpoints (warn+critical for each metric).
+    /// Rejects zone_ids outside [0, MAX_ZONES): they have no watchpoint-id encoding.
     pub fn register_zone(&mut self, config: AirConfig) -> bool {
-        if self.zone_count as usize >= MAX_ZONES {
+        if self.zone_count as usize >= MAX_ZONES || config.zone_id as usize >= MAX_ZONES {
             return false;
         }
 
-        let base = config.zone_id.saturating_mul(6);
+        // zone_id < MAX_ZONES (16), so base + 5 <= 95: no overflow possible.
+        let base = config.zone_id * 6;
         let thresholds = [
             config.co2_warn,
             config.co2_critical,
@@ -148,7 +150,11 @@ impl AirMonitor {
             alerts: [AirAlert::empty(); MAX_ALERTS_PER_READING],
             alert_count: 0,
         };
-        let base = reading.zone_id.saturating_mul(6);
+        // A zone_id outside [0, MAX_ZONES) can never have been registered.
+        if reading.zone_id as usize >= MAX_ZONES {
+            return res;
+        }
+        let base = reading.zone_id * 6;
         let values = [
             reading.co2_ppm,
             reading.co2_ppm,
@@ -282,6 +288,26 @@ mod tests {
         assert!(found);
     }
 
+    /// Regression for the 2026-11-08 nightly fuzz crash: zone_id near
+    /// u32::MAX saturated the watchpoint base, then `base + i` overflowed.
+    /// Registration and readings with unencodable zone_ids must be refused
+    /// without panicking.
+    #[test]
+    fn test_unencodable_zone_id_rejected() {
+        let mut m = AirMonitor::new();
+        assert!(!m.register_zone(make_config(u32::MAX)));
+        assert!(!m.register_zone(make_config(MAX_ZONES as u32)));
+        assert!(m.register_zone(make_config(MAX_ZONES as u32 - 1)));
+        let r = m.process_reading(AirReading {
+            zone_id: u32::MAX,
+            co2_ppm: u32::MAX,
+            pm25: u32::MAX,
+            voc_index: u32::MAX,
+            time: 100,
+        });
+        assert_eq!(r.alert_count, 0);
+    }
+
     #[test]
     fn test_normal_no_alert() {
         let mut m = AirMonitor::new();
@@ -363,14 +389,16 @@ mod kani_proofs {
         assert_eq!(r.alert_count, 0);
     }
 
-    /// No panics for any combination of symbolic inputs
+    /// No panics for any combination of symbolic inputs. zone_id is fully
+    /// unconstrained (the 2026-11-08 nightly fuzz crash was an add-overflow
+    /// at zone_id near u32::MAX, hidden from an earlier version of this
+    /// harness by a `zone_id < 100` assumption), and the reading's zone_id
+    /// is independent of the registered one.
     #[kani::proof]
     fn verify_no_panic() {
         let mut m = AirMonitor::new();
-        let zone_id: u32 = kani::any();
-        kani::assume(zone_id < 100);
         let config = AirConfig {
-            zone_id,
+            zone_id: kani::any(),
             co2_warn: kani::any(),
             co2_critical: kani::any(),
             pm25_warn: kani::any(),
@@ -381,13 +409,24 @@ mod kani_proofs {
         };
         m.register_zone(config);
         let reading = AirReading {
-            zone_id,
+            zone_id: kani::any(),
             co2_ppm: kani::any(),
             pm25: kani::any(),
             voc_index: kani::any(),
             time: kani::any(),
         };
         let _ = m.process_reading(reading);
+    }
+
+    /// Registration refuses zone_ids with no watchpoint-id encoding.
+    #[kani::proof]
+    fn verify_register_rejects_unencodable_zone() {
+        let mut m = AirMonitor::new();
+        let zone_id: u32 = kani::any();
+        kani::assume(zone_id as usize >= MAX_ZONES);
+        let mut config = AirConfig::empty();
+        config.zone_id = zone_id;
+        assert!(!m.register_zone(config));
     }
 }
 
