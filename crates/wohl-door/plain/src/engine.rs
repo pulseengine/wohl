@@ -329,7 +329,6 @@ mod kani_proofs {
     fn verify_no_panic() {
         let mut w = DoorWatch::new();
         let contact_id: u32 = kani::any();
-        kani::assume(contact_id < 100);
         let config = ContactConfig {
             contact_id,
             zone_id: kani::any(),

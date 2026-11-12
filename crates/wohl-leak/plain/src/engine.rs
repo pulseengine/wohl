@@ -223,7 +223,6 @@ mod kani_proofs {
     fn verify_wet_always_detects() {
         let mut det = LeakDetector::new();
         let zone_id: u32 = kani::any();
-        kani::assume(zone_id < 100); // bound search space
         det.register_zone(zone_id);
         let time: u64 = kani::any();
         let action = det.process_event(zone_id, true, time);
@@ -247,7 +246,6 @@ mod kani_proofs {
         let zone_id: u32 = kani::any();
         let wet: bool = kani::any();
         let time: u64 = kani::any();
-        kani::assume(zone_id < 100);
         det.register_zone(zone_id);
         let _ = det.process_event(zone_id, wet, time);
         let _ = det.any_wet();
