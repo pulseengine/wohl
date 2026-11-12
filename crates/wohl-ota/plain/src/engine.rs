@@ -824,13 +824,12 @@ mod kani_proofs {
         let initial: bool = kani::any();
         let init_slot = if initial { Slot::A } else { Slot::B };
         let mut core = OtaCore::new(init_slot);
-        let m = any_small_manifest(64);
+        let m = any_small_manifest(MAX_IMAGE_BYTES);
         core.start_download(m).unwrap();
         let t = core.target_slot().unwrap();
         assert!(t != core.active_slot());
         // Also during Verifying and Ready.
         let chunk: u32 = kani::any();
-        kani::assume(chunk <= 64);
         // We cannot fully fill in pure Kani without unbounded loops, but
         // we can still inspect the Downloading invariant for one chunk.
         let _ = core.write_chunk(chunk);

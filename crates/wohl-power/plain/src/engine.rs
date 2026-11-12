@@ -286,12 +286,10 @@ mod kani_proofs {
         // First reading to establish baseline for spike detection
         let w1: u32 = kani::any();
         let t1: u64 = kani::any();
-        kani::assume(t1 < u64::MAX / 2);
         m.process_reading(1, w1, t1);
         // Second reading may trigger both overconsumption and spike
         let w2: u32 = kani::any();
         let t2: u64 = kani::any();
-        kani::assume(t2 > t1);
         let r = m.process_reading(1, w2, t2);
         assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
     }
@@ -301,7 +299,6 @@ mod kani_proofs {
     fn verify_overconsumption_via_relay_lc() {
         let mut m = PowerMonitor::new();
         let max_watts: u32 = kani::any();
-        kani::assume(max_watts < u32::MAX - 1);
         let config = CircuitConfig {
             circuit_id: 1,
             max_watts,
@@ -330,7 +327,6 @@ mod kani_proofs {
     fn verify_no_panic() {
         let mut m = PowerMonitor::new();
         let circuit_id: u32 = kani::any();
-        kani::assume(circuit_id < 100);
         let config = CircuitConfig {
             circuit_id,
             max_watts: kani::any(),
