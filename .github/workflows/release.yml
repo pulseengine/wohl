@@ -74,8 +74,11 @@ jobs:
           # macOS targets for dev convenience — wohl-hub on a Mac is
           # not the production deployment shape, but reviewers and
           # developers want a runnable binary.
+          # Cross-compiled from the ARM runner: GitHub retired the macos-14
+          # image (jobs cancel with "configuration 'macos-14-arm64-us-default'
+          # is not supported", observed on the v0.7.0 release runs 2026-11-13).
           - target: x86_64-apple-darwin
-            os: macos-14
+            os: macos-latest
             archive: tar.gz
           - target: aarch64-apple-darwin
             os: macos-latest
