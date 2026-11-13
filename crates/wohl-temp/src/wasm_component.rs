@@ -153,8 +153,10 @@ mod engine {
         }
     }
 
-    fn freeze_wp_id(zone_id: u32) -> u32 { zone_id * 2 }
-    fn overheat_wp_id(zone_id: u32) -> u32 { zone_id * 2 + 1 }
+    // Mirrors plain/src/engine.rs: saturating so adversarial u32 zone_ids
+    // cannot panic on overflow; real zone_ids are bounded by MAX_ZONES.
+    fn freeze_wp_id(zone_id: u32) -> u32 { zone_id.saturating_mul(2) }
+    fn overheat_wp_id(zone_id: u32) -> u32 { zone_id.saturating_mul(2).saturating_add(1) }
 
     impl TemperatureMonitor {
         pub fn new() -> Self {
