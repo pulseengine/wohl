@@ -406,8 +406,19 @@ jobs:
       - name: Install wsc from the sigil release (cosign-verified)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ubuntu-latest images are dropping preinstalled cosign mid-rollout
+          # (observed 2026-11-13: present on one runner, absent on the next).
+          COSIGN_VERSION: v3.1.4
+          COSIGN_SHA256: 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
         run: |
           set -euo pipefail
+          if ! command -v cosign >/dev/null 2>&1; then
+            curl -fsSLo /tmp/cosign \
+              "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-linux-amd64"
+            echo "$COSIGN_SHA256  /tmp/cosign" | sha256sum -c -
+            chmod +x /tmp/cosign && sudo mv /tmp/cosign /usr/local/bin/cosign
+          fi
+          cosign version
           mkdir -p "$RUNNER_TEMP/wsc" && cd "$RUNNER_TEMP/wsc"
           gh release download "$WSC_VERSION" --repo pulseengine/sigil \
             -p wsc-linux-x86_64 -p SHA256SUMS.txt -p SHA256SUMS.txt.cosign.bundle
