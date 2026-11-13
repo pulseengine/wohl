@@ -1,0 +1,23 @@
+artifacts:
+  - id: SWV-REL-001
+    type: sw-verification
+    title: "Evidence-bundle machinery: assemble + verify with negative controls"
+    status: implemented
+    description: >
+      Verifies SWREQ-REL-001's bundle machinery on every PR, without
+      building the heavy producer tools: tools/test-evidence-bundle.sh
+      assembles a bundle from committed fixtures and asserts verify.sh
+      passes on the intact bundle and fails on each tampered variant.
+      The negative controls exist so "verify passed" cannot be produced
+      by a verifier that checks nothing. The signature path runs with a
+      real verifier in the release workflow; at PR time the control is
+      inverted — verify.sh must refuse when no verifier is present.
+      Run via: tools/test-evidence-bundle.sh
+    tags: [testing, release, evidence, negative-control]
+    fields:
+      method: automated-test
+      steps:
+        - run: tools/test-evidence-bundle.sh
+    links:
+      - type: verifies
+        target: SWREQ-REL-001

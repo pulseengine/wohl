@@ -1,0 +1,37 @@
+artifacts:
+  - id: SWREQ-REL-001
+    type: sw-req
+    title: "One-command evidence bundle on every release"
+    status: implemented
+    description: >
+      The release pipeline shall attach one archive,
+      wohl-vX.Y.Z-evidence-bundle.tar.gz, to every GitHub Release,
+      containing: the rivet trace export and coverage report
+      (trace/trace-export.yaml, trace/coverage.json), the witness MC/DC
+      report for the Matter seam (witness/mcdc-report.txt), the signed
+      composed component and its public key
+      (attestation/wohl-matter-composed.signed.wasm,
+      attestation/signing.pub), a tooling record naming the producing
+      refs (TOOLING.txt), and a verifier (verify.sh) with a checksum
+      manifest (MANIFEST.sha256). Running ./verify.sh inside the
+      unpacked bundle is the one command: it fails on any checksum
+      mismatch, on a witness gap count other than zero, on a missing or
+      empty trace file, on a bad attestation signature, and when no
+      signature verifier is available (a verification that silently
+      skips the signature is not a verification). The bundle flows
+      through the release's existing SHA256SUMS + cosign + SLSA chain,
+      which is what binds it to this repository's release workflow
+      identity; verify.sh states this anchoring in its output.
+    tags: [release, evidence, bundle, o2]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Fixture-driven negative controls on every PR
+        (assembled bundle verifies green; a tampered file, a non-zero
+        witness gap count, and an absent signature verifier each turn
+        verify.sh red), plus the release workflow assembling the real
+        bundle and running its verify.sh as a gate before upload.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-009
