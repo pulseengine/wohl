@@ -194,6 +194,14 @@ def main() -> int:
         ids += rivet_list(t, args.filter)
     print(f"# wohl verification gate — {len(ids)} artifact(s): {', '.join(ids)}\n")
 
+    # Fail closed: "0 failures" and "nothing listed" must not look alike.
+    # An empty listing means the store moved, the filter matches nothing, or
+    # rivet changed its output shape — all of them gate defects, not passes.
+    if not ids:
+        print("GATE FAIL: rivet listed no verification artifacts — "
+              "an empty artifact list is red, not vacuously green")
+        return 1
+
     report = []
     overall_pass = True
     for aid in ids:
@@ -204,6 +212,16 @@ def main() -> int:
 
     if args.markdown:
         print("\n" + emit_markdown(report))
+
+    # Fail closed: if every artifact was bench-only or has no steps yet, the
+    # gate executed nothing and must say so rather than report green.
+    # (Per-artifact no-steps stays a loudly printed waiver above — existing
+    # debt is visible, but it may not add up to a gate that checks nothing.)
+    executed = sum(1 for r in report for s in r["steps"] if not s.get("skipped"))
+    if executed == 0:
+        print("GATE FAIL: no verification step was executed "
+              "(all artifacts bench-only or without steps) — nothing was checked")
+        return 1
     return 0 if overall_pass else 1
 
 
