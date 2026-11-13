@@ -465,3 +465,200 @@ mod kani_proofs {
         let _ = m.process_reading(zone_id, value, time);
     }
 }
+
+/// Unit tests pinning behaviors a cargo-mutants pass reported untested.
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+
+    fn cfg(zone_id: u32, freeze: i32, overheat: i32, rate: i32) -> ZoneConfig {
+        ZoneConfig {
+            zone_id,
+            freeze_threshold: freeze,
+            overheat_threshold: overheat,
+            rate_threshold: rate,
+            enabled: true,
+        }
+    }
+
+    // freeze watchpoint id derived from the zone (vs constant 0)
+    #[test]
+    fn freeze_watchpoints_are_per_zone() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(0, 0, 4000, 100000)));
+        assert!(m.register_zone(cfg(1, 1000, 4000, 100000)));
+        // zone 0 freeze threshold is 0, so 500 must not alert
+        let r0 = m.process_reading(0, 500, 100);
+        assert_eq!(r0.alert_count, 0);
+        // zone 1 freeze threshold is 1000, so 500 must alert Freeze
+        let r1 = m.process_reading(1, 500, 100);
+        assert_eq!(r1.alert_count, 1);
+        assert_eq!(r1.alerts[0].alert_type, TempAlertType::Freeze);
+        assert_eq!(r1.alerts[0].threshold, 1000);
+    }
+
+    // freeze watchpoint id (vs constant 1): zone 0 fires exactly one alert
+    #[test]
+    fn zone_zero_freeze_only_one_alert() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(0, 0, 4000, 500)));
+        let r = m.process_reading(0, -100, 100);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].alert_type, TempAlertType::Freeze);
+    }
+
+    #[test]
+    fn zone_zero_overheat_only_one_alert() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(0, 0, 4000, 5000)));
+        let r = m.process_reading(0, 4500, 100);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].alert_type, TempAlertType::Overheat);
+    }
+
+    // overheat watchpoint id derived from the zone (vs constant 0)
+    #[test]
+    fn overheat_watchpoints_are_per_zone() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1, 0, 4000, 100000)));
+        assert!(m.register_zone(cfg(2, 0, 3000, 100000)));
+        // 3500 is below zone 1's overheat threshold, so no alert must fire for zone 1.
+        let r = m.process_reading(1, 3500, 100);
+        assert_eq!(r.alert_count, 0);
+        // Zone 2 does overheat at 3500.
+        let r2 = m.process_reading(2, 3500, 200);
+        assert_eq!(r2.alert_count, 1);
+        assert_eq!(r2.alerts[0].alert_type, TempAlertType::Overheat);
+        assert_eq!(r2.alerts[0].threshold, 3000);
+    }
+
+    // overheat watchpoint id (vs constant 1): zone 0's threshold applies to zone 0
+    #[test]
+    fn overheat_watchpoint_zone_zero() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(0, 0, 4000, 500)));
+        assert!(m.register_zone(cfg(1, 0, 6000, 500)));
+        // 5000 is below zone 1's overheat threshold, so no alert is expected for zone 1
+        let r = m.process_reading(1, 5000, 100);
+        assert_eq!(r.alert_count, 0);
+        // zone 0 does overheat at 5000
+        let r0 = m.process_reading(0, 5000, 200);
+        assert_eq!(r0.alert_count, 1);
+        assert_eq!(r0.alerts[0].alert_type, TempAlertType::Overheat);
+        assert_eq!(r0.alerts[0].threshold, 4000);
+    }
+
+    // process_reading: loop bound < zone_count (vs <=) with a full table
+    #[test]
+    fn full_table_unknown_zone_scans_without_overrun() {
+        let mut m = TemperatureMonitor::new();
+        let mut z = 1u32;
+        while (z as usize) <= MAX_ZONES {
+            assert!(m.register_zone(cfg(z, 0, 4000, 500)));
+            z += 1;
+        }
+        // Unknown zone: the rate-of-change scan walks all zones and never breaks early.
+        let r = m.process_reading(999, 2000, 100);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    // process_reading: id match && has-state (vs ||)
+    #[test]
+    fn other_zone_reading_does_not_use_foreign_state() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1, 0, 4000, 500)));
+        assert!(m.register_zone(cfg(2, 0, 4000, 500)));
+        let r1 = m.process_reading(1, 2000, 100);
+        assert_eq!(r1.alert_count, 0);
+        // first reading for zone 2: no baseline, so no rate alert
+        let r2 = m.process_reading(2, 3000, 100);
+        assert_eq!(r2.alert_count, 0);
+        // unknown zone must not alter or use any state
+        let r3 = m.process_reading(99, 3500, 200);
+        assert_eq!(r3.alert_count, 0);
+    }
+
+    // process_reading: id match && enabled (vs ||)
+    #[test]
+    fn disabled_zone_no_rate_alerts() {
+        let mut m = TemperatureMonitor::new();
+        let mut c = cfg(1, 0, 4000, 500);
+        c.enabled = false;
+        m.register_zone(c);
+        let r1 = m.process_reading(1, 2500, 100);
+        assert_eq!(r1.alert_count, 0);
+        let r2 = m.process_reading(1, 1500, 200);
+        assert_eq!(r2.alert_count, 0);
+        let r3 = m.process_reading(1, 2900, 300);
+        assert_eq!(r3.alert_count, 0);
+    }
+
+    #[test]
+    fn other_zone_reading_does_not_use_enabled_zone_state() {
+        let mut m = TemperatureMonitor::new();
+        m.register_zone(cfg(1, 0, 4000, 500));
+        m.process_reading(1, 2500, 100);
+        let r = m.process_reading(99, 1500, 200);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    // rapid drop: strictly over rate_threshold (> vs >=)
+    #[test]
+    fn rapid_drop_equal_to_threshold_is_not_alert() {
+        let mut m = TemperatureMonitor::new();
+        m.register_zone(cfg(1, -10000, 10000, 500));
+        m.process_reading(1, 2500, 100);
+        let r = m.process_reading(1, 2000, 200);
+        assert_eq!(r.alert_count, 0);
+    }
+
+    #[test]
+    fn rapid_drop_above_threshold_is_alert() {
+        let mut m = TemperatureMonitor::new();
+        m.register_zone(cfg(1, -10000, 10000, 500));
+        m.process_reading(1, 2500, 100);
+        let r = m.process_reading(1, 1999, 200);
+        assert_eq!(r.alert_count, 1);
+        assert_eq!(r.alerts[0].alert_type, TempAlertType::RapidDrop);
+    }
+
+    // rapid drop: has-baseline && over-threshold (vs ||)
+    #[test]
+    fn steady_reading_no_rapid_drop() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1, 0, 4000, 500)));
+        let r1 = m.process_reading(1, 2000, 100);
+        assert_eq!(r1.alert_count, 0);
+        let r2 = m.process_reading(1, 2000, 200);
+        assert_eq!(r2.alert_count, 0);
+        let r3 = m.process_reading(1, 2100, 300);
+        assert_eq!(r3.alert_count, 0);
+    }
+
+    // rapid rise: strictly over rate_threshold (> vs >=)
+    #[test]
+    fn rise_equal_to_rate_threshold_is_not_rapid_rise() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1, 0, 4000, 500)));
+        let r0 = m.process_reading(1, 1500, 100);
+        assert_eq!(r0.alert_count, 0);
+        let r = m.process_reading(1, 2000, 200);
+        assert_eq!(r.alert_count, 0);
+        let r2 = m.process_reading(1, 2501, 300);
+        assert_eq!(r2.alert_count, 1);
+        assert_eq!(r2.alerts[0].alert_type, TempAlertType::RapidRise);
+    }
+
+    // rapid rise: has-baseline && over-threshold (vs ||)
+    #[test]
+    fn no_rise_alert_for_small_change() {
+        let mut m = TemperatureMonitor::new();
+        m.register_zone(cfg(1, 0, 4000, 500));
+        let r0 = m.process_reading(1, 2000, 100);
+        assert_eq!(r0.alert_count, 0);
+        let r = m.process_reading(1, 2100, 200);
+        assert_eq!(r.alert_count, 0);
+        let r2 = m.process_reading(1, 2050, 300);
+        assert_eq!(r2.alert_count, 0);
+    }
+}

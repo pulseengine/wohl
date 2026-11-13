@@ -475,3 +475,32 @@ mod proptests {
         }
     }
 }
+
+/// Unit tests pinning behaviors a cargo-mutants pass reported untested.
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+
+    fn cfg(zone_id: u32) -> AirConfig {
+        AirConfig {
+            zone_id,
+            co2_warn: 1000,
+            co2_critical: 2000,
+            pm25_warn: 250,
+            pm25_critical: 500,
+            voc_warn: 200,
+            voc_critical: 400,
+            enabled: true,
+        }
+    }
+
+    // register_zone: += on zone_count (vs *=)
+    #[test]
+    fn zone_limit_enforced_by_count() {
+        let mut m = AirMonitor::new();
+        for z in 0..MAX_ZONES as u32 {
+            assert!(m.register_zone(cfg(z)));
+        }
+        assert!(!m.register_zone(cfg(0)));
+    }
+}
