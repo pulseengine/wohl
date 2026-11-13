@@ -161,7 +161,12 @@ mod engine {
         }
 
         pub fn register_zone(&mut self, config: AirConfig) -> bool {
-            if self.zone_count as usize >= MAX_ZONES { return false; }
+            // Mirrors plain/src/engine.rs (#75): zone_ids outside
+            // [0, MAX_ZONES) have no watchpoint-id encoding, and the
+            // unguarded multiply below would overflow on them.
+            if self.zone_count as usize >= MAX_ZONES || config.zone_id as usize >= MAX_ZONES {
+                return false;
+            }
 
             let base = config.zone_id * 6;
             let thresholds = [
@@ -187,6 +192,11 @@ mod engine {
 
         pub fn process_reading(&mut self, reading: AirReading) -> AirResult {
             let mut res = AirResult { alerts: [AirAlert::empty(); MAX_ALERTS_PER_READING], alert_count: 0 };
+            // Mirrors plain/src/engine.rs (#75): an unregistrable zone_id
+            // can never match a watchpoint, and the multiply would overflow.
+            if reading.zone_id as usize >= MAX_ZONES {
+                return res;
+            }
             let base = reading.zone_id * 6;
             let values = [reading.co2_ppm, reading.co2_ppm, reading.pm25, reading.pm25, reading.voc_index, reading.voc_index];
 
