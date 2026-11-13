@@ -32,7 +32,7 @@ env:
   # job signs the composed Matter component). sigil ships its binary as
   # `wsc`; installed from the cosign-verified release, in lock-step with
   # release.yml's WSC_VERSION — bump together via PR.
-  WSC_VERSION: v0.12.0
+  WSC_VERSION: v0.12.1
 
 jobs:
   lint:
