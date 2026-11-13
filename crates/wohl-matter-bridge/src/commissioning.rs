@@ -400,6 +400,18 @@ async fn run_builtin_mdns<C: rs_matter::crypto::Crypto>(
         .await
 }
 
+// Wired-first ordering, but no hard name allowlist: runners and hubs name
+// their primary interface eth0, eno1, ens5, enp3s0 or wlan0 depending on
+// image and kernel (#81 — a CI image with neither IPv6 nor an eth*/eno*
+// name made startup fail here).
+fn fallback_interface_rank(name: &str) -> u8 {
+    match name {
+        n if n.starts_with("eth") || n.starts_with("en") => 0,
+        n if n.starts_with("wl") => 1,
+        _ => 2,
+    }
+}
+
 #[inline(never)]
 fn pick_network_interface() -> Result<(std::net::Ipv4Addr, std::net::Ipv6Addr, u32), Error> {
     use rs_matter::error::ErrorCode;
@@ -426,10 +438,20 @@ fn pick_network_interface() -> Result<(std::net::Ipv4Addr, std::net::Ipv6Addr, u
             })
     };
 
+    let fallback_rank = fallback_interface_rank;
     let find_fallback_candidate = || {
         all.iter()
             .filter(|ia| !ia.is_loopback())
-            .filter(|ia| ia.name.starts_with("eth") || ia.name.starts_with("eno"))
+            .min_by_key(|ia| {
+                // Prefer an IPv4 address row; this branch is only reached
+                // when no IPv6 candidate exists.
+                let v6_penalty = matches!(ia.addr, if_addrs::IfAddr::V6(_)) as u8;
+                (
+                    fallback_rank(&ia.name),
+                    v6_penalty,
+                    ia.index.unwrap_or(u32::MAX),
+                )
+            })
             .map(|ia| match ia.addr {
                 if_addrs::IfAddr::V4(ref v4) => (
                     ia.name.clone(),
@@ -444,13 +466,12 @@ fn pick_network_interface() -> Result<(std::net::Ipv4Addr, std::net::Ipv6Addr, u
                     ia.index.unwrap_or(0),
                 ),
             })
-            .next()
     };
 
     let candidate = find_ipv6_candidate(|ip| ip.is_unicast_link_local())
         .or_else(|| find_ipv6_candidate(|_| true))
         .or_else(|| {
-            warn!("[wohl-matter] no IPv6 interface; falling back to ethN/enoN with IPv4 only");
+            warn!("[wohl-matter] no IPv6 interface; falling back to any non-loopback interface, wired-first");
             find_fallback_candidate()
         })
         .ok_or_else(|| {
@@ -468,6 +489,20 @@ mod tests {
 
     fn handler(cache: Arc<AttributeCache>, wohl_endpoint_id: u32) -> CacheBooleanState {
         CacheBooleanState::new(Dataver::new(1), cache, wohl_endpoint_id)
+    }
+
+    #[test]
+    fn fallback_rank_prefers_wired_then_wireless_then_anything() {
+        // #81: ens5/enp3s0 (cloud/PCIe naming) must rank with eth0/eno1,
+        // ahead of wlan0, and nothing may be excluded outright.
+        for wired in ["eth0", "eno1", "ens5", "enp3s0"] {
+            assert_eq!(fallback_interface_rank(wired), 0, "{wired}");
+        }
+        assert_eq!(fallback_interface_rank("wlan0"), 1);
+        assert_eq!(fallback_interface_rank("wlp2s0"), 1);
+        for other in ["podman0", "docker0", "tailscale0", "utun3"] {
+            assert_eq!(fallback_interface_rank(other), 2, "{other}");
+        }
     }
 
     #[test]
