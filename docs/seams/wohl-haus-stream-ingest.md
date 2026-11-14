@@ -34,8 +34,29 @@ repository kept its earlier name).
 A sample carries only its valid fields. Descaling happens in wohl's relay
 transformer before this seam (wohl#87).
 
+## Batch format: SenML profile (proposed; haus concurs in principle, 2026-11-14)
+
+Batches are SenML (RFC 8428), JSON form, media type `application/senml+json`.
+wohl uses a fixed subset; the consumer refuses records outside it rather than
+half-supporting them.
+
+- `bn` is exactly `wohl/<stable-id>/`. The stable id never contains `/`
+  (node id and zone id are joined by `-`). `n` is the field name and never
+  contains `/`. The consumer splits a resolved name into
+  source = `wohl`, stable id = the middle segment, field = `n`, and refuses
+  any other shape.
+- `bt` plus relative `t`, UTC seconds as a float (the consumer stores ms).
+- Values are numeric `v` only, with `u` from the IANA SenML units registry
+  (RFC 8798 secondary units included) or documented in the record table
+  above when no registry entry fits.
+- wohl does NOT use: `sum`, string/boolean/data values (`vs`, `vb`, `vd`),
+  base fields other than `bn`/`bt` (no `bu`, `bv`, `bs`, `but`), `ut`, or a
+  `bver` other than the RFC 8428 default (10). A record carrying any of
+  these is a contract violation, refused by the consumer.
+
 ## Transport
 
 Under decision on wohl#90 (options: pull-http with cursor — recommended —
-push-http, stream-sub). Batch format, schema versioning, replay-window
-retention and LAN auth are open questions on the block.
+push-http, stream-sub). Replay-window retention and LAN auth are open
+questions on the block; the batch format above resolves once haus confirms
+on wohl#90 at ingest start.
