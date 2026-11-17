@@ -23,7 +23,12 @@ package(default_visibility = ["//visibility:public"])
         srcs = glob(["crates/wohl-%s/plain/src/**/*.rs" % c]),
         crate_name = "wohl_%s" % c,
         edition = "2024",
-        deps = ["@relay_src//:relay-lc-engine"] if c in ("air", "power", "temp") else [],
+        deps = {
+            "air": ["@relay_src//:relay-lc-engine"],
+            "power": ["@relay_src//:relay-lc-engine"],
+            "temp": ["@relay_src//:relay-lc-engine"],
+            "alert": ["@relay_src//:relay-to-engine"],
+        }.get(c, []),
     )
     for c in ("air", "alert", "door", "leak", "power", "temp")
 ]

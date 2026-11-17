@@ -27,3 +27,10 @@ rust_library(
     crate_name = "relay_lc",
     deps = [":relay-primitives-lib"],
 )
+
+rust_library(
+    name = "relay-to-engine",
+    srcs = glob(["crates/relay-to/plain/src/**/*.rs"]),
+    edition = "2024",
+    crate_name = "relay_to",
+)
