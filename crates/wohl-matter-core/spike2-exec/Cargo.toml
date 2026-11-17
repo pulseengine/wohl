@@ -14,6 +14,7 @@
 name = "wohl-matter-pase-exec"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.87.0"
 publish = false
 
 [[bin]]
@@ -23,7 +24,7 @@ path = "src/main.rs"
 [dependencies]
 # rs-matter core only — rustcrypto, NO `os` feature (no sockets / async-io /
 # polling). Same git rev as the rest of the spike.
-rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", default-features = false, features = ["rustcrypto"] }
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "d223ca48ed51de019233b6e590881080b383a4a2", default-features = false, features = ["rustcrypto"] }
 
 # Busy-poll executor (no_std-friendly, no reactor needed for in-memory I/O).
 embassy-futures = "0.1"
@@ -37,3 +38,4 @@ embassy-time-driver = "0.2"
 critical-section = { version = "1", features = ["std"] }
 
 [workspace]
+resolver = "3"

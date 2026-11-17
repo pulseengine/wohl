@@ -2,6 +2,7 @@
 name = "wohl-leak-wasm"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.87.0"
 [lib]
 crate-type = ["cdylib"]
 [dependencies]
@@ -13,7 +14,7 @@ wit-bindgen = "0.41.0"
 # universe only; no monitor component deps on it, so the verified
 # monitors' compiled closure is unchanged. See the
 # matter-core-wasm-buildable finding + SWARCH-WOHL-008 (spike).
-rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a99", default-features = false, features = ["rustcrypto"] }
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "d223ca48ed51de019233b6e590881080b383a4a2", default-features = false, features = ["rustcrypto"] }
 # Direct deps so @wohl_crates exposes them as bindgen `deps` for the
 # wohl-matter-core-composed component (SWARCH-WOHL-008 C4). These are already
 # transitive via rs-matter, but crate_universe only aliases DIRECT manifest
@@ -23,7 +24,8 @@ rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "0030ba4a
 embassy-futures = "0.1"
 embassy-time-driver = "0.2"
 critical-section = { version = "1", features = ["std"] }
-# rand_core (0.6, matching rs-matter's rustcrypto stack) so @wohl_crates
+# rand_core (0.10, matching rs-matter's rustcrypto stack at d223ca4) so @wohl_crates
 # exposes it for the SeamRand in wohl-matter-core-composed (C4c entropy seam).
-rand_core = "0.6"
+rand_core = "0.10"
 [workspace]
+resolver = "3"

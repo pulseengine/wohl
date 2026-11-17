@@ -20,12 +20,14 @@ use core::task::{Poll, Waker};
 use embassy_futures::block_on;
 use embassy_futures::select::{select, Either};
 
-use rand_core::{CryptoRng, Error as RandError, RngCore};
+use core::convert::Infallible;
+
+use rand_core::{TryCryptoRng, TryRng};
 use rs_matter::crypto::default_crypto;
 use rs_matter::dm::devices::test::{DAC_PRIVKEY, TEST_DEV_ATT, TEST_DEV_COMM, TEST_DEV_DET};
 use rs_matter::error::Error;
 use rs_matter::respond::Responder;
-use rs_matter::sc::pase::{PaseInitiator, MAX_COMM_WINDOW_TIMEOUT_SECS};
+use rs_matter::sc::pase::MAX_COMM_WINDOW_TIMEOUT_SECS;
 use rs_matter::sc::SecureChannel;
 use rs_matter::transport::exchange::Exchange;
 use rs_matter::transport::network::{
@@ -58,29 +60,31 @@ embassy_time_driver::time_driver_impl!(static DRIVER: HostClock = HostClock);
 #[derive(Clone, Copy)]
 struct SeamRand;
 
-impl RngCore for SeamRand {
-    fn next_u32(&mut self) -> u32 {
+// rand_core 0.10: implement the fallible `TryRng` with `Infallible` and the
+// `TryCryptoRng` marker; the blanket impls then provide `Rng` + `CryptoRng`,
+// which is what rs-matter's `default_crypto` requires.
+impl TryRng for SeamRand {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Infallible> {
         let mut b = [0u8; 4];
-        self.fill_bytes(&mut b);
-        u32::from_le_bytes(b)
+        self.try_fill_bytes(&mut b)?;
+        Ok(u32::from_le_bytes(b))
     }
-    fn next_u64(&mut self) -> u64 {
+    fn try_next_u64(&mut self) -> Result<u64, Infallible> {
         let mut b = [0u8; 8];
-        self.fill_bytes(&mut b);
-        u64::from_le_bytes(b)
+        self.try_fill_bytes(&mut b)?;
+        Ok(u64::from_le_bytes(b))
     }
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), Infallible> {
         let bytes = matter_ports::on_entropy_in(dest.len() as u32);
         let n = dest.len().min(bytes.len());
         dest[..n].copy_from_slice(&bytes[..n]);
-    }
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), RandError> {
-        self.fill_bytes(dest);
         Ok(())
     }
 }
 
-impl CryptoRng for SeamRand {}
+impl TryCryptoRng for SeamRand {}
 
 // ── transport endpoint backed by the imported matter-ports seam ──
 // on-message-in consumes (no peek), so wait_available buffers one packet.
@@ -183,9 +187,11 @@ async fn run_handshake() -> bool {
         let transport =
             controller_matter.run(&crypto, &controller_ep, &controller_ep, NoNetwork);
         let handshake = async {
-            let mut exchange =
-                Exchange::initiate_unsecured(&controller_matter, &crypto, device_addr).await?;
-            PaseInitiator::initiate(&mut exchange, &crypto, 20202021).await?;
+            // d223ca4: `initiate_pase` opens the unsecured exchange and runs
+            // the full PASE handshake (PaseInitiator::perform) in one call.
+            let _exchange =
+                Exchange::initiate_pase(&controller_matter, &crypto, device_addr, 20202021)
+                    .await?;
             Ok::<(), Error>(())
         };
         match select(transport, handshake).await {

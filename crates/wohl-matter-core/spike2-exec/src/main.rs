@@ -15,7 +15,7 @@
 //!      with a real `now()` (wasi monotonic clock via std) + a no-op
 //!      `schedule_wake` is sufficient: real time advances during the busy-loop.
 //!
-//! Success criterion: the initiator's `PaseInitiator::initiate(...)` returns
+//! Success criterion: the initiator's `Exchange::initiate_pase(...)` returns
 //! `Ok` — which requires the complete pake1/pake2/pake3 round-trip through the
 //! responder — and we print `PASE-RUNS-OK`. That is the executable proof for
 //! SWARCH-WOHL-008 that the verified Matter protocol+crypto core RUNS in wasm.
@@ -35,7 +35,7 @@ use rs_matter::crypto::test_only_crypto;
 use rs_matter::dm::devices::test::{TEST_DEV_ATT, TEST_DEV_COMM, TEST_DEV_DET};
 use rs_matter::error::Error;
 use rs_matter::respond::Responder;
-use rs_matter::sc::pase::{PaseInitiator, MAX_COMM_WINDOW_TIMEOUT_SECS};
+use rs_matter::sc::pase::MAX_COMM_WINDOW_TIMEOUT_SECS;
 use rs_matter::sc::SecureChannel;
 use rs_matter::transport::exchange::Exchange;
 use rs_matter::transport::network::{
@@ -173,9 +173,11 @@ async fn run() -> i32 {
         let transport =
             controller_matter.run(&crypto, &controller_ep, &controller_ep, NoNetwork);
         let handshake = async {
-            let mut exchange =
-                Exchange::initiate_unsecured(&controller_matter, &crypto, device_addr).await?;
-            PaseInitiator::initiate(&mut exchange, &crypto, 20202021).await?;
+            // d223ca4: `initiate_pase` opens the unsecured exchange and runs
+            // the full PASE handshake (PaseInitiator::perform) in one call.
+            let _exchange =
+                Exchange::initiate_pase(&controller_matter, &crypto, device_addr, 20202021)
+                    .await?;
             Ok::<(), Error>(())
         };
         match select(transport, handshake).await {
