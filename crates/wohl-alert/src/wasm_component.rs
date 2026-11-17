@@ -42,6 +42,11 @@ fn to_wit_action(action: engine::DispatchAction) -> WitAction {
         engine::DispatchAction::Send => WitAction::Send,
         engine::DispatchAction::Deduplicated => WitAction::Deduplicated,
         engine::DispatchAction::RateLimited => WitAction::RateLimited,
+        // Reachable only when the 128-entry auto-subscribe table overflows
+        // (see do_process_alert): the WIT enum predates the engine's
+        // subscription phase and has no not-subscribed variant (#99), so the
+        // drop is reported through the closest resource-limit variant.
+        engine::DispatchAction::NotSubscribed => WitAction::RateLimited,
     }
 }
 
@@ -78,7 +83,17 @@ impl Guest for Component {
 
 impl Component {
     fn do_process_alert(zone_id: u32, alert_type: u8, time: u64) -> WitResult {
-        let result = with_table(|t| t.process_alert(zone_id, alert_type, time));
+        let result = with_table(|t| {
+            // The WIT surface exposes no subscribe/unsubscribe (the generated
+            // interface predates the engine's relay-to subscription phase,
+            // #99), so the component keeps its historical deliver-everything
+            // behavior by subscribing each (zone, alert-type) pair on first
+            // sight. Nothing can unsubscribe over this interface.
+            if !t.is_subscribed(zone_id, alert_type) {
+                t.subscribe(zone_id, alert_type, 1);
+            }
+            t.process_alert(zone_id, alert_type, time)
+        });
         WitResult {
             action: to_wit_action(result.action),
             queue_depth: result.queue_depth,
