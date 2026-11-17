@@ -1,90 +1,12 @@
-// Wohl Water Leak Detector — P3 WASM component (self-contained).
+// Wohl Water Leak Detector — P3 WASM component.
 //
-// This file contains both:
-//   1. The verified core engine (from plain/src/engine.rs)
-//   2. The P3 async Guest trait implementation
+// Binding glue only: the verified engine is the plain crate (#84).
 //
 // Built by: bazel build //:wohl-leak (rules_wasm_component, wasi_version="p3")
 
-// ═══════════════════════════════════════════════════════════════
-// Verified core engine (plain Rust, identical to plain/src/engine.rs)
-// ═══════════════════════════════════════════════════════════════
-
-mod engine {
-    pub const MAX_ZONES: usize = 32;
-
-    #[derive(Clone, Copy)]
-    pub struct ZoneState {
-        pub zone_id: u32,
-        pub wet: bool,
-        pub detected_at: u64,
-        pub active: bool,
-    }
-
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    pub enum LeakAction {
-        NewLeak,
-        AlreadyWet,
-        Cleared,
-        AlreadyDry,
-        Unknown,
-    }
-
-    pub struct LeakDetector {
-        zones: [ZoneState; MAX_ZONES],
-        zone_count: u32,
-    }
-
-    impl ZoneState {
-        pub const fn empty() -> Self {
-            ZoneState { zone_id: 0, wet: false, detected_at: 0, active: false }
-        }
-    }
-
-    impl LeakDetector {
-        pub fn new() -> Self {
-            LeakDetector { zones: [ZoneState::empty(); MAX_ZONES], zone_count: 0 }
-        }
-
-        pub fn register_zone(&mut self, zone_id: u32) -> bool {
-            if self.zone_count as usize >= MAX_ZONES { return false; }
-            let idx = self.zone_count as usize;
-            self.zones[idx] = ZoneState { zone_id, wet: false, detected_at: 0, active: true };
-            self.zone_count = self.zone_count + 1;
-            true
-        }
-
-        pub fn process_event(&mut self, zone_id: u32, wet: bool, timestamp_sec: u64) -> LeakAction {
-            let count = self.zone_count;
-            let mut i: u32 = 0;
-            while i < count {
-                let idx = i as usize;
-                if self.zones[idx].active && self.zones[idx].zone_id == zone_id {
-                    let was_wet = self.zones[idx].wet;
-                    if wet {
-                        if was_wet { return LeakAction::AlreadyWet; }
-                        else { self.zones[idx].wet = true; self.zones[idx].detected_at = timestamp_sec; return LeakAction::NewLeak; }
-                    } else {
-                        if was_wet { self.zones[idx].wet = false; return LeakAction::Cleared; }
-                        else { return LeakAction::AlreadyDry; }
-                    }
-                }
-                i = i + 1;
-            }
-            LeakAction::Unknown
-        }
-
-        pub fn any_wet(&self) -> bool {
-            let count = self.zone_count;
-            let mut i: u32 = 0;
-            while i < count {
-                if self.zones[i as usize].active && self.zones[i as usize].wet { return true; }
-                i = i + 1;
-            }
-            false
-        }
-    }
-}
+// The verified engine comes from the plain crate (crates/wohl-leak/plain),
+// built as the Bazel target //:wohl-leak-engine — no inline copy (#84).
+use wohl_leak::engine;
 
 // ═══════════════════════════════════════════════════════════════
 // P3 WASM component binding — delegates to verified engine

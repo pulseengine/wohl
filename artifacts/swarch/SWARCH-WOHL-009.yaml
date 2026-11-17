@@ -1,0 +1,54 @@
+artifacts:
+  - id: SWARCH-WOHL-009
+    type: sw-arch-component
+    title: Monitor components depend on the plain engines (no inline copies)
+    status: implemented
+    description: >
+      The six monitor WASM components (wohl-air, wohl-alert, wohl-door,
+      wohl-leak, wohl-power, wohl-temp) build against their verified
+      crates/wohl-*/plain engines as Bazel rust_library targets
+      (//:wohl-*-engine); wasm_component.rs holds WIT binding glue only.
+      air/power/temp additionally depend on the real relay-lc engine,
+      wrapped from the sibling relay checkout via the @relay_src
+      source-only repo (third_party/relay_src.BUILD, mirroring relay's
+      own relay-lc-engine target, relay#168 precedent).
+
+      Rationale (#84): the components previously carried inline copies of
+      their engine logic. The mirrored-trees coupled pair drifted while
+      every check stayed green — #75's air-engine guard reached only
+      plain/ until #83 re-aligned the copy — because no check owned the
+      relationship. Depending on the plain crates dissolves the pair by
+      construction: there is one engine text, the one Kani/proptest/fuzz
+      verify, and a plain-engine fix reaches the shipped component in the
+      same commit.
+
+      Consequence for evidence: the per-monitor components' compiled
+      engine closure is now exactly the verified crates. No equivalence
+      gate is needed for a copy that no longer exists; reintroducing an
+      inline engine would require adding code reviewed against this
+      decision, not forgetting a port.
+    tags: [architecture, wasm, components, verified-core, decision]
+    fields:
+      interfaces:
+        provided:
+          - "Bazel targets //:wohl-{air,alert,door,leak,power,temp}-engine (rust_library over crates/wohl-*/plain)"
+          - "@relay_src//:relay-lc-engine + :relay-primitives-lib (source-only wrap of ../relay)"
+        required:
+          - "sibling relay checkout at RELAY_REF (already provided by the Bazel CI job)"
+      concurrency: "unchanged — engines are pure no_std state machines; the component glue keeps the single-threaded OnceLock<Mutex<_>> singleton"
+    links:
+      - type: refines
+        target: SWARCH-WOHL-001
+      # The shipped components must run the engines these requirements are
+      # verified against; one allocated-from per monitor with a sw-req.
+      # (wohl-power has no SWREQ-POWER-* yet — tracked as a trace gap.)
+      - type: allocated-from
+        target: SWREQ-AIR-001
+      - type: allocated-from
+        target: SWREQ-ALERT-001
+      - type: allocated-from
+        target: SWREQ-DOOR-001
+      - type: allocated-from
+        target: SWREQ-LEAK-001
+      - type: allocated-from
+        target: SWREQ-TEMP-001

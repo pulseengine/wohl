@@ -66,6 +66,23 @@ local_path_override(
     path = "../rules_wasm_component",
 )
 
+# ── relay plain engines as a source-only repo (#84) ─────────────────────
+# The six monitor components depend on the verified plain engines instead
+# of carrying inline copies. air/power/temp build on relay-lc, which lives
+# in the sibling relay checkout (the Bazel CI job already checks it out at
+# RELAY_REF). See third_party/relay_src.BUILD for why this is a repo rule
+# and not a bazel_dep on the relay module.
+new_local_repository = use_repo_rule(
+    "@bazel_tools//tools/build_defs/repo:local.bzl",
+    "new_local_repository",
+)
+
+new_local_repository(
+    name = "relay_src",
+    path = "../relay",
+    build_file = "//third_party:relay_src.BUILD",
+)
+
 # rules_rust 0.70.0 (from BCR) — old git_override to commit 6281d27 is
 # no longer needed because 6281d27 is now an ancestor of 0.70.0, and
 # rules_rocq_rust + rules_wasm_component 1.0.0 both require the newer
