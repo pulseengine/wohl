@@ -45,31 +45,24 @@ use std::thread::{Builder as ThreadBuilder, JoinHandle};
 use embassy_futures::select::select4;
 use log::{debug, error, info, warn};
 
-use rs_matter::crypto::Crypto;
-use rs_matter::dm::IMBuffer;
+use rs_matter::crypto::{Crypto, Rng};
 use rs_matter::dm::clusters::decl::boolean_state;
 use rs_matter::dm::clusters::desc::{self, ClusterHandler as _};
-use rs_matter::dm::clusters::net_comm::SharedNetworks;
 use rs_matter::dm::devices::test::{DAC_PRIVKEY, TEST_DEV_ATT, TEST_DEV_COMM, TEST_DEV_DET};
 use rs_matter::dm::endpoints;
-use rs_matter::dm::events::NoEvents;
 use rs_matter::dm::networks::SysNetifs;
-use rs_matter::dm::networks::eth::EthNetwork;
-use rs_matter::dm::subscriptions::Subscriptions;
-use rs_matter::dm::{
-    Async, Cluster, DataModel, DataModelHandler, Dataver, DeviceType, Endpoint, EpClMatcher, Node,
-    ReadContext,
-};
+use rs_matter::dm::{Async, Cluster, DataModel, Dataver, DeviceType, Endpoint, Node, ReadContext};
 use rs_matter::error::Error;
+use rs_matter::im::{InteractionModel, InteractionModelState};
 use rs_matter::pairing::DiscoveryCapabilities;
 use rs_matter::pairing::qr::QrTextType;
-use rs_matter::persist::{DirKvBlobStore, SharedKvBlobStore};
+use rs_matter::persist::DirKvBlobStore;
 use rs_matter::respond::DefaultResponder;
 use rs_matter::sc::pase::MAX_COMM_WINDOW_TIMEOUT_SECS;
 use rs_matter::transport::MATTER_SOCKET_BIND_ADDR;
+use rs_matter::transport::exchange::MatterBuffers;
 use rs_matter::utils::init::InitMaybeUninit;
 use rs_matter::utils::select::Coalesce;
-use rs_matter::utils::storage::pooled::PooledBuffers;
 use rs_matter::{MATTER_PORT, Matter, clusters, crypto::default_crypto, devices, root_endpoint};
 
 use static_cell::StaticCell;
@@ -101,9 +94,8 @@ const WATER_LEAK_ENDPOINT: u16 = 1;
 // `RsMatterBridge` that calls into this module — calling it twice on
 // the same process is undefined behavior beyond a clean panic.
 static MATTER: StaticCell<Matter> = StaticCell::new();
-static BUFFERS: StaticCell<PooledBuffers<10, IMBuffer>> = StaticCell::new();
-static SUBSCRIPTIONS: StaticCell<Subscriptions> = StaticCell::new();
-static KV_BUF: StaticCell<[u8; 4096]> = StaticCell::new();
+static BUFFERS: StaticCell<MatterBuffers> = StaticCell::new();
+static IM_STATE: StaticCell<InteractionModelState> = StaticCell::new();
 
 /// Spawn the Matter commissioning thread.
 ///
@@ -139,10 +131,10 @@ pub fn start(
 fn run_matter(state_dir: PathBuf, cache: Arc<AttributeCache>) -> Result<(), Error> {
     info!("[wohl-matter] commissioning thread up; initializing Matter device");
     info!(
-        "[wohl-matter] memory: Matter (BSS)={}B, IM Buffers (BSS)={}B, Subscriptions (BSS)={}B",
+        "[wohl-matter] memory: Matter (BSS)={}B, IM Buffers (BSS)={}B, IM State (BSS)={}B",
         core::mem::size_of::<Matter>(),
-        core::mem::size_of::<PooledBuffers<10, IMBuffer>>(),
-        core::mem::size_of::<Subscriptions>()
+        core::mem::size_of::<MatterBuffers>(),
+        core::mem::size_of::<InteractionModelState>()
     );
 
     // ── Step 1: Build the Matter instance using the *test* attestation
@@ -158,45 +150,47 @@ fn run_matter(state_dir: PathBuf, cache: Arc<AttributeCache>) -> Result<(), Erro
     ));
 
     // ── Step 2: Persistence. The DirKvBlobStore at the configured path
-    // satisfies SWREQ-MATTER-004 (fsync-durable fabric storage). On
-    // first boot the load is a no-op; on subsequent boots it replays
+    // satisfies SWREQ-MATTER-004 (fsync-durable fabric storage). The KV
+    // scratch buffer now lives inside `Matter`; `matter.startup` replays
     // the persisted fabric set before any LAN socket is bound.
-    let kv_buf = KV_BUF.uninit().init_zeroed().as_mut_slice();
-    let mut kv = DirKvBlobStore::new(state_dir);
-    futures_lite::future::block_on(matter.load_persist(&mut kv, kv_buf))?;
+    let store = DirKvBlobStore::new(state_dir);
+    let kv = matter.kv(store);
+    matter.startup(&kv)?;
     info!(
         "[wohl-matter] persistence loaded; commissioned={}",
-        matter.is_commissioned()
+        matter.has_fabrics()
     );
 
-    // ── Step 3: Construct the transport buffers & subscription table.
-    let buffers = BUFFERS.uninit().init_with(PooledBuffers::init(0));
-    let subscriptions = SUBSCRIPTIONS.uninit().init_with(Subscriptions::init());
+    // ── Step 3: Construct the transport buffers & the Interaction Model
+    // state (subscription table + events queue).
+    let buffers = BUFFERS.init(MatterBuffers::new());
+    let state = IM_STATE.init(InteractionModelState::new());
 
     // ── Step 4: Crypto. The PRNG is per-thread (we're on our own thread
     // here). DAC_PRIVKEY is the test-vendor private key — replace with
     // a real one when attestation certs ship.
-    let crypto = default_crypto(rand::thread_rng(), DAC_PRIVKEY);
+    let crypto = default_crypto(rand::rng(), DAC_PRIVKEY);
 
-    // ── Step 5: Build the data-model handler. The root endpoint
-    // carries the commissioning clusters; the water-leak endpoint
-    // exposes BooleanState served from the attribute cache.
+    // ── Step 5: Build the Interaction Model over the data-model handler.
+    // The root endpoint carries the commissioning clusters; the
+    // water-leak endpoint exposes BooleanState served from the cache.
     let rand = crypto.rand()?;
-    let events = NoEvents::new();
-    let dm = DataModel::new(
-        matter,
+    let im = InteractionModel::new(
+        &matter,
         &crypto,
         buffers,
-        subscriptions,
-        &events,
         bridge_handler(rand, cache),
-        SharedKvBlobStore::new(kv, kv_buf),
-        SharedNetworks::new(EthNetwork::new_default()),
+        &kv,
+        state,
     );
 
-    let responder = DefaultResponder::new(&dm);
+    // Re-hydrate the data model's persisted state and deliver the
+    // `Startup` lifecycle op to all cluster handlers.
+    futures_lite::future::block_on(im.startup())?;
+
+    let responder = DefaultResponder::new(&im);
     let mut respond = pin!(responder.run::<4, 4>());
-    let mut dm_job = pin!(dm.run());
+    let mut dm_job = pin!(im.run());
 
     // ── Step 6: UDP transport bound to MATTER_SOCKET_BIND_ADDR
     //         (the IPv6 ANY address on the IANA-assigned Matter port).
@@ -209,7 +203,7 @@ fn run_matter(state_dir: PathBuf, cache: Arc<AttributeCache>) -> Result<(), Erro
     // and open a basic commissioning window. Once a controller
     // commissions us, this branch never runs again on subsequent boots
     // — `is_commissioned()` returns true.
-    if !matter.is_commissioned() {
+    if !matter.has_fabrics() {
         warn!("[wohl-matter] no commissioned fabric — opening commissioning window");
         matter.print_standard_qr_text(DiscoveryCapabilities::IP)?;
         matter.print_standard_qr_code(QrTextType::Unicode, DiscoveryCapabilities::IP)?;
@@ -308,10 +302,7 @@ const NODE: Node<'static> = Node {
     ],
 };
 
-fn bridge_handler(
-    mut rand: impl rand::RngCore + Copy,
-    cache: Arc<AttributeCache>,
-) -> impl DataModelHandler {
+fn bridge_handler(mut rand: impl Rng + Copy, cache: Arc<AttributeCache>) -> impl DataModel {
     (
         NODE,
         endpoints::EthSysHandlerBuilder::new()
@@ -319,20 +310,14 @@ fn bridge_handler(
             .build(rand)
             // The water-leak endpoint's descriptor cluster.
             .chain(
-                EpClMatcher::new(
-                    Some(WATER_LEAK_ENDPOINT),
-                    Some(desc::DescHandler::CLUSTER.id),
-                ),
+                |e, c| e == WATER_LEAK_ENDPOINT && c == desc::DescHandler::CLUSTER.id,
                 Async(desc::DescHandler::new(Dataver::new_rand(&mut rand)).adapt()),
             )
             // The water-leak endpoint's BooleanState, served from the
             // attribute cache. wohl endpoint id == Matter endpoint id
             // for this single-endpoint demonstration.
             .chain(
-                EpClMatcher::new(
-                    Some(WATER_LEAK_ENDPOINT),
-                    Some(boolean_state::FULL_CLUSTER.id),
-                ),
+                |e, c| e == WATER_LEAK_ENDPOINT && c == boolean_state::FULL_CLUSTER.id,
                 Async(
                     CacheBooleanState::new(
                         Dataver::new_rand(&mut rand),
@@ -356,15 +341,18 @@ async fn run_builtin_mdns<C: rs_matter::crypto::Crypto>(
     matter: &Matter<'_>,
     crypto: C,
 ) -> Result<(), Error> {
-    use rs_matter::transport::network::mdns::builtin::{BuiltinMdnsResponder, Host};
+    use rs_matter::transport::network::Ipv6Addr;
+    use rs_matter::transport::network::mdns::builtin::{BuiltinMdns, Host};
     use rs_matter::transport::network::mdns::{
         MDNS_IPV4_BROADCAST_ADDR, MDNS_IPV6_BROADCAST_ADDR, MDNS_SOCKET_DEFAULT_BIND_ADDR,
     };
-    use rs_matter::transport::network::{Ipv4Addr, Ipv6Addr};
     use socket2::{Domain, Protocol, Socket, Type};
 
-    let (ipv4_addr, ipv6_addr, interface) = pick_network_interface()?;
-    info!("[wohl-matter] mDNS using interface {ipv4_addr}/{ipv6_addr} (index {interface})");
+    let (ipv4_addr, ipv6_addrs, interface) = pick_network_interface()?;
+    info!(
+        "[wohl-matter] mDNS using interface {ipv4_addr} ({} IPv6 addr(s), index {interface})",
+        ipv6_addrs.len()
+    );
 
     // IPv6 dual-stack UDP socket with multicast joining.
     let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
@@ -379,7 +367,12 @@ async fn run_builtin_mdns<C: rs_matter::crypto::Crypto>(
         .get_ref()
         .join_multicast_v4(&MDNS_IPV4_BROADCAST_ADDR, &ipv4_addr)?;
 
-    BuiltinMdnsResponder::new()
+    let ipv6: Vec<Ipv6Addr> = ipv6_addrs
+        .iter()
+        .map(|a| Ipv6Addr::from(a.octets()))
+        .collect();
+
+    BuiltinMdns::new()
         .run(
             &socket,
             &socket,
@@ -389,8 +382,8 @@ async fn run_builtin_mdns<C: rs_matter::crypto::Crypto>(
                 // The hub's real serial / MAC plumbing is a later
                 // slice's concern.
                 hostname: "001122334455",
-                ip: Ipv4Addr::from(ipv4_addr.octets()),
-                ipv6: Ipv6Addr::from(ipv6_addr.octets()),
+                ip: rs_matter::transport::network::Ipv4Addr::from(ipv4_addr.octets()),
+                ipv6: &ipv6,
             },
             Some(ipv4_addr),
             Some(interface),
@@ -413,7 +406,7 @@ fn fallback_interface_rank(name: &str) -> u8 {
 }
 
 #[inline(never)]
-fn pick_network_interface() -> Result<(std::net::Ipv4Addr, std::net::Ipv6Addr, u32), Error> {
+fn pick_network_interface() -> Result<(std::net::Ipv4Addr, Vec<std::net::Ipv6Addr>, u32), Error> {
     use rs_matter::error::ErrorCode;
 
     let all = if_addrs::get_if_addrs().map_err(|_| ErrorCode::StdIoError)?;
@@ -479,8 +472,19 @@ fn pick_network_interface() -> Result<(std::net::Ipv4Addr, std::net::Ipv6Addr, u
             ErrorCode::StdIoError
         })?;
 
-    let (_iname, ip, ipv6, index) = candidate;
-    Ok((ip, ipv6, index))
+    let (iname, ip, _ipv6, index) = candidate;
+    // The responder's `Host` carries every IPv6 address of the chosen
+    // interface (the upstream example does the same), so collect them all
+    // rather than only the one that selected the interface.
+    let ipv6s: Vec<std::net::Ipv6Addr> = all
+        .iter()
+        .filter(|ia| ia.name == iname)
+        .filter_map(|ia| match ia.addr {
+            if_addrs::IfAddr::V6(ref v6) => Some(v6.ip),
+            _ => None,
+        })
+        .collect();
+    Ok((ip, ipv6s, index))
 }
 
 #[cfg(test)]

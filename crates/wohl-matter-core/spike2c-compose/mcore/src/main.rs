@@ -27,7 +27,7 @@ use rs_matter::crypto::test_only_crypto;
 use rs_matter::dm::devices::test::{TEST_DEV_ATT, TEST_DEV_COMM, TEST_DEV_DET};
 use rs_matter::error::Error;
 use rs_matter::respond::Responder;
-use rs_matter::sc::pase::{PaseInitiator, MAX_COMM_WINDOW_TIMEOUT_SECS};
+use rs_matter::sc::pase::MAX_COMM_WINDOW_TIMEOUT_SECS;
 use rs_matter::sc::SecureChannel;
 use rs_matter::transport::exchange::Exchange;
 use rs_matter::transport::network::{
@@ -138,9 +138,11 @@ async fn run() -> i32 {
         let transport =
             controller_matter.run(&crypto, &controller_ep, &controller_ep, NoNetwork);
         let handshake = async {
-            let mut exchange =
-                Exchange::initiate_unsecured(&controller_matter, &crypto, device_addr).await?;
-            PaseInitiator::initiate(&mut exchange, &crypto, 20202021).await?;
+            // d223ca4: `initiate_pase` opens the unsecured exchange and runs
+            // the full PASE handshake (PaseInitiator::perform) in one call.
+            let _exchange =
+                Exchange::initiate_pase(&controller_matter, &crypto, device_addr, 20202021)
+                    .await?;
             Ok::<(), Error>(())
         };
         match select(transport, handshake).await {
