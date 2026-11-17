@@ -99,4 +99,30 @@ expect_fail "rejects a bad signature verdict" "did not verify" run_badsig
 run_exit1() { PATH="$BIN_EXIT1:$BASE_PATH" "$G/wohl-vTEST-evidence/verify.sh"; }
 expect_fail "rejects a non-zero verifier exit" "exited non-zero" run_exit1
 
-echo "PASS: evidence-bundle machinery — 1 green, 5 red controls"
+# ── red 6: trace file MISSING and dropped from the manifest ───────────
+# The checksum step passes over whatever the manifest lists, so a producer
+# bug that both loses the file and omits its manifest line must be caught
+# by the dedicated presence check, not ride through vacuously green.
+M="$WORK/notrace"; mkdir -p "$M"; assemble "$F/mcdc-report.txt" "$M"
+rm "$M/wohl-vTEST-evidence/trace/trace-export.yaml"
+grep -v 'trace/trace-export.yaml' "$M/wohl-vTEST-evidence/MANIFEST.sha256" \
+    > "$M/manifest.tmp" && mv "$M/manifest.tmp" "$M/wohl-vTEST-evidence/MANIFEST.sha256"
+run_notrace() { PATH="$BIN_OK:$BASE_PATH" "$M/wohl-vTEST-evidence/verify.sh"; }
+expect_fail "rejects a missing trace file (even when the manifest omits it)" \
+    "trace/trace-export.yaml missing or empty" run_notrace
+
+# ── red 7: trace file EMPTY with a matching manifest entry ────────────
+# sha256 of the empty string is a valid checksum, so an emptied file with a
+# refreshed manifest line passes step 1 — the -s presence check is what
+# must go red.
+E="$WORK/emptytrace"; mkdir -p "$E"; assemble "$F/mcdc-report.txt" "$E"
+: > "$E/wohl-vTEST-evidence/trace/trace-export.yaml"
+EMPTY_SHA="e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+sed "s|^[0-9a-f]\{64\}\(  ./trace/trace-export.yaml\)\$|$EMPTY_SHA\1|" \
+    "$E/wohl-vTEST-evidence/MANIFEST.sha256" > "$E/manifest.tmp" \
+    && mv "$E/manifest.tmp" "$E/wohl-vTEST-evidence/MANIFEST.sha256"
+run_emptytrace() { PATH="$BIN_OK:$BASE_PATH" "$E/wohl-vTEST-evidence/verify.sh"; }
+expect_fail "rejects an empty trace file (checksum alone would pass)" \
+    "trace/trace-export.yaml missing or empty" run_emptytrace
+
+echo "PASS: evidence-bundle machinery — 1 green, 7 red controls"

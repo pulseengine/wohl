@@ -5,9 +5,12 @@ artifacts:
     status: approved
     description: >
       The system shall detect water presence via water-event sensors and
-      raise a critical alert within 5 seconds of detection. Water leak is
-      the highest-priority monitor — no delay, no dedup, immediate dispatch.
-      The alert shall include the affected zone identifier.
+      raise a critical alert within 5 seconds, measured from the hub's
+      receipt of the water-event to the dispatcher emitting the alert
+      (sensor-to-hub link latency is the link budget's, not this bound).
+      Water leak is the highest-priority monitor — no delay, no dedup,
+      immediate dispatch. The alert shall include the affected zone
+      identifier.
     tags: [water-leak, safety, critical]
     fields:
       req-type: safety

@@ -4,17 +4,24 @@ artifacts:
     title: "LEAK-P01: Water detection triggers immediate alert"
     status: approved
     description: >
-      When a water-event with wet == true is received, the LeakDetector
-      shall emit a critical alert within one processing cycle. No debounce,
-      no delay — water detection is unconditionally urgent.
+      When a water-event with wet == true is received for a dry tracked
+      zone, the LeakDetector shall report the leak start (NewLeak)
+      synchronously, in the same process_event invocation, and the hub
+      shall emit exactly one critical alert for it. A wet == true event
+      for an already-wet zone reports AlreadyWet and emits no new alert;
+      re-alerting while a leak persists is the dispatcher's repeat path,
+      not a new leak. No debounce, no delay. The end-to-end bound is the parent
+      system requirement's 5 seconds.
     tags: [water-leak, safety, critical, verus]
     fields:
       req-type: safety
       priority: must
       verification-criteria: >
-        Verus proof: for all inputs where wet == true, output contains
-        exactly one critical alert. Unit test: single wet event produces
-        alert. Proptest: random event sequences never miss a wet == true.
+        Kani BMC harness: for every wet == true on a dry tracked zone the
+        result is NewLeak, and never NewLeak twice without an intervening
+        dry. Unit test: single wet event produces the alert; a second wet
+        on the same zone does not. Proptest: random event sequences never
+        miss a dry-to-wet transition.
     links:
       - type: derives-from
         target: SYSREQ-WOHL-001

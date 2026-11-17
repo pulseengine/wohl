@@ -561,3 +561,233 @@ mod tests {
         assert_eq!(dedup_count, 1);
     }
 }
+
+#[cfg(test)]
+mod requirement_boundary_pins {
+    //! Boundary pins for the 2026-11-17 requirements-ambiguity batch (#97).
+    //!
+    //! Each test pins the exact boundary its requirement states, so a
+    //! drifting comparison operator in an engine turns the corresponding
+    //! requirement text red. The texts and these tests were both written
+    //! from the engines' current, proof-covered behavior.
+
+    use wohl_air::engine::{AirAlertType, AirConfig, AirMonitor, AirReading};
+    use wohl_alert::engine::{AlertDispatcher, DispatchAction};
+    use wohl_door::engine::{ContactConfig, DoorAlertType, DoorWatch};
+    use wohl_temp::engine::{TemperatureMonitor, ZoneConfig};
+
+    fn door(max_open_sec: u32) -> DoorWatch {
+        let mut w = DoorWatch::new();
+        w.register_contact(ContactConfig {
+            contact_id: 1,
+            zone_id: 1,
+            max_open_sec,
+            night_start_hour: 22,
+            night_end_hour: 6,
+            enabled: true,
+        });
+        w
+    }
+
+    /// SWREQ-DOOR-001: alert iff open duration is STRICTLY greater than
+    /// the timeout — 599 s and 600 s no alert, 601 s alert — and the
+    /// alert repeats on each later evaluation while the contact is open.
+    #[test]
+    fn door_timeout_boundary_600_silent_601_alerts() {
+        let mut w = door(600);
+        // Open at noon (12:00), far from night hours.
+        let open_at = 12 * 3600;
+        assert_eq!(w.process_event(1, true, open_at).alert_count, 0);
+        assert_eq!(w.check_timeouts(open_at + 599).alert_count, 0, "599 s");
+        assert_eq!(w.check_timeouts(open_at + 600).alert_count, 0, "600 s");
+        let r = w.check_timeouts(open_at + 601);
+        assert_eq!(r.alert_count, 1, "601 s");
+        assert_eq!(r.alerts[0].alert_type, DoorAlertType::OpenTooLong);
+        assert_eq!(w.check_timeouts(open_at + 700).alert_count, 1, "repeats");
+        // Close stops the repeats.
+        w.process_event(1, false, open_at + 701);
+        assert_eq!(w.check_timeouts(open_at + 800).alert_count, 0, "closed");
+    }
+
+    /// SWREQ-DOOR-002 (window semantics shared with the decided text):
+    /// night hours are [22:00, 06:00) — 22:00 is night, 06:00 is not.
+    #[test]
+    fn door_night_window_2200_inclusive_0600_exclusive() {
+        for (secs_of_day, night, label) in [
+            (21 * 3600 + 3599, false, "21:59:59"),
+            (22 * 3600, true, "22:00:00"),
+            (5 * 3600 + 3599, true, "05:59:59"),
+            (6 * 3600, false, "06:00:00"),
+        ] {
+            let mut w = door(600);
+            let r = w.process_event(1, true, secs_of_day);
+            assert_eq!(r.alert_count, u32::from(night), "{label}: night={night}");
+            if night {
+                assert_eq!(r.alerts[0].alert_type, DoorAlertType::OpenedAtNight);
+            }
+        }
+    }
+
+    /// SWREQ-ALERT-001: dedup suppresses a duplicate STRICTLY inside
+    /// 300 s of the last SENT alert; at exactly 300 s it is sent, and a
+    /// suppressed duplicate does not extend the window.
+    #[test]
+    fn alert_dedup_boundary_300s_anchored_at_last_sent() {
+        let at: u8 = 10;
+        let mk = || {
+            let mut d = AlertDispatcher::new();
+            d.subscribe(1, at, 1);
+            d
+        };
+        let mut d = mk();
+        assert_eq!(d.process_alert(1, at, 1000).action, DispatchAction::Send);
+        assert_eq!(
+            d.process_alert(1, at, 1299).action,
+            DispatchAction::Deduplicated,
+            "299 s later"
+        );
+        let mut d = mk();
+        assert_eq!(d.process_alert(1, at, 1000).action, DispatchAction::Send);
+        assert_eq!(
+            d.process_alert(1, at, 1300).action,
+            DispatchAction::Send,
+            "exactly 300 s later"
+        );
+        // Window anchored at the last SENT alert: a suppressed duplicate
+        // at +200 does not extend it past +300.
+        let mut d = mk();
+        assert_eq!(d.process_alert(1, at, 1000).action, DispatchAction::Send);
+        assert_eq!(
+            d.process_alert(1, at, 1200).action,
+            DispatchAction::Deduplicated
+        );
+        assert_eq!(
+            d.process_alert(1, at, 1300).action,
+            DispatchAction::Send,
+            "suppressed duplicate must not extend the window"
+        );
+    }
+
+    fn air() -> AirMonitor {
+        let mut m = AirMonitor::new();
+        m.register_zone(AirConfig {
+            zone_id: 1,
+            co2_warn: 1000,
+            co2_critical: 2000,
+            pm25_warn: 350,
+            pm25_critical: 1500,
+            voc_warn: 250,
+            voc_critical: 400,
+            enabled: true,
+        });
+        m
+    }
+
+    fn air_reading(co2: u32, pm25: u32, voc: u32) -> AirReading {
+        AirReading {
+            zone_id: 1,
+            co2_ppm: co2,
+            pm25,
+            voc_index: voc,
+            time: 100,
+        }
+    }
+
+    fn count(m: &mut AirMonitor, r: AirReading, t: AirAlertType) -> usize {
+        let res = m.process_reading(r);
+        (0..res.alert_count as usize)
+            .filter(|&i| res.alerts[i].alert_type == t)
+            .count()
+    }
+
+    /// SWREQ-AIR-002 / SYSREQ-WOHL-003: thresholds compare at-or-above
+    /// (wire value 349 silent, 350 warns), and a value at or above the
+    /// critical threshold emits BOTH the warning and the critical alert
+    /// for that metric.
+    #[test]
+    fn air_pm25_boundary_at_or_above_and_dual_severity() {
+        let mut m = air();
+        assert_eq!(
+            count(&mut m, air_reading(0, 349, 0), AirAlertType::Pm25Warning),
+            0
+        );
+        let mut m = air();
+        assert_eq!(
+            count(&mut m, air_reading(0, 350, 0), AirAlertType::Pm25Warning),
+            1
+        );
+        let mut m = air();
+        let res = m.process_reading(air_reading(0, 1500, 0));
+        let warn = (0..res.alert_count as usize)
+            .filter(|&i| res.alerts[i].alert_type == AirAlertType::Pm25Warning)
+            .count();
+        let crit = (0..res.alert_count as usize)
+            .filter(|&i| res.alerts[i].alert_type == AirAlertType::Pm25Critical)
+            .count();
+        assert_eq!((warn, crit), (1, 1), "at critical, both severities emit");
+    }
+
+    /// SWREQ-AIR-001 boundary: CO2 warns at exactly 1000 ppm (>=).
+    #[test]
+    fn air_co2_boundary_at_or_above() {
+        let mut m = air();
+        assert_eq!(
+            count(&mut m, air_reading(999, 0, 0), AirAlertType::Co2Warning),
+            0
+        );
+        let mut m = air();
+        assert_eq!(
+            count(&mut m, air_reading(1000, 0, 0), AirAlertType::Co2Warning),
+            1
+        );
+    }
+
+    /// SWREQ-AIR-002 boundary: VOC warns at exactly 250 (>=).
+    #[test]
+    fn air_voc_boundary_at_or_above() {
+        let mut m = air();
+        assert_eq!(
+            count(&mut m, air_reading(0, 0, 249), AirAlertType::VocWarning),
+            0
+        );
+        let mut m = air();
+        assert_eq!(
+            count(&mut m, air_reading(0, 0, 250), AirAlertType::VocWarning),
+            1
+        );
+    }
+
+    fn temp() -> TemperatureMonitor {
+        let mut m = TemperatureMonitor::new();
+        m.register_zone(ZoneConfig {
+            zone_id: 1,
+            freeze_threshold: 300,
+            overheat_threshold: 4000,
+            rate_threshold: 100_000, // out of the way
+            enabled: true,
+        });
+        m
+    }
+
+    /// SWREQ-TEMP-001: freeze fires at-or-below the threshold — exactly
+    /// 300 alerts, 301 does not.
+    #[test]
+    fn temp_freeze_boundary_at_or_below() {
+        for (v, n) in [(299, 1), (300, 1), (301, 0)] {
+            let mut m = temp();
+            let r = m.process_reading(1, v, 100);
+            assert_eq!(r.alert_count, n, "value {v}");
+        }
+    }
+
+    /// SWREQ-TEMP-002: overheat fires at-or-above the threshold — exactly
+    /// 4000 alerts, 3999 does not.
+    #[test]
+    fn temp_overheat_boundary_at_or_above() {
+        for (v, n) in [(3999, 0), (4000, 1), (4001, 1)] {
+            let mut m = temp();
+            let r = m.process_reading(1, v, 100);
+            assert_eq!(r.alert_count, n, "value {v}");
+        }
+    }
+}

@@ -4,20 +4,30 @@ artifacts:
     title: "ALERT-P01: Alert deduplication and rate limiting"
     status: approved
     description: >
-      The AlertDispatcher shall deduplicate identical alerts (matching
-      severity + zone + title) within a 60-second sliding window. For
-      non-critical alerts, the dispatcher shall enforce a rate limit of
-      at most 1 alert per zone per 5 minutes. Dedup and rate-limit state
-      shall be bounded (max 32 dedup entries, max 64 rate buckets).
+      The AlertDispatcher shall deduplicate identical alerts — identical
+      means matching zone_id and alert_type — for 300 seconds after the
+      last SENT alert of that identity: a duplicate arriving strictly
+      inside the window is suppressed, one arriving at exactly 300 s or
+      later is sent, and suppressed duplicates do not extend the window.
+      The dispatcher shall enforce a global rate limit of at most 10
+      sent alerts per fixed 60-second window (the window resets when a
+      processed alert's time is 60 s or more past the window start); the
+      limit is severity-blind at this layer; the critical-path
+      exemption lives in the dispatch requirement. Dedup state shall be bounded at 64 recent
+      entries; when the table is full a new alert is still sent but not
+      recorded, so its own later duplicates are not suppressed
+      (fail-open on overflow, never a dropped alert).
     tags: [alert, dedup, rate-limit, verus]
     fields:
       req-type: functional
       priority: must
       verification-criteria: >
-        Verus proof: duplicate alert within window is suppressed; unique
-        alert is never suppressed. Unit tests for window boundary (59s,
-        60s, 61s). Proptest with random alert sequences verifying bounded
-        state size.
+        Verus proof (proofs/verus/alert_dedup.rs): duplicate alert within
+        the window is suppressed; an alert that is neither a duplicate
+        inside the window nor over the rate limit is never suppressed.
+        Boundary tests at 299 s (suppressed), 300 s (sent) and 301 s
+        (sent) in wohl-integration. Proptest with random alert sequences
+        verifying bounded state size.
     links:
       - type: derives-from
         target: SYSREQ-WOHL-006

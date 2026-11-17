@@ -5,18 +5,23 @@ artifacts:
     status: approved
     description: >
       The DoorWatch shall track contact-event open/close state per
-      contact_id. When a contact remains open for longer than the
-      configured timeout (default 600 seconds / 10 minutes), the
-      monitor shall emit a warning alert. Closing the contact before
-      timeout cancels the pending alert.
+      contact_id. When a contact's open duration exceeds the configured
+      timeout (strictly greater: at a 600-second default, 600 s open
+      produces no alert and 601 s produces one), the monitor shall emit
+      a warning alert on each timeout evaluation while the contact
+      stays open; the dispatcher's deduplication collapses
+      the repeats. Closing the contact at or before the timeout expiry
+      cancels the pending alert; a close after an alert was emitted
+      stops further repeats and emits nothing itself.
     tags: [door-watch, timeout, security, verus]
     fields:
       req-type: functional
       priority: must
       verification-criteria: >
-        Verus proof: open event followed by timeout expiry always
+        Kani BMC harness: open event followed by timeout expiry always
         produces alert; close event before timeout produces no alert.
-        Unit tests for timeout boundary (599s, 600s, 601s).
+        Boundary tests at 599 s (no alert), 600 s (no alert) and 601 s
+        (alert) in wohl-integration.
     links:
       - type: derives-from
         target: SYSREQ-WOHL-004
