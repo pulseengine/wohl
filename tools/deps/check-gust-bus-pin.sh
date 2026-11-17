@@ -14,21 +14,26 @@ set -u
 
 REPO="pulseengine/gale"
 BRANCH="main"
-WIT_PATH="wit/bus/gust-bus.wit"
-WANT="package gust:bus@0.1.0;"
 
-url="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${WIT_PATH}"
-body=$(curl -fsS --max-time 30 "$url") || {
-    echo "UNKNOWN: could not read ${url} (network or GitHub error)" >&2
-    exit 2
-}
+# One line per pinned interface: <path-in-gale> <exact package line>
+PINS="wit/bus/gust-bus.wit package gust:bus@0.1.0;
+wit/sensor/gust-sen66.wit package gust:sen66@0.1.0;"
 
-if printf '%s\n' "$body" | grep -qxF "$WANT"; then
-    echo "OK: ${REPO}@${BRANCH} ${WIT_PATH} carries '${WANT}'"
-    exit 0
-fi
-
-got=$(printf '%s\n' "$body" | grep -m1 '^package ' || echo '(no package line)')
-echo "SEAM VIOLATION: expected '${WANT}' in ${WIT_PATH} on ${REPO}@${BRANCH}; found: ${got}" >&2
-echo "The provider moved the interface. Reconcile the seam block in pulseengine/gale#511 and this guard in the same change." >&2
-exit 1
+rc=0
+printf '%s\n' "$PINS" | while read -r WIT_PATH WANT; do
+    url="https://raw.githubusercontent.com/${REPO}/${BRANCH}/${WIT_PATH}"
+    body=$(curl -fsS --max-time 30 "$url") || {
+        echo "UNKNOWN: could not read ${url} (network or GitHub error)" >&2
+        exit 2
+    }
+    if printf '%s\n' "$body" | grep -qxF "$WANT"; then
+        echo "OK: ${REPO}@${BRANCH} ${WIT_PATH} carries '${WANT}'"
+    else
+        got=$(printf '%s\n' "$body" | grep -m1 '^package ' || echo '(no package line)')
+        echo "SEAM VIOLATION: expected '${WANT}' in ${WIT_PATH} on ${REPO}@${BRANCH}; found: ${got}" >&2
+        echo "The provider moved the interface. Reconcile the seam block in pulseengine/gale#511 and this guard in the same change." >&2
+        exit 1
+    fi
+done
+rc=$?
+exit $rc
