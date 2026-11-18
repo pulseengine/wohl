@@ -1,8 +1,37 @@
 load("@rules_wasm_component//rust:defs.bzl", "rust_wasm_component_bindgen")
+load("@rules_rust//rust:defs.bzl", "rust_library")
 load("@rules_wasm_component//wac:defs.bzl", "wac_plug")
 load("@rules_wasm_component//wit:defs.bzl", "wit_library")
 
 package(default_visibility = ["//visibility:public"])
+
+# ═══════════════════════════════════════════════════════════════
+# Verified plain engines as libraries (#84)
+#
+# Each monitor component depends on its crates/wohl-*/plain crate —
+# the Kani-verified source of truth — instead of carrying an inline
+# copy in wasm_component.rs. air/power/temp additionally pull the
+# real relay-lc engine from the sibling relay checkout (@relay_src).
+# This dissolves the mirrored-trees coupled pair that let #75's fix
+# reach only plain/ while every check stayed green (re-aligned in
+# #83; made structural here).
+# ═══════════════════════════════════════════════════════════════
+
+[
+    rust_library(
+        name = "wohl-%s-engine" % c,
+        srcs = glob(["crates/wohl-%s/plain/src/**/*.rs" % c]),
+        crate_name = "wohl_%s" % c,
+        edition = "2024",
+        deps = {
+            "air": ["@relay_src//:relay-lc-engine"],
+            "power": ["@relay_src//:relay-lc-engine"],
+            "temp": ["@relay_src//:relay-lc-engine"],
+            "alert": ["@relay_src//:relay-to-engine"],
+        }.get(c, []),
+    )
+    for c in ("air", "alert", "door", "leak", "power", "temp")
+]
 
 # ═══════════════════════════════════════════════════════════════
 # Water Leak Detector
@@ -18,6 +47,7 @@ wit_library(
 rust_wasm_component_bindgen(
     name = "wohl-leak",
     srcs = ["crates/wohl-leak/src/wasm_component.rs"],
+    deps = [":wohl-leak-engine"],
     wit = ":wohl_leak_wit",
     wasi_version = "p3",
     profiles = ["release"],
@@ -37,6 +67,7 @@ wit_library(
 rust_wasm_component_bindgen(
     name = "wohl-temp",
     srcs = ["crates/wohl-temp/src/wasm_component.rs"],
+    deps = [":wohl-temp-engine"],
     wit = ":wohl_temperature_wit",
     wasi_version = "p3",
     profiles = ["release"],
@@ -56,6 +87,7 @@ wit_library(
 rust_wasm_component_bindgen(
     name = "wohl-air",
     srcs = ["crates/wohl-air/src/wasm_component.rs"],
+    deps = [":wohl-air-engine"],
     wit = ":wohl_air_quality_wit",
     wasi_version = "p3",
     profiles = ["release"],
@@ -75,6 +107,7 @@ wit_library(
 rust_wasm_component_bindgen(
     name = "wohl-door",
     srcs = ["crates/wohl-door/src/wasm_component.rs"],
+    deps = [":wohl-door-engine"],
     wit = ":wohl_door_watch_wit",
     wasi_version = "p3",
     profiles = ["release"],
@@ -94,6 +127,7 @@ wit_library(
 rust_wasm_component_bindgen(
     name = "wohl-power",
     srcs = ["crates/wohl-power/src/wasm_component.rs"],
+    deps = [":wohl-power-engine"],
     wit = ":wohl_power_meter_wit",
     wasi_version = "p3",
     profiles = ["release"],
@@ -113,6 +147,7 @@ wit_library(
 rust_wasm_component_bindgen(
     name = "wohl-alert",
     srcs = ["crates/wohl-alert/src/wasm_component.rs"],
+    deps = [":wohl-alert-engine"],
     wit = ":wohl_alert_dispatcher_wit",
     wasi_version = "p3",
     profiles = ["release"],
