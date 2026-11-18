@@ -29,23 +29,26 @@ env:
   CARGO_TERM_COLOR: always
   # wohl-hub depends on the relay sibling via path = "../relay/...".
   # Pin the relay commit explicitly so release builds are reproducible
-  # against a known sibling state. Keep this SHA in lock-step with
-  # ci.yml's RELAY_REF — bump them together via PR. fetch-depth: 0
+  # against a known sibling state. Copy of tools/deps/sibling-pins.env
+  # (the canonical pin source; the Script portability job fails on
+  # divergence — bump there first). fetch-depth: 0
   # on the checkout below covers force-pushes of relay (sibling repo
   # is routinely rebased; see ci.yml comment + issue #8).
   RELAY_REF: 178ffd479ad863c91ece4f580379a9207c36a530
-  # Pinned rules_wasm_component for the Bazel wasm build (build-wasm job),
-  # in lock-step with ci.yml's RULES_WASM_COMPONENT_REF — bump together.
+  # Pinned rules_wasm_component for the Bazel wasm build (build-wasm job).
+  # Copy of tools/deps/sibling-pins.env (the canonical pin source); the
+  # Script portability job fails if this copy diverges. Bump there first.
   RULES_WASM_COMPONENT_REF: fbe20571eee9bd05687c95e7a43f6c236d9b2428
-  # Evidence-bundle producer pins (SWREQ-REL-001). RIVET_REF in lock-step
-  # with ci.yml, WITNESS_REF with witness-gate.yml — bump together.
+  # Evidence-bundle producer pins (SWREQ-REL-001).
+  # Copy of tools/deps/sibling-pins.env (the canonical pin source); the
+  # Script portability job fails if this copy diverges. Bump there first.
   RIVET_REF: 78f001e23d595ba816f7a7be59282194dedfdc12
   WITNESS_REF: v0.38.0
   # sigil ships its binary as `wsc`. Installed from the sigil release
   # (cosign-verified against the tag identity) instead of built from git, so
   # the bundle is signed by the same binary an assessor installs
-  # (`cargo install wsc-cli`, or the release asset). One pin, bumped via PR,
-  # in lock-step with ci.yml's WSC_VERSION.
+  # (`cargo install wsc-cli`, or the release asset). One pin, a copy of
+  # tools/deps/sibling-pins.env — bump there first.
   WSC_VERSION: v0.12.1
 
 jobs:

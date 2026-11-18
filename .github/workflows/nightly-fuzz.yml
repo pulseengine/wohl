@@ -23,11 +23,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  # IMPORTANT: this RELAY_REF must be kept in lock-step with the
-  # RELAY_REF in `.github/workflows/ci.yml`. When you bump one, bump
-  # the other in the same PR — otherwise the nightly fuzzes a
-  # different sibling-relay than the PR gate, which defeats the
-  # purpose of pinning.
+  # Copy of tools/deps/sibling-pins.env (the canonical pin source); the
+  # Script portability job fails if this copy diverges. Bump there first.
   RELAY_REF: 178ffd479ad863c91ece4f580379a9207c36a530
 
 jobs:

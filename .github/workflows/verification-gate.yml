@@ -23,6 +23,8 @@ permissions:
   pull-requests: write
 
 env:
+  # Copy of tools/deps/sibling-pins.env (the canonical pin source); the
+  # Script portability job fails if this copy diverges. Bump there first.
   RELAY_REF: 178ffd479ad863c91ece4f580379a9207c36a530
   RIVET_REF: 78f001e23d595ba816f7a7be59282194dedfdc12
 
