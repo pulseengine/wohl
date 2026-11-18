@@ -8,7 +8,7 @@ verification artifacts, so the right side of the V is *driven*, not narrated
 
   1. List verification artifacts (unit-verification + sw-verification).
   2. For each, `rivet get` the full JSON and read fields.steps[].run.
-  3. Skip commands whose shape needs infra the ubuntu-latest gate lacks
+  3. Skip commands whose shape needs infra the hosted Ubuntu gate lacks
      (cargo kani, bazel/Verus, spar, wasmtime, sigil, developer abs paths) —
      those have their OWN dedicated CI jobs; the gate runs the rest.
   4. Run each remaining command; a `cargo test -p X <name>` that names a test
@@ -33,7 +33,7 @@ import sys
 import time
 from typing import Any
 
-# Command shapes that need infra the ubuntu-latest gate doesn't provide.
+# Command shapes that need infra the hosted Ubuntu gate doesn't provide.
 # Each of these already has a dedicated CI job (Kani matrix, Verus bazel job,
 # bazel-build, sigil-attest) — the gate must not re-run or fail on them.
 BENCH_PATTERNS = [

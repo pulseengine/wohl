@@ -37,7 +37,7 @@ env:
 jobs:
   lint:
     name: fmt + clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -76,7 +76,7 @@ jobs:
     # versions and unmaintained advisories currently warn rather than
     # fail (see deny.toml comment and #8 follow-ups).
     name: cargo-deny (supply-chain)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -99,7 +99,7 @@ jobs:
 
   test:
     name: cargo test (workspace, incl. proptest)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -143,7 +143,7 @@ jobs:
     # Cargo.toml at job-graph time, which GH Actions can't do cleanly.
     # When a new Kani-verified crate lands, add it here.
     name: "Kani: ${{ matrix.crate }}"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -198,7 +198,7 @@ jobs:
 
   fuzz-smoke:
     name: cargo-fuzz smoke (60s/target)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -230,7 +230,7 @@ jobs:
 
   rivet-validate:
     name: rivet validate (ASPICE artifacts)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -266,7 +266,7 @@ jobs:
 
   verus:
     name: Verus (bazel test //proofs/verus)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -299,7 +299,7 @@ jobs:
     # exercises every `rust_wasm_component_bindgen` target on the
     # wasm32-wasip2 toolchain, closing that gap (issue #14).
     name: Bazel build (//:all — exercises WASM component glue)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -393,7 +393,7 @@ jobs:
     # locally-demonstrated chain in crates/wohl-matter-core/attestation/.
     # Separate job; depends on bazel-build for the artifact.
     name: sigil attestation (sign composed component)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: bazel-build
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -446,7 +446,7 @@ jobs:
     # would. NOTE: chip-tool + mDNS in a CI network namespace is fiddly; this
     # job prints diagnostics and is expected to iterate.
     name: Matter interop (chip-tool commissions the hub)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
