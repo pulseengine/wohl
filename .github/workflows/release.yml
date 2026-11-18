@@ -61,7 +61,7 @@ jobs:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04
             archive: tar.gz
           # Native arm64 runner — avoids cross-compilation's friction
           # with wohl's `path = "../relay/..."` sibling-path deps
@@ -153,7 +153,7 @@ jobs:
   # SLSA). Mirrors ci.yml's bazel-build job.
   build-wasm:
     name: Build composed Matter wasm
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -207,7 +207,7 @@ jobs:
   # flows through like every other asset.
   evidence-bundle:
     name: Assemble evidence bundle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build-wasm
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -349,7 +349,7 @@ jobs:
   create-release:
     name: Create GitHub Release
     needs: [build-binaries, build-wasm, evidence-bundle]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       # Keyless signing + provenance need an OIDC token; release-asset
       # upload needs contents: write; build provenance attestation
