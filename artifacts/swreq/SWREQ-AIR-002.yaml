@@ -5,18 +5,28 @@ artifacts:
     status: approved
     description: >
       The AirMonitor shall evaluate PM2.5 and VOC index from air-quality
-      events. PM2.5 thresholds: > 350 (35.0 ug/m3 x10) warning, > 1500
-      (150.0 ug/m3 x10) critical. VOC index thresholds: > 250 warning,
-      > 400 critical. When multiple metrics exceed thresholds, the highest
-      severity across all metrics determines the alert severity.
+      events. The sensor wire value for PM2.5 is 10 times the
+      concentration in ug/m3; thresholds compare the wire value. PM2.5
+      defaults: wire value at or above 350 (= 35.0 ug/m3) warning, at or
+      above 1500 (= 150.0 ug/m3) critical. VOC index defaults: at or
+      above 250 warning, at or above 400 critical. All thresholds are
+      configurable per zone at registration. The monitor emits one alert
+      per exceeded threshold: a value at or above a metric's critical
+      threshold emits both that metric's warning and critical alerts,
+      and multiple exceeding metrics each emit their own alerts, every
+      alert naming its metric; downstream deduplication collapses
+      repeats. CO2 has its own requirement and is evaluated by the same
+      monitor on the same reading.
     tags: [air-quality, pm25, voc, health, verus]
     fields:
       req-type: functional
       priority: must
       verification-criteria: >
-        Verus proof: multi-metric max-severity selection is correct.
-        Unit tests for each metric at boundary values. Proptest with
-        random air-quality records verifying severity monotonicity.
+        Kani BMC harness: every threshold exceedance produces its alert
+        and none below threshold. Boundary tests at wire values 349/350/351
+        and 1499/1500/1501 (PM2.5), 249/250/251 and 399/400/401 (VOC) in
+        wohl-integration. Proptest with random air-quality records
+        verifying severity monotonicity.
     links:
       - type: derives-from
         target: SYSREQ-WOHL-003

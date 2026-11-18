@@ -27,11 +27,13 @@ artifacts:
       req-type: functional
       priority: must
       verification-criteria: >
-        Fixture-driven negative controls on every PR
-        (assembled bundle verifies green; a tampered file, a non-zero
-        witness gap count, and an absent signature verifier each turn
-        verify.sh red), plus the release workflow assembling the real
-        bundle and running its verify.sh as a gate before upload.
+        Fixture-driven negative controls on every PR, one per failure
+        mode the description names: a tampered file, a non-zero witness
+        gap count, an absent signature verifier, a rejected signature,
+        a missing trace file and an empty trace file each turn verify.sh
+        red (assembled bundle verifies green), plus the release workflow
+        assembling the real bundle and running its verify.sh as a gate
+        before upload.
     links:
       - type: derives-from
         target: SYSREQ-WOHL-009

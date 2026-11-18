@@ -4,18 +4,21 @@ artifacts:
     title: "TEMP-P02: Overheat alert when temperature above threshold"
     status: approved
     description: >
-      When a temperature reading has value > high_threshold (default 4000,
-      i.e. 40.00 C), the TemperatureMonitor shall emit a warning alert.
-      When value > critical_threshold (default 5000, i.e. 50.00 C), the
-      alert shall be critical severity.
+      When a temperature reading has value at or above the overheat
+      threshold (value >= 4000 default, i.e. 40.00 C — exactly 4000
+      alerts), the TemperatureMonitor shall emit an overheat alert.
+      The monitor has one overheat threshold per zone; severity grading
+      above it (warning vs critical bands) is the dispatcher's mapping,
+      not a second engine threshold. The threshold is configurable per
+      zone at registration.
     tags: [temperature, overheat, safety, verus]
     fields:
       req-type: safety
       priority: must
       verification-criteria: >
-        Verus proof: for all inputs where value > high_threshold,
-        output contains an alert. Unit tests at boundary values
-        for both warning and critical thresholds.
+        Kani BMC harness: for all inputs where value >= overheat
+        threshold, output contains the overheat alert. Boundary tests at
+        3999 (no alert), 4000 (alert), 4001 (alert) in wohl-integration.
     links:
       - type: derives-from
         target: SYSREQ-WOHL-002

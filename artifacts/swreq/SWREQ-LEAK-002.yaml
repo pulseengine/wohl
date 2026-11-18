@@ -4,16 +4,25 @@ artifacts:
     title: "LEAK-P02: Dry event clears active leak state"
     status: approved
     description: >
-      When a water-event with wet == false is received for a zone that
-      previously had an active leak, the LeakDetector shall transition
-      that zone to dry state and emit an info-level "leak cleared" alert.
+      When a water-event with wet == false is received for a zone whose
+      current state is wet, the LeakDetector shall transition that zone
+      to dry (Cleared) and the hub shall emit an info-level "leak
+      cleared" alert. The cleared alert passes the same dedup and
+      rate-limit path as any alert and may be
+      suppressed by it; suppression of a cleared notice is acceptable
+      because zone state, not the notice, is the source of truth. A
+      wet == false event for a dry zone reports AlreadyDry and emits
+      nothing; one for an untracked zone reports Unknown and emits
+      nothing.
     tags: [water-leak, state-management, verus]
     fields:
       req-type: functional
       priority: must
       verification-criteria: >
-        Verus proof: wet-then-dry sequence leaves zone in dry state.
-        Unit test: state transition from active to cleared.
+        Kani BMC harness: wet-then-dry sequence leaves the zone dry.
+        Unit tests: active-to-cleared transition; wet == false on a dry
+        zone (AlreadyDry) and on an untracked zone (Unknown) each emit
+        nothing.
     links:
       - type: derives-from
         target: SYSREQ-WOHL-001
