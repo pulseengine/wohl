@@ -61,6 +61,9 @@ nix_repo.github(
 )
 use_repo(nix_repo, "nixpkgs")
 
+# In CI the sibling paths below are materialized at the commits named in
+# tools/deps/sibling-pins.env (the canonical pin source); local dev uses
+# whatever sibling checkout is present.
 local_path_override(
     module_name = "rules_wasm_component",
     path = "../rules_wasm_component",

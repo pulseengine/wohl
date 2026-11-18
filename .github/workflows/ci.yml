@@ -15,7 +15,9 @@ env:
   # Pinned sibling-repo commits — bumped explicitly via PR. Without these
   # pins, unpinned `main` of relay/rivet can change tool behavior on this
   # workflow with zero wohl code change (see #8 for the concrete
-  # incident that motivated pinning).
+  # incident that motivated pinning). These values are copies of
+  # tools/deps/sibling-pins.env (the canonical pin source); the Script
+  # portability job fails if any copy diverges. Bump there first.
   #
   # IMPORTANT: every cross-repo checkout below uses `fetch-depth: 0`
   # because relay/rivet are routinely force-pushed by the architect.
@@ -246,7 +248,9 @@ jobs:
       # sec-constraints it inherits (see safety/stpa). The path external
       # resolves live, so relay must sit beside wohl as a sibling checkout;
       # main carries relay's STPA-Sec (PR #117). If relay renames a referenced
-      # ID, this job goes red — that is the federation guarantee.
+      # ID, this job goes red — that is the federation guarantee. For the
+      # same reason this checkout is exempt from tools/deps/sibling-pins.env
+      # and the job must stay outside any CI path classifier (sieve).
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: pulseengine/relay
@@ -511,6 +515,40 @@ jobs:
     runs-on: ubuntu-24.04  # setup-python has no 3.9 build for 26.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # tools/deps/sibling-pins.env is the canonical pin source; the
+      # workflow env blocks carry copies (Actions cannot read a repo file
+      # at workflow-env level). Any divergence goes red here. Fails closed:
+      # a key no workflow uses, or an empty pins file, is also an error.
+      - name: Sibling pins match tools/deps/sibling-pins.env
+        run: |
+          set -euo pipefail
+          fail=0
+          keys=0
+          while IFS='=' read -r key val; do
+            case "$key" in ''|'#'*) continue ;; esac
+            keys=$((keys + 1))
+            found=0
+            for f in .github/workflows/*.yml; do
+              if grep -Eq "^  ${key}: " "$f"; then
+                found=1
+                if ! grep -Eq "^  ${key}: ${val}([ ]|\$)" "$f"; then
+                  echo "::error file=$f::env copy of $key diverges from tools/deps/sibling-pins.env ($val)"
+                  grep -En "^  ${key}: " "$f" || true
+                  fail=1
+                fi
+              fi
+            done
+            if [ "$found" -eq 0 ]; then
+              echo "::error::$key from tools/deps/sibling-pins.env appears in no workflow env block"
+              fail=1
+            fi
+          done < tools/deps/sibling-pins.env
+          if [ "$keys" -eq 0 ]; then
+            echo "::error::tools/deps/sibling-pins.env defines no pins"
+            fail=1
+          fi
+          exit "$fail"
 
       # SHELLCHECK_SHA256 is the release asset's `digest` for
       # shellcheck-v0.11.0.linux.x86_64.tar.gz from
