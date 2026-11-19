@@ -1,21 +1,26 @@
 artifacts:
   - id: SWREQ-DOOR-002
     type: sw-req
-    title: "DOOR-P02: Night-hour severity escalation"
+    title: "DOOR-P02: Night-hour immediate open alert"
     status: approved
     description: >
-      During night hours (22:00-06:00 local time), the DoorWatch shall
-      reduce the open timeout to 120 seconds (2 minutes) and escalate
-      alert severity from warning to critical. The night-hour window
-      shall be configurable. Time is obtained from the Relay time service.
-    tags: [door-watch, night-mode, security, verus]
+      During the night window, opening a contact shall emit an immediate
+      opened-at-night alert, without waiting for any timeout. The night
+      window is configurable per contact at registration as [start hour,
+      end hour), end exclusive, wrapping midnight when start > end
+      (default 22:00-06:00 local time). The open-too-long timeout keeps
+      its configured value during night hours; the immediate alert is
+      strictly faster than a shortened timeout for the night-security
+      concern. Time is obtained from the Relay time service.
+    tags: [door-watch, night-mode, security, kani]
     fields:
       req-type: functional
       priority: must
       verification-criteria: >
-        Verus proof: during night hours, timeout is <= 120s and severity
-        is critical. Unit tests for boundary times (21:59, 22:00, 05:59,
-        06:00). Integration test with mock time service.
+        Kani BMC harness on the door engine's night-window predicate and
+        open-event path. Boundary tests at 21:59:59, 22:00:00, 05:59:59
+        and 06:00:00 in wohl-integration (requirement_boundary_pins).
+        Matter interop gate exercises the open-event path end to end.
     links:
       - type: derives-from
         target: SYSREQ-WOHL-004
