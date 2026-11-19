@@ -1,0 +1,40 @@
+artifacts:
+  - id: SWREQ-REL-002
+    type: sw-req
+    title: "Evidence bundle as a release invariant, outsider-checkable"
+    status: draft
+    release: "v0.8.0"
+    description: >
+      Objective O2 (one-command evidence bundle), hardening the shipped
+      SWREQ-REL-001 bundle from a once-achieved milestone into an
+      invariant. The release pipeline shall refuse to publish a tag
+      whose evidence bundle fails its own verify.sh. The negative
+      controls become per-piece: removing any one of the rivet trace,
+      the witness MC/DC report, the sigil attestation, SHA256SUMS or the
+      cosign bundle shall each turn verification red, each proven by its
+      own CI control. The release notes' verify instructions shall be
+      generated from the publishing run, so the cosign certificate
+      identity always matches the path that actually published (the
+      v0.7.0 notes needed a hand-written correction for this).
+      Verification by an outsider: one recorded run by someone other
+      than the maintainer, on a clean container with networking disabled
+      after asset download, using only release assets plus the pinned
+      wsc from sigil's release.
+    tags: [release, evidence, bundle, o2]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        CI: one red control per evidence piece in
+        tools/test-evidence-bundle.sh, and the release workflow gate
+        that verifies the assembled bundle before upload refuses the
+        publish on failure. Release: the recorded outsider run passes
+        offline. Kill criterion: an outsider needing any undocumented
+        step, network access or a locally built tool falsifies the
+        outsider-checkable claim; a per-piece control that stays green
+        with its piece removed falsifies the gate.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-009
+      - type: refines
+        target: SWREQ-REL-001
