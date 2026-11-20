@@ -355,6 +355,16 @@ jobs:
           CARGO_BAZEL_REPIN: "1"
         run: bazel build //:all
 
+      # TEMPORARY (wohl#111, removed before merge): capture the lock
+      # the repin just regenerated, so it can be committed and made
+      # authoritative. The dev Mac cannot run the Bazel toolchain path
+      # (nix + wasi-sdk egress), so CI is where the lock is produced.
+      - name: Upload regenerated MODULE.bazel.lock
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: regenerated-module-bazel-lock
+          path: wohl/MODULE.bazel.lock
+
       # SWARCH-WOHL-008 C4 execution gate: prove the verified Matter core
       # actually RUNS — not just builds — by executing a full SPAKE2+ PASE
       # handshake across the wac_compose'd WIT boundary inside wasmtime. The
