@@ -790,4 +790,68 @@ mod requirement_boundary_pins {
             assert_eq!(r.alert_count, n, "value {v}");
         }
     }
+
+    fn power() -> wohl_power::engine::PowerMonitor {
+        let mut m = wohl_power::engine::PowerMonitor::new();
+        m.register_circuit(wohl_power::engine::CircuitConfig {
+            circuit_id: 1,
+            max_watts: 3000,
+            idle_watts: 50,
+            spike_threshold: 2000,
+            enabled: true,
+        });
+        m
+    }
+
+    /// SWREQ-POWER-001 boundary: overconsumption is STRICTLY above
+    /// max_watts — exactly 3000 is silent, 3001 alerts with the reading
+    /// value and the configured threshold.
+    // rivet: verifies SWREQ-POWER-001
+    #[test]
+    fn power_overconsumption_boundary_strictly_above() {
+        use wohl_power::engine::PowerAlertType;
+        let mut m = power();
+        assert_eq!(m.process_reading(1, 3000, 100).alert_count, 0, "3000 W");
+        let r = m.process_reading(1, 3001, 200);
+        assert_eq!(r.alert_count, 1, "3001 W");
+        assert_eq!(r.alerts[0].alert_type, PowerAlertType::OverConsumption);
+        assert_eq!(r.alerts[0].value, 3001);
+        assert_eq!(r.alerts[0].threshold, 3000);
+    }
+
+    /// SWREQ-POWER-002 boundary: spike uses the ABSOLUTE difference,
+    /// strictly above the threshold — a change of exactly 2000 is
+    /// silent, and a FALL of 2001 alerts like a rise would.
+    // rivet: verifies SWREQ-POWER-002
+    #[test]
+    fn power_spike_boundary_absolute_and_strict() {
+        use wohl_power::engine::PowerAlertType;
+        let mut m = power();
+        assert_eq!(m.process_reading(1, 2500, 100).alert_count, 0, "baseline");
+        assert_eq!(
+            m.process_reading(1, 500, 200).alert_count,
+            0,
+            "fall of 2000"
+        );
+        let r = m.process_reading(1, 2501, 300);
+        assert_eq!(r.alert_count, 1, "rise of 2001");
+        assert_eq!(r.alerts[0].alert_type, PowerAlertType::Spike);
+        let mut m2 = power();
+        m2.process_reading(1, 2501, 100);
+        let r2 = m2.process_reading(1, 500, 200);
+        assert_eq!(r2.alert_count, 1, "fall of 2001");
+        assert_eq!(r2.alerts[0].alert_type, PowerAlertType::Spike);
+    }
+
+    /// SWREQ-POWER-003 boundary: idle is at-or-below idle_watts —
+    /// exactly 50 is idle, 51 is not, and an unregistered circuit is
+    /// never idle.
+    // rivet: verifies SWREQ-POWER-003
+    #[test]
+    fn power_idle_boundary_at_or_below_and_unknown_false() {
+        let m = power();
+        assert!(m.check_idle(1, 50), "50 W is idle");
+        assert!(!m.check_idle(1, 51), "51 W is not idle");
+        assert!(!m.check_idle(99, 0), "unregistered circuit");
+    }
 }

@@ -5,17 +5,21 @@ artifacts:
     status: approved
     description: >
       The AirMonitor shall evaluate CO2 readings from air-quality events.
-      When co2_ppm > 1000, emit a warning alert. When co2_ppm > 2000,
-      emit a critical alert. Thresholds shall be configurable. Only the
-      highest applicable severity alert shall be emitted per reading.
+      At or above 1000 ppm it shall emit a warning alert; at or above
+      2000 ppm it shall emit a critical alert. Thresholds are
+      configurable per zone at registration. A reading at or above the
+      critical threshold emits both the warning and the critical alert;
+      downstream deduplication collapses repeats, and the dual emission
+      ensures the critical alert can never be masked.
     tags: [air-quality, co2, health, verus]
     fields:
       req-type: functional
       priority: must
       verification-criteria: >
-        Verus proof: for all inputs where co2_ppm > 1000, output contains
-        an alert of appropriate severity. Unit tests at boundary values
-        (999, 1000, 1001, 1999, 2000, 2001).
+        Kani BMC harness: every CO2 reading at or above a threshold
+        produces that threshold's alert and none below it. Boundary tests
+        at 999/1000/1001 and 1999/2000/2001 in wohl-integration
+        (requirement_boundary_pins).
     links:
       - type: derives-from
         target: SYSREQ-WOHL-003

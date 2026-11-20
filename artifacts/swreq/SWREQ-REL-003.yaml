@@ -1,0 +1,35 @@
+artifacts:
+  - id: SWREQ-REL-003
+    type: sw-req
+    title: "Trust-escape ledger as a required check, shipped in the bundle"
+    status: draft
+    release: "v0.8.0"
+    description: >
+      Objective O3 (every verified claim is backed), with O5 as a
+      secondary only if its own condition holds. A ledger shall
+      enumerate every assumption that narrows a proof harness's input
+      range across the seven plain engines and the Verus proofs: every
+      kani assume, documented harness precondition, Verus axiom or
+      assume, and proptest domain narrowing. A required CI check shall
+      compare the enumeration against a committed baseline and fail on
+      growth (the ledger may only shrink). The ledger file ships inside
+      the evidence bundle. The ledger tool is written in Rust under the
+      no-new-Python rule; it counts toward objective O5 only once it
+      runs as a signed WASI component under kiln with a wasmtime
+      differential and an in-CI equivalence test against the previous
+      version - without that, the O5 claim is not made.
+    tags: [verification, ledger, o3, o5]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Red control in CI: a scratch commit adding one input-narrowing
+        assume turns the check red. The v0.7.0 falsification clause
+        about undocumented assumes becomes machine-checked. Kill
+        criteria: the enumeration diverging from what Kani or Verus
+        actually discharge, or one observed baseline bump to green
+        without a proof change, demotes the ledger from required check
+        to report and the O3 claim is withdrawn.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-009

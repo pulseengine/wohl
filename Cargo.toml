@@ -12,6 +12,7 @@ members = [
     "crates/wohl-fw-door-bench",
     "crates/wohl-ota",
     "crates/wohl-matter-bridge",
+    "tools/trust-escape-ledger",
 ]
 
 [workspace.package]

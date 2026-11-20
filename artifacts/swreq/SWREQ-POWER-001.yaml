@@ -1,0 +1,31 @@
+artifacts:
+  - id: SWREQ-POWER-001
+    type: sw-req
+    title: "POWER-P01: Overconsumption alert strictly above max watts"
+    status: approved
+    description: >
+      For a registered, enabled circuit, a power reading with watts
+      strictly greater than the circuit's configured max_watts shall
+      produce one OverConsumption alert in the same process_reading
+      invocation, carrying the circuit id, the reading value, the
+      configured threshold and the reading time. A reading exactly at
+      max_watts produces no alert. The comparison is delegated to the
+      relay-lc WatchpointTable (GreaterThan, persistence 1), which is
+      relay's verified engine. Readings for unregistered circuits and
+      circuits registered with enabled == false produce no alert. At
+      most 4 alerts are reported per reading (the fixed result buffer);
+      further alert conditions in the same invocation are dropped.
+    tags: [power, monitoring, kani]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Kani BMC harness verify_overconsumption_via_relay_lc: for every
+        watts > max_watts the result contains an OverConsumption alert
+        (the harness narrows to watts > max_watts; the narrowing is in
+        the trust-escape ledger). Boundary pin in wohl-integration:
+        exactly max_watts is silent, max_watts + 1 alerts. Unit test
+        test_overconsumption_via_relay_lc.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-005

@@ -1,0 +1,30 @@
+artifacts:
+  - id: SWREQ-REL-004
+    type: sw-req
+    title: "Signed armv6-m door image with an emulated-target lane"
+    status: draft
+    release: "v0.8.0"
+    description: >
+      Objective O1 PREPARATION only - an emulated run is, by O1's own
+      guard, a skipped hardware run and does not move O1's indicator;
+      the release asset feeds O2. A release-blocking lane shall boot the
+      synth-built armv6-m image of the door component under renode,
+      inject a contact event at the gale seam and assert the alert on
+      the bus. The signed firmware image ships as a release asset under
+      SHA256SUMS and cosign. The air-path variant follows only if the
+      door lane is green early in the cycle.
+    tags: [target, renode, door, o1-prep, o2]
+    fields:
+      req-type: functional
+      priority: should
+      verification-criteria: >
+        The renode lane passes with no gap-style bypass, on a device
+        model that represents the gale boot-shim register contract.
+        Kill criteria (hard date): the synth armv6-m lane plus the
+        synth dissolve fix not merged upstream three weeks before the
+        intended tag kills this item for v0.8.0; it is re-planned, not
+        carried half-done. Emulator evidence is never filed as
+        on-target evidence.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-009
