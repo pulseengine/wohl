@@ -1,0 +1,37 @@
+artifacts:
+  - id: SWREQ-POWER-002
+    type: sw-req
+    title: "POWER-P02: Spike alert on absolute change strictly above threshold"
+    status: approved
+    description: >
+      For a registered, enabled circuit with an established baseline (at
+      least one earlier reading), a reading whose absolute difference
+      from the previous reading is strictly greater than the circuit's
+      spike_threshold shall produce one Spike alert in the same
+      process_reading invocation. The comparison uses the absolute
+      difference, so a fall is detected like a rise. A difference
+      exactly at spike_threshold produces no alert. The first reading
+      for a circuit never produces a Spike alert; it establishes the
+      baseline. Every reading for a circuit updates that circuit's
+      baseline, alert or not, and readings for one circuit never touch
+      another circuit's baseline. The engine detects a spike between
+      consecutive readings only; a gradual drift across several
+      readings, each within the threshold, is not detected.
+      (SYSREQ-WOHL-005 additionally names sustained high load and a
+      daily consumption budget; neither is implemented in the engine,
+      tracked as a deferral on wohl#97.)
+    tags: [power, monitoring, anomaly-detection, kani]
+    fields:
+      req-type: functional
+      priority: must
+      verification-criteria: >
+        Kani BMC harness verify_alert_count_bounded: alert_count never
+        exceeds the result buffer for any two symbolic readings.
+        Mutation-pinned unit tests: first_reading_never_spikes,
+        spike_exactly_at_threshold_no_alert,
+        reading_for_other_circuit_does_not_update_first_circuit_baseline.
+        Boundary pin in wohl-integration: a fall of threshold + 1 alerts
+        (absolute difference), a change of exactly threshold is silent.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-005

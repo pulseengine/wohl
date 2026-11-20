@@ -397,8 +397,10 @@ jobs:
       # witness v0.47 spike S3 (asked 2026-11-20): a composed build whose
       # DWARF line tables cover wohl's own crates, so witness can attribute
       # decisions to wohl code after meld fusion. The release asset is
-      # unchanged; this is a separate configuration (-Cdebuginfo=1 = line
-      # tables only, still -c opt) uploaded as a CI artifact. Advisory:
+      # unchanged; this differs from it only by -Cdebuginfo=1 (line tables).
+      # Both release.yml and this step build Bazel's default fastbuild, so
+      # the attribution evidence matches the shipped configuration; if the
+      # release ever moves to -c opt, move this step with it. Advisory:
       # a failure here must not redden the required Bazel check.
       - name: Build composed component with line tables (witness S3, advisory)
         id: linetables
@@ -617,6 +619,46 @@ jobs:
   # pinned: shellcheck by sha256 into a job-local path (called as
   # "$SHELLCHECK", never by PATH lookup), Python by setup-python's interpreter
   # path. curl, not `gh`: self-hosted runners do not have the GitHub CLI.
+  trust-escape-ledger:
+    # SWREQ-REL-003 (objective O3): the set of input-narrowing assumptions in
+    # the proof harnesses may only shrink. Growth and a stale baseline both
+    # fail, so every change to tools/trust-escape-ledger/baseline.tsv is a
+    # reviewed diff. The planted-assume step is the red control: it proves on
+    # every run that the check can fail. Marking this job required in the
+    # ruleset is the owner's step.
+    name: Trust-escape ledger (assumes may only shrink)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: wohl
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: pulseengine/relay
+          path: relay
+          ref: ${{ env.RELAY_REF }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.87.0"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: wohl
+      - name: Ledger check (set-equal against baseline.tsv)
+        working-directory: wohl
+        run: cargo run -q -p trust-escape-ledger
+      - name: Red control (a planted assume must turn the check red)
+        working-directory: wohl
+        run: |
+          set -euo pipefail
+          printf 'fn planted() { kani::assume(1 > 0); }\n' > crates/wohl-leak/plain/src/scratch_control.rs
+          if cargo run -q -p trust-escape-ledger; then
+            echo "::error::red control failed: planted kani::assume did not fail the ledger check"
+            exit 1
+          fi
+          rm crates/wohl-leak/plain/src/scratch_control.rs
+          cargo run -q -p trust-escape-ledger
+
   script-portability:
     name: Script portability (shellcheck + Python 3.9 floor)
     runs-on: ubuntu-24.04  # setup-python has no 3.9 build for 26.04
