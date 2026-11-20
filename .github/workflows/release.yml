@@ -43,7 +43,7 @@ env:
   # Copy of tools/deps/sibling-pins.env (the canonical pin source); the
   # Script portability job fails if this copy diverges. Bump there first.
   RIVET_REF: 78f001e23d595ba816f7a7be59282194dedfdc12
-  WITNESS_REF: v0.38.0
+  WITNESS_REF: v0.46.0
   # sigil ships its binary as `wsc`. Installed from the sigil release
   # (cosign-verified against the tag identity) instead of built from git, so
   # the bundle is signed by the same binary an assessor installs
