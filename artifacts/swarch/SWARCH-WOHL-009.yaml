@@ -41,7 +41,6 @@ artifacts:
         target: SWARCH-WOHL-001
       # The shipped components must run the engines these requirements are
       # verified against; one allocated-from per monitor with a sw-req.
-      # (wohl-power has no SWREQ-POWER-* yet — tracked as a trace gap.)
       - type: allocated-from
         target: SWREQ-AIR-001
       - type: allocated-from
@@ -50,5 +49,7 @@ artifacts:
         target: SWREQ-DOOR-001
       - type: allocated-from
         target: SWREQ-LEAK-001
+      - type: allocated-from
+        target: SWREQ-POWER-001
       - type: allocated-from
         target: SWREQ-TEMP-001

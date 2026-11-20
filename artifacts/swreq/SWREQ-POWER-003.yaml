@@ -1,0 +1,27 @@
+artifacts:
+  - id: SWREQ-POWER-003
+    type: sw-req
+    title: "POWER-P03: Idle query reports at-or-below idle watts"
+    status: approved
+    description: >
+      The engine shall provide an idle query: for a registered circuit,
+      check_idle(circuit_id, current_watts) returns true if and only if
+      current_watts is less than or equal to the circuit's configured
+      idle_watts. For a circuit id that is not registered the query
+      returns false. The query is a predicate the host invokes; the
+      engine emits no DeviceLeftOn alert itself. The DeviceLeftOn alert
+      type in the component interface is mapped by the hub, which owns
+      when the query's answer becomes an alert.
+    tags: [power, monitoring]
+    fields:
+      req-type: functional
+      priority: should
+      verification-criteria: >
+        Boundary pin in wohl-integration: exactly idle_watts is idle,
+        idle_watts + 1 is not, an unregistered circuit id is false.
+        Mutation-pinned unit tests: check_idle_finds_non_first_circuit,
+        check_idle_unknown_circuit_is_false. Kani harness
+        verify_no_panic covers the query for symbolic inputs.
+    links:
+      - type: derives-from
+        target: SYSREQ-WOHL-005
