@@ -50,7 +50,7 @@ jobs:
           path: relay
           ref: ${{ env.RELAY_REF }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: "1.87.0"
           components: rustfmt, clippy
@@ -112,7 +112,7 @@ jobs:
           path: relay
           ref: ${{ env.RELAY_REF }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: "1.87.0"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -169,7 +169,9 @@ jobs:
           fetch-depth: 0
       # Kani-verifier (the installer) needs newer Rust than our MSRV.
       # Kani itself uses an internal nightly for the proofs.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: wohl
@@ -211,7 +213,7 @@ jobs:
           path: relay
           ref: ${{ env.RELAY_REF }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: nightly
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -257,7 +259,9 @@ jobs:
           path: relay
           ref: main
       # rivet-cli's deps need Rust 1.89+; we don't care about MSRV for tooling.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
+        with:
+          toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: rivet
@@ -286,7 +290,7 @@ jobs:
       # so every Bazel job needs nix-build on PATH (see MODULE.bazel
       # comment). Pinned to cachix/install-nix-action v31.10.6.
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
-      - uses: bazel-contrib/setup-bazel@0.15.0
+      - uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
         with:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-verus
@@ -326,7 +330,7 @@ jobs:
       # comment). Pinned to the same SHA as the verus job above so
       # both stay aligned on cachix/install-nix-action v31.10.6.
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
-      - uses: bazel-contrib/setup-bazel@0.15.0
+      - uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
         with:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-bazel-build
@@ -497,7 +501,7 @@ jobs:
           path: relay
           ref: ${{ env.RELAY_REF }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: "1.87.0"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -565,7 +569,7 @@ jobs:
           path: relay
           ref: ${{ env.RELAY_REF }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
           toolchain: "1.87.0"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
