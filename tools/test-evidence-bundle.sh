@@ -125,4 +125,20 @@ run_emptytrace() { PATH="$BIN_OK:$BASE_PATH" "$E/wohl-vTEST-evidence/verify.sh";
 expect_fail "rejects an empty trace file (checksum alone would pass)" \
     "trace/trace-export.yaml missing or empty" run_emptytrace
 
-echo "PASS: evidence-bundle machinery — 1 green, 7 red controls"
+# ── red 8: corrupted content in the signed component ──────────────────
+# sigil#395: `wsc verify-chain` passes a one-bit-flipped component, so the
+# bundle's own re-hash (step 1, MANIFEST.sha256 covers the signed wasm) is
+# what must catch content tampering. This control plants the flip and
+# watches the checksum step go red — if it ever passes, verify.sh has
+# started trusting the signature tool for content integrity.
+B="$WORK/bitflip"; mkdir -p "$B"; assemble "$F/mcdc-report.txt" "$B"
+WASM="$B/wohl-vTEST-evidence/attestation/wohl-matter-composed.signed.wasm"
+# Corrupt one byte in place (dd, not a scripting runtime). The byte value
+# 0x00 differs from the fixture's first byte, so content changes while the
+# file keeps its length and its manifest line.
+dd if=/dev/zero of="$WASM" bs=1 count=1 conv=notrunc 2>/dev/null
+run_bitflip() { PATH="$BIN_OK:$BASE_PATH" "$B/wohl-vTEST-evidence/verify.sh"; }
+expect_fail "rejects a corrupted-content signed component (sigil#395 class)" \
+    "checksum mismatch against MANIFEST.sha256" run_bitflip
+
+echo "PASS: evidence-bundle machinery — 1 green, 8 red controls"

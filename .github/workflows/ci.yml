@@ -390,6 +390,40 @@ jobs:
           path: wohl-matter-composed.wasm
           if-no-files-found: error
 
+      # witness v0.47 spike S3 (asked 2026-11-20): a composed build whose
+      # DWARF line tables cover wohl's own crates, so witness can attribute
+      # decisions to wohl code after meld fusion. The release asset is
+      # unchanged; this is a separate configuration (-Cdebuginfo=1 = line
+      # tables only, still -c opt) uploaded as a CI artifact. Advisory:
+      # a failure here must not redden the required Bazel check.
+      - name: Build composed component with line tables (witness S3, advisory)
+        id: linetables
+        working-directory: wohl
+        continue-on-error: true
+        env:
+          CARGO_BAZEL_REPIN: "1"
+        run: |
+          set -euo pipefail
+          bazel build //:wohl-matter-composed \
+            --@rules_rust//rust/settings:extra_rustc_flag=-Cdebuginfo=1
+          WASM=$(find "$(bazel info bazel-bin)" -name 'wohl-matter-composed.wasm' | head -1)
+          test -n "$WASM"
+          # The artifact is only useful if wohl paths actually appear in the
+          # DWARF strings — assert that here rather than shipping a dud.
+          if ! grep -aq 'wohl-matter-core' "$WASM"; then
+            echo "::warning::line-tables build contains no wohl source paths; not uploading"
+            exit 1
+          fi
+          cp -L "$WASM" "$GITHUB_WORKSPACE/wohl-matter-composed-linetables.wasm"
+
+      - name: Upload line-tables composed component (witness S3)
+        if: steps.linetables.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wohl-matter-composed-linetables
+          path: wohl-matter-composed-linetables.wasm
+          if-no-files-found: error
+
   sigil-attest:
     # SWARCH-WOHL-008 step 6: build-stage attestation gate. Signs the
     # bazel-built composed component with sigil and confirms the detached
