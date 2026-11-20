@@ -393,8 +393,10 @@ jobs:
       # witness v0.47 spike S3 (asked 2026-11-20): a composed build whose
       # DWARF line tables cover wohl's own crates, so witness can attribute
       # decisions to wohl code after meld fusion. The release asset is
-      # unchanged; this is a separate configuration (-Cdebuginfo=1 = line
-      # tables only, still -c opt) uploaded as a CI artifact. Advisory:
+      # unchanged; this differs from it only by -Cdebuginfo=1 (line tables).
+      # Both release.yml and this step build Bazel's default fastbuild, so
+      # the attribution evidence matches the shipped configuration; if the
+      # release ever moves to -c opt, move this step with it. Advisory:
       # a failure here must not redden the required Bazel check.
       - name: Build composed component with line tables (witness S3, advisory)
         id: linetables
