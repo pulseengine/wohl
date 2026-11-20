@@ -21,7 +21,7 @@ permissions:
 env:
   # Pinned to the witness release tested against. Copy of
   # tools/deps/sibling-pins.env (canonical) — bump there first.
-  WITNESS_REF: v0.38.0
+  WITNESS_REF: v0.46.0
 
 jobs:
   witness:

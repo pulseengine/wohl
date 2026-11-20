@@ -30,6 +30,10 @@ env:
   # for local dev; CI checks out the pinned ref into a sibling path so
   # the override resolves.
   RULES_WASM_COMPONENT_REF: fbe20571eee9bd05687c95e7a43f6c236d9b2428
+  # Pinned meld + witness for the advisory composed-attribution steps in
+  # the bazel-build job (wohl#58). Copies of tools/deps/sibling-pins.env.
+  MELD_REF: v0.68.0
+  WITNESS_REF: v0.46.0
   # Pinned sigil release for the build-stage attestation gate (sigil-attest
   # job signs the composed Matter component). sigil ships its binary as
   # `wsc`; installed from the cosign-verified release, in lock-step with
@@ -428,6 +432,75 @@ jobs:
         with:
           name: wohl-matter-composed-linetables
           path: wohl-matter-composed-linetables.wasm
+
+      # wohl#58 first lane (advisory): static decision attribution of the
+      # REAL fused composed component, reproducing witness's S3 flow
+      # (meld fuse --preserve-names carries the line tables through, so
+      # witness instrument sets attribution_source=dwarf by itself). This
+      # asserts the fused build keeps attributing decisions to wohl's own
+      # sources, and uploads the instrument manifest. Static attribution
+      # only — no witness run, no coverage claim (the run step is wohl#58's
+      # open half; report scoping is witness#393). The jq prefix filter is
+      # interim glue until witness#393's --source-include exists.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: steps.linetables.outcome == 'success'
+        with:
+          repository: pulseengine/meld
+          path: meld
+          ref: ${{ env.MELD_REF }}
+          fetch-depth: 0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        if: steps.linetables.outcome == 'success'
+        with:
+          repository: pulseengine/witness
+          path: witness
+          ref: ${{ env.WITNESS_REF }}
+          fetch-depth: 0
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        if: steps.linetables.outcome == 'success'
+        with:
+          workspaces: |
+            meld
+            witness
+          key: meld-witness-s3
+      - name: Build meld + witness (pinned)
+        id: meldwitness
+        if: steps.linetables.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          cargo build --release -p meld-cli --bin meld --manifest-path meld/Cargo.toml
+          cargo build --release -p witness-mcdc --bin witness --manifest-path witness/Cargo.toml
+      - name: Composed attribution manifest (witness S3, advisory)
+        id: attribution
+        if: steps.meldwitness.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          MELD="$GITHUB_WORKSPACE/meld/target/release/meld"
+          WITNESS="$GITHUB_WORKSPACE/witness/target/release/witness"
+          "$MELD" fuse --preserve-names "$GITHUB_WORKSPACE/wohl-matter-composed-linetables.wasm" -o fused.wasm
+          "$WITNESS" instrument fused.wasm -o fused.instr.wasm
+          MANIFEST=fused.instr.wasm.witness.json
+          test -f "$MANIFEST"
+          src=$(jq -r '.attribution_source // empty' "$MANIFEST")
+          total=$(jq '.decisions|length' "$MANIFEST")
+          ours=$(jq -r '.decisions[].source_file' "$MANIFEST" | grep -c '^crates/wohl-matter-core/' || true)
+          echo "attribution_source=$src decisions_total=$total wohl-matter-core=$ours"
+          # Fail closed: the lane exists to prove attribution reaches our
+          # code. Zero attributed decisions, or a non-dwarf source, is the
+          # dud this step exists to catch.
+          if [ "$src" != "dwarf" ] || [ "$total" -eq 0 ] || [ "$ours" -eq 0 ]; then
+            echo "::warning::composed attribution lost: source=$src total=$total ours=$ours"
+            exit 1
+          fi
+          cp "$MANIFEST" "$GITHUB_WORKSPACE/wohl-matter-composed-attribution.json"
+      - name: Upload attribution manifest (witness S3)
+        if: steps.attribution.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wohl-matter-composed-attribution
+          path: wohl-matter-composed-attribution.json
           if-no-files-found: error
 
   sigil-attest:
