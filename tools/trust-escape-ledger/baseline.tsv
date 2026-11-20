@@ -1,0 +1,9 @@
+kani-assume	crates/wohl-air/plain/src/engine.rs	0	kani::assume(co2 < co2_warn && pm25 < pm25_warn && voc < voc_warn);
+kani-assume	crates/wohl-air/plain/src/engine.rs	0	kani::assume(zone_id as usize >= MAX_ZONES);
+kani-assume	crates/wohl-alert/plain/src/engine.rs	0	kani::assume(time < u64::MAX);
+kani-assume	crates/wohl-alert/plain/src/engine.rs	0	kani::assume(time2 >= time1 && time2 - time1 < DEDUP_COOLDOWN_SEC && time2 < u64::MAX);
+kani-assume	crates/wohl-ota/plain/src/engine.rs	0	kani::assume(n <= 16);
+kani-assume	crates/wohl-ota/plain/src/engine.rs	0	kani::assume(op < 8);
+kani-assume	crates/wohl-ota/plain/src/engine.rs	0	kani::assume(size > 0 && size <= max_size);
+kani-assume	crates/wohl-power/plain/src/engine.rs	0	kani::assume(watts > max_watts);
+kani-assume	crates/wohl-temp/plain/src/engine.rs	0	kani::assume(value <= freeze_thr);
