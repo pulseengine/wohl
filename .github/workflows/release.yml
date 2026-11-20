@@ -74,17 +74,11 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
             archive: tar.gz
-          # macOS targets for dev convenience — wohl-hub on a Mac is
+          # macOS target for dev convenience — wohl-hub on a Mac is
           # not the production deployment shape, but reviewers and
-          # developers want a runnable binary.
-          # GitHub retired the macos-14 image (jobs cancel with "configuration
-          # 'macos-14-arm64-us-default' is not supported", observed on the
-          # v0.7.0 release runs 2026-11-13). macos-15-intel keeps this leg a
-          # native build, matching rivet and kiln; move to cross-compiling on
-          # the ARM runner if Intel runners retire too.
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-            archive: tar.gz
+          # developers want a runnable binary. Apple-silicon only:
+          # the x86_64-apple-darwin leg was dropped fleet-wide by
+          # owner decision (2026-11-20) along with Intel macOS runners.
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
