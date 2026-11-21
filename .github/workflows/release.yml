@@ -49,7 +49,7 @@ env:
   # the bundle is signed by the same binary an assessor installs
   # (`cargo install wsc-cli`, or the release asset). One pin, a copy of
   # tools/deps/sibling-pins.env — bump there first.
-  WSC_VERSION: v0.12.1
+  WSC_VERSION: v0.12.2
 
 jobs:
   # ── Cross-platform binary builds ──────────────────────────────────────

@@ -126,7 +126,9 @@ expect_fail "rejects an empty trace file (checksum alone would pass)" \
     "trace/trace-export.yaml missing or empty" run_emptytrace
 
 # ── red 8: corrupted content in the signed component ──────────────────
-# sigil#395: `wsc verify-chain` passes a one-bit-flipped component, so the
+# sigil#395 (fixed in sigil v0.12.2, which binds the attested output hash
+# to the module; control kept as defense in depth): `wsc verify-chain`
+# before that fix passes a one-bit-flipped component, so the
 # bundle's own re-hash (step 1, MANIFEST.sha256 covers the signed wasm) is
 # what must catch content tampering. This control plants the flip and
 # watches the checksum step go red — if it ever passes, verify.sh has
