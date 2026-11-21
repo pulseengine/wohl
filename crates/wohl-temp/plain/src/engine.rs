@@ -12,13 +12,26 @@ use relay_lc::engine::{ComparisonOp, SensorReading, Watchpoint, WatchpointTable}
 pub const MAX_ZONES: usize = 32;
 pub const MAX_ALERTS_PER_READING: usize = 4;
 
+/// Rapid-drop window (SWREQ-TEMP-003): a drop greater than the zone's
+/// rate threshold within this many seconds fires RapidDrop.
+pub const RATE_WINDOW_SEC: u64 = 600;
+/// Bucket granularity of the window. The ring keeps one in-progress
+/// bucket plus RATE_WINDOW_SEC/RATE_BUCKET_SEC full ones, so every drop
+/// completing within RATE_WINDOW_SEC is seen, and a drop may also be
+/// seen up to one bucket (60s) beyond it.
+pub const RATE_BUCKET_SEC: u64 = 60;
+pub const RATE_BUCKETS: usize = 11;
+
 /// Per-zone configuration — domain-specific thresholds in centidegrees.
 #[derive(Clone, Copy)]
 pub struct ZoneConfig {
     pub zone_id: u32,
     pub freeze_threshold: i32,   // centidegrees (e.g., 0 = 0.00°C)
     pub overheat_threshold: i32, // centidegrees (e.g., 4000 = 40.00°C)
-    pub rate_threshold: i32,     // max change per reading in centidegrees
+    /// Centidegrees. RapidDrop: max drop within the RATE_WINDOW_SEC
+    /// window (strict >). RapidRise: max rise between two consecutive
+    /// readings (strict >).
+    pub rate_threshold: i32,
     pub enabled: bool,
 }
 
@@ -29,6 +42,12 @@ pub struct ZoneState {
     pub last_value: i32,
     pub last_time: u64,
     pub active: bool,
+    /// Per-bucket maximum of readings in the rapid-drop window ring.
+    pub bucket_max: [i32; RATE_BUCKETS],
+    pub bucket_valid: [bool; RATE_BUCKETS],
+    /// Absolute bucket index (time / RATE_BUCKET_SEC) of the newest bucket.
+    pub newest_bucket: u64,
+    pub window_init: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -83,6 +102,10 @@ impl ZoneState {
             last_value: 0,
             last_time: 0,
             active: false,
+            bucket_max: [0; RATE_BUCKETS],
+            bucket_valid: [false; RATE_BUCKETS],
+            newest_bucket: 0,
+            window_init: false,
         }
     }
 }
@@ -141,6 +164,10 @@ impl TemperatureMonitor {
             last_value: 0,
             last_time: 0,
             active: true,
+            bucket_max: [0; RATE_BUCKETS],
+            bucket_valid: [false; RATE_BUCKETS],
+            newest_bucket: 0,
+            window_init: false,
         };
 
         // Create relay-lc watchpoints — VERIFIED threshold evaluation
@@ -221,39 +248,98 @@ impl TemperatureMonitor {
                 && self.configs[idx].zone_id == zone_id
                 && self.configs[idx].enabled
             {
-                if self.states[idx].last_time > 0 {
-                    let last = self.states[idx].last_value;
-                    let rate_thr = self.configs[idx].rate_threshold;
+                let rate_thr = self.configs[idx].rate_threshold;
 
-                    if last.saturating_sub(value) > rate_thr
-                        && (res.alert_count as usize) < MAX_ALERTS_PER_READING
-                    {
-                        res.alerts[res.alert_count as usize] = TempAlert {
-                            zone_id,
-                            alert_type: TempAlertType::RapidDrop,
-                            value,
-                            threshold: rate_thr,
-                            time,
-                        };
-                        res.alert_count += 1;
+                // ── RapidDrop: windowed (SWREQ-TEMP-003) ──
+                // Ring of RATE_BUCKETS per-bucket maxima. Advance the ring
+                // to the current bucket, take the max over surviving
+                // buckets (the samples of the last <= 660s), compare, then
+                // insert the current reading.
+                let b = time / RATE_BUCKET_SEC;
+                let st = &mut self.states[idx];
+                if !st.window_init || b < st.newest_bucket {
+                    // First reading, or time went backwards (clock
+                    // adjustment): restart the window rather than compare
+                    // against stale maxima.
+                    let mut k: usize = 0;
+                    while k < RATE_BUCKETS {
+                        st.bucket_valid[k] = false;
+                        k += 1;
                     }
-
-                    if value.saturating_sub(last) > rate_thr
-                        && (res.alert_count as usize) < MAX_ALERTS_PER_READING
-                    {
-                        res.alerts[res.alert_count as usize] = TempAlert {
-                            zone_id,
-                            alert_type: TempAlertType::RapidRise,
-                            value,
-                            threshold: rate_thr,
-                            time,
-                        };
-                        res.alert_count += 1;
+                    st.newest_bucket = b;
+                    st.window_init = true;
+                } else if b > st.newest_bucket {
+                    if b - st.newest_bucket >= RATE_BUCKETS as u64 {
+                        // The whole window expired.
+                        let mut k: usize = 0;
+                        while k < RATE_BUCKETS {
+                            st.bucket_valid[k] = false;
+                            k += 1;
+                        }
+                    } else {
+                        // Invalidate the buckets the gap skipped over
+                        // (at most RATE_BUCKETS - 1 steps).
+                        let mut step = st.newest_bucket + 1;
+                        while step <= b {
+                            st.bucket_valid[(step % RATE_BUCKETS as u64) as usize] = false;
+                            step += 1;
+                        }
                     }
+                    st.newest_bucket = b;
                 }
 
-                self.states[idx].last_value = value;
-                self.states[idx].last_time = time;
+                let mut have_max = false;
+                let mut window_max: i32 = 0;
+                let mut k: usize = 0;
+                while k < RATE_BUCKETS {
+                    if st.bucket_valid[k] && (!have_max || st.bucket_max[k] > window_max) {
+                        window_max = st.bucket_max[k];
+                        have_max = true;
+                    }
+                    k += 1;
+                }
+
+                if have_max
+                    && window_max.saturating_sub(value) > rate_thr
+                    && (res.alert_count as usize) < MAX_ALERTS_PER_READING
+                {
+                    res.alerts[res.alert_count as usize] = TempAlert {
+                        zone_id,
+                        alert_type: TempAlertType::RapidDrop,
+                        value,
+                        threshold: rate_thr,
+                        time,
+                    };
+                    res.alert_count += 1;
+                }
+
+                let slot = (b % RATE_BUCKETS as u64) as usize;
+                if st.bucket_valid[slot] {
+                    if value > st.bucket_max[slot] {
+                        st.bucket_max[slot] = value;
+                    }
+                } else {
+                    st.bucket_valid[slot] = true;
+                    st.bucket_max[slot] = value;
+                }
+
+                // ── RapidRise: consecutive readings (unchanged) ──
+                if st.last_time > 0
+                    && value.saturating_sub(st.last_value) > rate_thr
+                    && (res.alert_count as usize) < MAX_ALERTS_PER_READING
+                {
+                    res.alerts[res.alert_count as usize] = TempAlert {
+                        zone_id,
+                        alert_type: TempAlertType::RapidRise,
+                        value,
+                        threshold: rate_thr,
+                        time,
+                    };
+                    res.alert_count += 1;
+                }
+
+                st.last_value = value;
+                st.last_time = time;
                 break;
             }
             i += 1;
@@ -376,6 +462,33 @@ mod proptests {
         }
 
         #[test]
+        fn window_fires_any_alignment(
+            t1 in 0u64..1_000_000,
+            dt in 0u64..=RATE_WINDOW_SEC,
+            v1 in -10000i32..10000,
+            drop in 201i32..5000,
+        ) {
+            // Complements the Kani harnesses' first-bucket narrowing: any
+            // t1 alignment, any in-window dt, any drop over the threshold.
+            let mut m = TemperatureMonitor::new();
+            m.register_zone(ZoneConfig {
+                zone_id: 1, freeze_threshold: i32::MIN,
+                overheat_threshold: i32::MAX, rate_threshold: 200, enabled: true,
+            });
+            m.process_reading(1, v1, t1);
+            let r = m.process_reading(1, v1 - drop, t1 + dt);
+            let mut found = false;
+            let mut j = 0u32;
+            while j < r.alert_count {
+                if r.alerts[j as usize].alert_type == TempAlertType::RapidDrop {
+                    found = true;
+                }
+                j += 1;
+            }
+            prop_assert!(found);
+        }
+
+        #[test]
         fn normal_range_no_alerts(
             value in 1000i32..3000,
         ) {
@@ -396,27 +509,40 @@ mod proptests {
 mod kani_proofs {
     use super::*;
 
-    /// TEMP-P04: alert_count never exceeds MAX_ALERTS_PER_READING
+    /// TEMP-P04: alert_count never exceeds MAX_ALERTS_PER_READING.
+    ///
+    /// Input narrowing (trust escape, documented): the reading times are
+    /// LITERAL constants, one pair per window code path (in-window insert,
+    /// time-backwards reset, gap clear-all, one-bucket skip), run as four
+    /// independent monitors in straight-line code. Symbolic times — even a
+    /// symbolic choice over these same four pairs — leave a symbolic u64
+    /// division CBMC cannot constant-fold, which made this harness
+    /// intractable once the bucket ring landed (two runs killed). Values
+    /// and thresholds stay symbolic; the exhaustive window_tests cover the
+    /// time dimension densely.
     #[kani::proof]
     fn verify_alert_count_bounded() {
-        let mut m = TemperatureMonitor::new();
-        let config = ZoneConfig {
-            zone_id: 1,
-            freeze_threshold: kani::any(),
-            overheat_threshold: kani::any(),
-            rate_threshold: kani::any(),
-            enabled: true,
-        };
-        m.register_zone(config);
-        // First reading to establish baseline for rate detection
-        let v1: i32 = kani::any();
-        let t1: u64 = kani::any();
-        m.process_reading(1, v1, t1);
-        // Second reading may trigger rate-of-change alerts too
-        let v2: i32 = kani::any();
-        let t2: u64 = kani::any();
-        let r = m.process_reading(1, v2, t2);
-        assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
+        // (t1, t2) per path; RATE_WINDOW_SEC = 600, clear-all gap = 810.
+        let cases: [(u64, u64); 4] = [(0, 600), (100, 50), (0, 810), (0, 90)];
+        let mut c = 0usize;
+        while c < 4 {
+            let (t1, t2) = cases[c];
+            let mut m = TemperatureMonitor::new();
+            let config = ZoneConfig {
+                zone_id: 1,
+                freeze_threshold: kani::any(),
+                overheat_threshold: kani::any(),
+                rate_threshold: kani::any(),
+                enabled: true,
+            };
+            m.register_zone(config);
+            let v1: i32 = kani::any();
+            m.process_reading(1, v1, t1);
+            let v2: i32 = kani::any();
+            let r = m.process_reading(1, v2, t2);
+            assert!(r.alert_count as usize <= MAX_ALERTS_PER_READING);
+            c += 1;
+        }
     }
 
     /// TEMP-P01: value <= freeze_threshold produces Freeze alert (via relay-lc)
@@ -447,6 +573,76 @@ mod kani_proofs {
         assert!(found_freeze);
     }
 
+    /// TEMP-003: any drop greater than rate_threshold between two readings
+    /// RATE_WINDOW_SEC apart fires RapidDrop, for every value pair.
+    ///
+    /// Input narrowing (trust escape, documented): the two reading TIMES are
+    /// concrete (0 and RATE_WINDOW_SEC, the farthest in-window alignment) —
+    /// symbolic u64 time division made the harness intractable for CBMC
+    /// (two runs killed after 5 h+). The time dimension is instead covered
+    /// COMPLETELY by the exhaustive window_tests::exhaustive_* tests (all
+    /// 60 bucket alignments x every dt in range, at boundary values) and by
+    /// the window_fires_any_alignment proptest (random large t1). Values
+    /// here stay symbolic in [-10000, 10000].
+    #[kani::proof]
+    fn verify_window_drop_fires() {
+        let mut m = TemperatureMonitor::new();
+        m.register_zone(ZoneConfig {
+            zone_id: 1,
+            freeze_threshold: i32::MIN,
+            overheat_threshold: i32::MAX,
+            rate_threshold: 200,
+            enabled: true,
+        });
+        let v1: i32 = kani::any();
+        let v2: i32 = kani::any();
+        kani::assume(v1 >= -10000 && v1 <= 10000);
+        kani::assume(v2 >= -10000 && v2 <= 10000);
+        kani::assume(v1 - v2 > 200);
+        m.process_reading(1, v1, 0);
+        let r = m.process_reading(1, v2, RATE_WINDOW_SEC);
+        let mut found = false;
+        let mut j: u32 = 0;
+        while j < r.alert_count {
+            if r.alerts[j as usize].alert_type == TempAlertType::RapidDrop {
+                found = true;
+            }
+            j += 1;
+        }
+        assert!(found);
+    }
+
+    /// TEMP-003 negative: with only two readings more than
+    /// RATE_WINDOW_SEC + RATE_BUCKET_SEC apart, the baseline has expired
+    /// and no RapidDrop fires, however large the drop.
+    #[kani::proof]
+    fn verify_window_drop_expired_no_fire() {
+        let mut m = TemperatureMonitor::new();
+        m.register_zone(ZoneConfig {
+            zone_id: 1,
+            freeze_threshold: i32::MIN,
+            overheat_threshold: i32::MAX,
+            rate_threshold: 200,
+            enabled: true,
+        });
+        // Input narrowing (trust escape, documented): concrete reading times
+        // (0 and RATE_WINDOW_SEC + RATE_BUCKET_SEC, the nearest expired
+        // alignment) for the same tractability reason as
+        // verify_window_drop_fires; the exhaustive tests and the proptest
+        // cover the time dimension. Values stay symbolic.
+        let v1: i32 = kani::any();
+        let v2: i32 = kani::any();
+        kani::assume(v1 >= -10000 && v1 <= 10000);
+        kani::assume(v2 >= -10000 && v2 <= 10000);
+        m.process_reading(1, v1, 0);
+        let r = m.process_reading(1, v2, RATE_WINDOW_SEC + RATE_BUCKET_SEC);
+        let mut j: u32 = 0;
+        while j < r.alert_count {
+            assert!(r.alerts[j as usize].alert_type != TempAlertType::RapidDrop);
+            j += 1;
+        }
+    }
+
     /// No panics for any combination of symbolic inputs
     #[kani::proof]
     fn verify_no_panic() {
@@ -463,6 +659,37 @@ mod kani_proofs {
         let value: i32 = kani::any();
         let time: u64 = kani::any();
         let _ = m.process_reading(zone_id, value, time);
+    }
+
+    /// No panics through every window code path (insert, time-backwards
+    /// reset, gap clear-all, one-bucket skip) with a second reading.
+    /// Input narrowing (trust escape, documented): the times are literal
+    /// constants per path (symbolic time is intractable for CBMC with the
+    /// bucket ring — see verify_alert_count_bounded); verify_no_panic
+    /// above keeps one fully symbolic time, and values, thresholds and
+    /// the zone id stay symbolic here.
+    #[kani::proof]
+    fn verify_no_panic_window_paths() {
+        let cases: [(u64, u64); 4] = [(0, 600), (100, 50), (0, 810), (0, 90)];
+        let mut c = 0usize;
+        while c < 4 {
+            let (t1, t2) = cases[c];
+            let mut m = TemperatureMonitor::new();
+            let zone_id: u32 = kani::any();
+            let config = ZoneConfig {
+                zone_id,
+                freeze_threshold: kani::any(),
+                overheat_threshold: kani::any(),
+                rate_threshold: kani::any(),
+                enabled: kani::any(),
+            };
+            m.register_zone(config);
+            let v1: i32 = kani::any();
+            let v2: i32 = kani::any();
+            let _ = m.process_reading(zone_id, v1, t1);
+            let _ = m.process_reading(zone_id, v2, t2);
+            c += 1;
+        }
     }
 }
 
@@ -660,5 +887,169 @@ mod mutation_tests {
         assert_eq!(r.alert_count, 0);
         let r2 = m.process_reading(1, 2050, 300);
         assert_eq!(r2.alert_count, 0);
+    }
+}
+
+/// TEMP-003 window tests: the 10-minute rapid-drop window (owner decision
+/// implement-window, 2026-11-19). The requirement's own scenario: a gradual
+/// freeze onset must fire even when no consecutive-reading step exceeds the
+/// threshold.
+#[cfg(test)]
+mod window_tests {
+    use super::*;
+
+    fn cfg(zone_id: u32) -> ZoneConfig {
+        ZoneConfig {
+            zone_id,
+            freeze_threshold: -10000,
+            overheat_threshold: 10000,
+            rate_threshold: 200, // 2.00 C, the requirement's value
+            enabled: true,
+        }
+    }
+
+    fn drop_alert_in(r: &TempResult) -> bool {
+        let mut j = 0u32;
+        let mut found = false;
+        while j < r.alert_count {
+            if r.alerts[j as usize].alert_type == TempAlertType::RapidDrop {
+                found = true;
+            }
+            j += 1;
+        }
+        found
+    }
+
+    // SWREQ-TEMP-003 verification criterion: a 2.01 C drop within 9 minutes
+    // fires. 60s cadence, -0.3 C per reading: no consecutive step exceeds
+    // 2.00 C, only the window sees it.
+    #[test]
+    fn gradual_drop_201_within_9_minutes_fires() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1)));
+        let mut fired = false;
+        let mut i: u64 = 0;
+        while i <= 9 {
+            let value = 2000i32 - (i as i32) * 30; // t=540: 1730, drop 270
+            let r = m.process_reading(1, value, i * 60);
+            if drop_alert_in(&r) {
+                fired = true;
+            }
+            i += 1;
+        }
+        assert!(
+            fired,
+            "gradual 2.7C/9min drop must fire the window detector"
+        );
+    }
+
+    // SWREQ-TEMP-003 verification criterion: a 1.99 C drop does not fire.
+    #[test]
+    fn gradual_drop_199_within_9_minutes_does_not_fire() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1)));
+        let mut i: u64 = 0;
+        while i <= 9 {
+            // t=0: 2000 ... t=540: 1801 — total drop 199 (1.99 C)
+            let value = if i == 9 {
+                1801
+            } else {
+                2000i32 - (i as i32) * 22
+            };
+            let r = m.process_reading(1, value, i * 60);
+            assert!(!drop_alert_in(&r), "1.99C drop must not fire (reading {i})");
+            i += 1;
+        }
+    }
+
+    // A baseline older than the window (plus the 60s bucket slack) expires:
+    // the same total drop spread beyond the window does not fire.
+    #[test]
+    fn drop_beyond_expired_window_does_not_fire() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1)));
+        let r0 = m.process_reading(1, 2000, 0);
+        assert!(!drop_alert_in(&r0));
+        // 700s later (> 660s = window + bucket slack): baseline expired.
+        let r1 = m.process_reading(1, 1700, 700);
+        assert!(
+            !drop_alert_in(&r1),
+            "a 3.0C drop over 700s is outside the 10-minute window"
+        );
+    }
+
+    // The old consecutive-step behavior still fires through the window:
+    // one >2.00 C step between consecutive readings is a within-window drop.
+    #[test]
+    fn single_step_drop_still_fires() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1)));
+        m.process_reading(1, 2500, 100);
+        let r = m.process_reading(1, 2299, 101);
+        assert!(drop_alert_in(&r));
+    }
+
+    // Boundary: window max minus value exactly equal to the threshold does
+    // not fire (strict >), one below it does.
+    #[test]
+    fn window_drop_boundary_is_strict() {
+        let mut m = TemperatureMonitor::new();
+        assert!(m.register_zone(cfg(1)));
+        m.process_reading(1, 2000, 0);
+        let r_eq = m.process_reading(1, 1800, 300); // drop 200 == threshold
+        assert!(!drop_alert_in(&r_eq));
+        let r_gt = m.process_reading(1, 1799, 301); // drop 201 > threshold
+        assert!(drop_alert_in(&r_gt));
+    }
+
+    // Exhaustive complement to the Kani harnesses, which hold the reading
+    // times CONCRETE (symbolic u64 time division is intractable for CBMC;
+    // two runs were killed after 5 h+). Bucket indexing repeats modulo
+    // RATE_BUCKET_SEC, so t1 in 0..60 enumerates EVERY alignment the engine
+    // can see; with every dt in range this covers the whole time dimension
+    // at the boundary values 201 (must fire) and 200 (must not). The Kani
+    // harnesses cover the whole value dimension at concrete times.
+
+    // Every alignment x every in-window dt: a 2.01 C drop fires, and a
+    // 2.00 C drop never does (strict threshold), at all 36,660 time pairs.
+    #[test]
+    fn exhaustive_all_alignments_in_window() {
+        for t1 in 0..RATE_BUCKET_SEC {
+            for dt in 0..=RATE_WINDOW_SEC {
+                let mut m = TemperatureMonitor::new();
+                assert!(m.register_zone(cfg(1)));
+                m.process_reading(1, 2000, t1);
+                let r = m.process_reading(1, 1799, t1 + dt);
+                assert!(drop_alert_in(&r), "drop 201 must fire at t1={t1} dt={dt}");
+                let mut m2 = TemperatureMonitor::new();
+                assert!(m2.register_zone(cfg(1)));
+                m2.process_reading(1, 2000, t1);
+                let r2 = m2.process_reading(1, 1800, t1 + dt);
+                assert!(
+                    !drop_alert_in(&r2),
+                    "drop 200 must not fire at t1={t1} dt={dt}"
+                );
+            }
+        }
+    }
+
+    // Every alignment x every expired dt up to 2000s: with the baseline
+    // older than the window plus the bucket slack, no drop fires however
+    // large (here 30.0 C), at all 80,460 time pairs.
+    #[test]
+    fn exhaustive_all_alignments_expired() {
+        let first_expired = RATE_WINDOW_SEC + RATE_BUCKET_SEC;
+        for t1 in 0..RATE_BUCKET_SEC {
+            for dt in first_expired..=2000 {
+                let mut m = TemperatureMonitor::new();
+                assert!(m.register_zone(cfg(1)));
+                m.process_reading(1, 2000, t1);
+                let r = m.process_reading(1, -1000, t1 + dt);
+                assert!(
+                    !drop_alert_in(&r),
+                    "expired baseline must not fire at t1={t1} dt={dt}"
+                );
+            }
+        }
     }
 }
