@@ -1,0 +1,15 @@
+# Negative control for lockfile freshness: Cargo.lock in this fixture
+# deliberately pins bitflags 2.6.0 while this manifest requires exactly
+# 2.9.0. `cargo metadata --locked` MUST refuse ("lock file ... needs to
+# be updated"); CI asserts the refusal. If this control ever passes,
+# the freshness guard is not actually checking locks.
+[package]
+name = "stale-lock"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+bitflags = "=2.9.0"
+
+[workspace]

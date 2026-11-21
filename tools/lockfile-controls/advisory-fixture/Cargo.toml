@@ -1,0 +1,16 @@
+# Negative control for the nested-lockfile audit: this fixture pins
+# smallvec 1.6.0, which carries RUSTSEC-2021-0003 (buffer overflow in
+# insert_many). `cargo deny check advisories` against this manifest
+# MUST fail; CI asserts the failure. If this control ever passes, the
+# audit lost its teeth (empty advisory DB, broken invocation) and the
+# job goes red.
+[package]
+name = "advisory-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+smallvec = "=1.6.0"
+
+[workspace]

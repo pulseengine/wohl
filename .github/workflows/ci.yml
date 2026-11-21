@@ -103,6 +103,93 @@ jobs:
           manifest-path: wohl/Cargo.toml
           command: check bans licenses advisories sources
 
+      # ── Nested lockfiles (lockfile sweep, 2026-11-20) ──────────────
+      # The check above covers only the workspace Cargo.lock. Six more
+      # committed locks exist (fuzz + five standalone spike/wasm
+      # crates); each gets its own advisories check. cargo-deny
+      # resolves deny.toml upward from the manifest, so every nested
+      # check runs under the same root policy and ignore list.
+      - name: "Nested lock audit: fuzz"
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: wohl/fuzz/Cargo.toml
+          command: check advisories
+      - name: "Nested lock audit: wohl-leak/wasm"
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: wohl/crates/wohl-leak/wasm/Cargo.toml
+          command: check advisories
+      - name: "Nested lock audit: matter-core witness"
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: wohl/crates/wohl-matter-core/witness/Cargo.toml
+          command: check advisories
+      - name: "Nested lock audit: spike2-exec"
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: wohl/crates/wohl-matter-core/spike2-exec/Cargo.toml
+          command: check advisories
+      - name: "Nested lock audit: spike2c transport"
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: wohl/crates/wohl-matter-core/spike2c-compose/transport/Cargo.toml
+          command: check advisories
+      - name: "Nested lock audit: spike2c mcore"
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: wohl/crates/wohl-matter-core/spike2c-compose/mcore/Cargo.toml
+          command: check advisories
+
+      # Freshness: the five standalone locks must match their
+      # manifests. fuzz and the root workspace are excluded here: both
+      # carry sibling relay path-deps and build unlocked by design
+      # (wohl#30; fuzz-smoke comment below). Their locks are committed
+      # audit records, not build pins.
+      - name: Nested locks are fresh (cargo metadata --locked)
+        working-directory: wohl
+        run: |
+          set -euo pipefail
+          for m in crates/wohl-leak/wasm crates/wohl-matter-core/witness \
+                   crates/wohl-matter-core/spike2-exec \
+                   crates/wohl-matter-core/spike2c-compose/transport \
+                   crates/wohl-matter-core/spike2c-compose/mcore; do
+            echo "== $m"
+            cargo metadata --locked --format-version 1 \
+              --manifest-path "$m/Cargo.toml" > /dev/null
+          done
+
+      # Red control: a stale lock must turn this job red. The fixture's
+      # manifest requires a bitflags version its Cargo.lock does not
+      # pin; --locked must refuse it. If it does not, the freshness
+      # guard above is vacuous.
+      - name: "Control: stale lock fails --locked"
+        working-directory: wohl
+        run: |
+          set -euo pipefail
+          if cargo metadata --locked --format-version 1 \
+               --manifest-path tools/lockfile-controls/stale-lock/Cargo.toml \
+               > /dev/null 2>&1; then
+            echo "::error::stale-lock control passed a --locked metadata read; the freshness guard does not detect stale locks"
+            exit 1
+          fi
+          echo "stale-lock control refused as expected"
+
+      # Red control: an advisory in a nested lock must turn the audit
+      # red. The fixture pins smallvec 1.6.0 (RUSTSEC-2021-0003); the
+      # check must fail and the follow-up step asserts it did.
+      - name: "Control: planted advisory in a nested lock"
+        id: advisory_control
+        continue-on-error: true
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
+        with:
+          manifest-path: wohl/tools/lockfile-controls/advisory-fixture/Cargo.toml
+          command: check advisories
+      - name: "Control: assert the planted advisory went red"
+        if: steps.advisory_control.outcome != 'failure'
+        run: |
+          echo "::error::advisory-fixture control did not fail (outcome ${{ steps.advisory_control.outcome }}); the nested audit cannot detect a planted RUSTSEC"
+          exit 1
+
   test:
     name: cargo test (workspace, incl. proptest)
     runs-on: ubuntu-24.04
@@ -299,9 +386,31 @@ jobs:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-verus
           repository-cache: true
+      # --lockfile_mode=error: build with the committed MODULE.bazel.lock
+      # or go red (lockfile sweep, 2026-11-20). The bazel-build job
+      # cannot take this flag yet: its CARGO_BAZEL_REPIN=1 re-resolves
+      # the crate universe every run because the committed lock is
+      # stale for the grown seed — tracked in the lockfile-sweep issue.
       - name: bazel test //proofs/verus:alert_dedup_verify
         working-directory: wohl
-        run: bazel test //proofs/verus:alert_dedup_verify --test_output=summary
+        run: bazel test //proofs/verus:alert_dedup_verify --test_output=summary --lockfile_mode=error
+
+      # Red control: an out-of-date Bazel lock must turn CI red. The
+      # lock records MODULE.bazel's hash, so any edit without a lock
+      # regeneration must make error-mode refuse. Perturb, expect
+      # refusal, restore.
+      - name: "Control: perturbed MODULE.bazel fails lockfile_mode=error"
+        working-directory: wohl
+        run: |
+          set -euo pipefail
+          echo "# lockfile-control perturbation" >> MODULE.bazel
+          if bazel mod deps --lockfile_mode=error > /dev/null 2>&1; then
+            echo "::error::MODULE.bazel was perturbed without a lock update and error-mode did not refuse; the Bazel lock is not actually enforced"
+            git checkout -- MODULE.bazel
+            exit 1
+          fi
+          git checkout -- MODULE.bazel
+          echo "perturbed-lock control refused as expected"
 
   bazel-build:
     # Catches drift in `rules_wasm_component` and in the
