@@ -43,7 +43,7 @@ env:
   # Copy of tools/deps/sibling-pins.env (the canonical pin source); the
   # Script portability job fails if this copy diverges. Bump there first.
   RIVET_REF: 78f001e23d595ba816f7a7be59282194dedfdc12
-  WITNESS_REF: v0.38.0
+  WITNESS_REF: v0.46.0
   # sigil ships its binary as `wsc`. Installed from the sigil release
   # (cosign-verified against the tag identity) instead of built from git, so
   # the bundle is signed by the same binary an assessor installs
@@ -74,17 +74,11 @@ jobs:
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
             archive: tar.gz
-          # macOS targets for dev convenience — wohl-hub on a Mac is
+          # macOS target for dev convenience — wohl-hub on a Mac is
           # not the production deployment shape, but reviewers and
-          # developers want a runnable binary.
-          # GitHub retired the macos-14 image (jobs cancel with "configuration
-          # 'macos-14-arm64-us-default' is not supported", observed on the
-          # v0.7.0 release runs 2026-11-13). macos-15-intel keeps this leg a
-          # native build, matching rivet and kiln; move to cross-compiling on
-          # the ARM runner if Intel runners retire too.
-          - target: x86_64-apple-darwin
-            os: macos-15-intel
-            archive: tar.gz
+          # developers want a runnable binary. Apple-silicon only:
+          # the x86_64-apple-darwin leg was dropped fleet-wide by
+          # owner decision (2026-11-20) along with Intel macOS runners.
           - target: aarch64-apple-darwin
             os: macos-latest
             archive: tar.gz
@@ -104,8 +98,9 @@ jobs:
           ref: ${{ env.RELAY_REF }}
           fetch-depth: 0
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
@@ -177,18 +172,18 @@ jobs:
       # rules_rocq_rust's module extension needs nix-build on PATH at Bazel
       # analysis time (same pin as ci.yml's bazel jobs).
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3
-      - uses: bazel-contrib/setup-bazel@0.15.0
+      - uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
         with:
           bazelisk-cache: true
           disk-cache: ${{ github.workflow }}-build-wasm
           repository-cache: true
       - name: bazel build //:wohl-matter-composed
         working-directory: wohl
-        env:
-          CARGO_BAZEL_REPIN: "1"
+        # Builds from the committed MODULE.bazel.lock or fails (wohl#111);
+        # the repin that used to run here masked a stale lock.
         run: |
           set -euo pipefail
-          bazel build //:wohl-matter-composed
+          bazel build //:wohl-matter-composed --lockfile_mode=error
           WASM=$(find "$(bazel info bazel-bin)" -name 'wohl-matter-composed.wasm' | head -1)
           test -n "$WASM"
           # bazel-bin is a symlink tree; copy out a real file for upload.
@@ -237,8 +232,9 @@ jobs:
           path: witness
           ref: ${{ env.WITNESS_REF }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@df2a88e9fe4098bad09cb42c3dec7187f15861fc # master
         with:
+          toolchain: stable
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
