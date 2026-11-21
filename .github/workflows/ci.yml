@@ -348,7 +348,20 @@ jobs:
         # or manifest edit) regenerates the lock via the one-off
         # artifact-capture flow in PR #113, or on any machine that can
         # run the Bazel toolchain path.
-        run: bazel build //:all --lockfile_mode=error
+        # TEMP (one round, PR #113): update mode + artifact capture. The
+        # first captured lock was regenerated in a job that still had
+        # CARGO_BAZEL_REPIN=1 set, so it recorded that env var as an
+        # extension input ('1'); error-mode then refuses under the
+        # REPIN-free jobs ('1' -> <unset>). This round regenerates the
+        # lock with REPIN unset; the next commit restores error-mode.
+        run: bazel build //:all --lockfile_mode=update
+
+      - name: Upload regenerated MODULE.bazel.lock (TEMP, one round)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: module-bazel-lock-repinfree
+          path: wohl/MODULE.bazel.lock
+          if-no-files-found: error
 
       # SWARCH-WOHL-008 C4 execution gate: prove the verified Matter core
       # actually RUNS — not just builds — by executing a full SPAKE2+ PASE
