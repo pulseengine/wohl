@@ -179,11 +179,11 @@ jobs:
           repository-cache: true
       - name: bazel build //:wohl-matter-composed
         working-directory: wohl
-        env:
-          CARGO_BAZEL_REPIN: "1"
+        # Builds from the committed MODULE.bazel.lock or fails (wohl#111);
+        # the repin that used to run here masked a stale lock.
         run: |
           set -euo pipefail
-          bazel build //:wohl-matter-composed
+          bazel build //:wohl-matter-composed --lockfile_mode=error
           WASM=$(find "$(bazel info bazel-bin)" -name 'wohl-matter-composed.wasm' | head -1)
           test -n "$WASM"
           # bazel-bin is a symlink tree; copy out a real file for upload.
