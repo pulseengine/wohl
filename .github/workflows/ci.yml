@@ -457,19 +457,7 @@ jobs:
         # or manifest edit) regenerates the lock via the one-off
         # artifact-capture flow in PR #113, or on any machine that can
         # run the Bazel toolchain path.
-        # TEMP (one round, PR #115): the url 2.5.9 bump changed
-        # crates/wohl-leak/wasm/Cargo.lock, which is a crate-extension
-        # input recorded in MODULE.bazel.lock, so error-mode correctly
-        # refuses the stale lock. This round regenerates it in update
-        # mode and uploads it; the next commit restores error-mode.
-        run: bazel build //:all --lockfile_mode=update
-
-      - name: Upload regenerated MODULE.bazel.lock (TEMP, one round)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: module-bazel-lock-url259
-          path: wohl/MODULE.bazel.lock
-          if-no-files-found: error
+        run: bazel build //:all --lockfile_mode=error
 
       # SWARCH-WOHL-008 C4 execution gate: prove the verified Matter core
       # actually RUNS — not just builds — by executing a full SPAKE2+ PASE
