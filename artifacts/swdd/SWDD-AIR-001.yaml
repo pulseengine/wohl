@@ -1,44 +1,54 @@
 artifacts:
   - id: SWDD-AIR-001
     type: sw-detail-design
-    title: AirMonitor multi-metric threshold design
+    title: AirMonitor independent-watchpoint threshold design
     status: implemented
     description: >
       The AirMonitor processes stream<air-quality> and emits stream<alert>.
-      It evaluates three metrics independently and selects the highest
-      severity across all metrics for the emitted alert.
-
-      Metric evaluation:
-        CO2:  co2_ppm > 2000 -> Critical, > 1000 -> Warning, else None
-        PM2.5: pm25 > 1500 -> Critical, > 350 -> Warning, else None
-        VOC:  voc_index > 400 -> Critical, > 250 -> Warning, else None
-
-      Severity selection: max(co2_severity, pm25_severity, voc_severity)
-      If max severity is None, no alert is emitted.
+      Each registered zone gets six independent relay-lc watchpoints
+      (warning and critical for each of CO2, PM2.5 and VOC), all with
+      comparison at-or-above (GreaterOrEqual) against per-zone thresholds
+      supplied at registration. There is no severity selection: every
+      watchpoint a reading crosses emits its own alert, so a metric at or
+      above its critical threshold emits BOTH the warning and the critical
+      alert (dual emission, normative per SWREQ-AIR-001's 2026-11-19 owner
+      decision; downstream deduplication collapses repeats, and dual
+      emission ensures the critical alert can never be masked). A reading
+      can emit up to MAX_ALERTS_PER_READING = 6 alerts (all three metrics
+      at critical); a reading below every threshold emits none.
 
       The process function:
-        fn process(reading: AirQuality) -> Option<Alert>
-        - Evaluates all three metrics
-        - Takes max severity
-        - Constructs alert message listing which metrics exceeded thresholds
-        - Returns None if all metrics within normal range
+        fn process_reading(reading: AirReading) -> AirResult
+        - Routes each metric value through the relay-lc WatchpointTable
+          (watchpoint ids are zone_id * 6 + metric-level index)
+        - Appends one AirAlert (alert_type, zone, threshold) per crossed
+          watchpoint, bounded by the fixed result buffer
+        - Refuses readings and registrations whose zone_id has no
+          watchpoint-id encoding (zone_id >= MAX_ZONES = 16), without
+          panicking (regression: 2026-11-08 nightly-fuzz add-overflow)
 
-      Verus properties verified:
-        AIR-P01: CO2 > 1000 always produces alert (SWREQ-AIR-001)
-        AIR-P02: max-severity selection is correct (SWREQ-AIR-002)
-        AIR-P03: severity ordering is total and antisymmetric
-        AIR-P04: no arithmetic overflow in threshold comparisons
-    tags: [air-quality, multi-metric, threshold, verus, detailed-design]
+      Kani BMC harnesses in the unit (instrument is Kani, not Verus —
+      the Verus proofs cover the alert dispatcher, not this monitor):
+        AIR-P03: alert_count never exceeds MAX_ALERTS_PER_READING
+        AIR-P04: values below all thresholds produce 0 alerts
+        no-panic: fully symbolic inputs, zone_id unconstrained
+        registration refuses unencodable zone_ids
+      Proptests pin the buffer bound and the strictly-below-no-alert
+      property; boundary pins at the at-or-above edges live in
+      wohl-integration (requirement_boundary_pins).
+    tags: [air-quality, multi-metric, threshold, kani, detailed-design]
     fields:
-      unit: src/air/core.rs
-      function: "AirMonitor::process"
+      unit: crates/wohl-air/plain/src/engine.rs
+      function: "AirMonitor::process_reading"
       algorithm: >
-        1. co2_sev = if co2_ppm > 2000 { Critical } else if > 1000 { Warning } else { None }
-        2. pm_sev = if pm25 > 1500 { Critical } else if > 350 { Warning } else { None }
-        3. voc_sev = if voc_index > 400 { Critical } else if > 250 { Warning } else { None }
-        4. max_sev = max(co2_sev, pm_sev, voc_sev)
-        5. if max_sev != None: emit Alert with max_sev and metric details
-        Stateless — no per-zone history needed for threshold checks.
+        1. register_zone: add 6 watchpoints (co2_warn, co2_critical,
+           pm25_warn, pm25_critical, voc_warn, voc_critical), op
+           GreaterOrEqual, per-zone thresholds, persistence 1
+        2. process_reading: feed each metric to its two watchpoints via
+           relay-lc; for every violation append AirAlert{alert_type,
+           threshold} until MAX_ALERTS_PER_READING
+        3. No max-severity step: alerts are independent per watchpoint
+        Stateless across readings — no per-zone history for threshold checks.
     links:
       - type: refines
         target: SWARCH-WOHL-001
