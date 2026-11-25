@@ -1,13 +1,54 @@
 version: 2
-# One PR per logical release across all directories: version-locked families
-# (wasm-tools, wasmtime) and all github-actions pins in / must not split into
-# one PR per directory. (Learned from loom/witness/mcp/relay/rules_wasm_component,
-# where one release arrived as 4-8 PRs.)
+# Grouped monthly updates (fleet template from pulseengine/rivet, owner
+# decision 2026-11-21). One entry per ecosystem, its directories in one
+# `directories:` list, so a release opens one PR and not one per directory.
+# Every entry runs monthly (the 1st, 02:00 UTC), keeps at most 2 PRs open,
+# and waits 7 days after a release (cooldown). Lockstep groups come first
+# because Dependabot puts a dependency in the FIRST group it matches; then
+# one minor-patch group. Majors stay ungrouped, one PR each, so a breaking
+# change is read on its own. Security updates ignore the schedule and limit.
+#
+# The cargo list is the standalone roots (each has its own Cargo.lock); the
+# root workspace covers every crates/* member. tools/lockfile-controls/* are
+# deliberately-broken negative-control fixtures (stale lock, known advisory)
+# and must never be updated — they are not listed.
+#
+# A bump to crates/wohl-leak/wasm or the spike2c locks invalidates
+# MODULE.bazel.lock (recorded crate_universe extension input); the Bazel job
+# runs --lockfile_mode=error on every PR, so such a branch goes red until
+# the lock is recaptured. That red is the verify-only lock check working.
 updates:
-  - package-ecosystem: cargo
+  - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+      time: "02:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
+    groups:
+      github-actions-all:
+        patterns:
+          - "*"
+  - package-ecosystem: cargo
+    directories:
+      - /
+      - /fuzz
+      - /crates/wohl-leak/wasm
+      - /crates/wohl-matter-core/spike2-exec
+      - /crates/wohl-matter-core/spike2c-compose/mcore
+      - /crates/wohl-matter-core/spike2c-compose/transport
+      - /crates/wohl-matter-core/witness
+    schedule:
+      interval: monthly
+      time: "02:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
     groups:
@@ -25,33 +66,9 @@ updates:
         patterns:
           - "wasmtime"
           - "wasmtime-*"
-      github-actions-all:
-        # groups cannot be scoped by package-ecosystem; action names are
-        # owner/name (contain a slash, never start with @), which cargo crates
-        # and unscoped npm packages never match.
-        patterns:
-          - "^[^@]+/"
-  - package-ecosystem: cargo
-    directory: /fuzz
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-  - package-ecosystem: cargo
-    directory: /crates/wohl-air
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-  - package-ecosystem: cargo
-    directory: /crates/wohl-alert
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-  - package-ecosystem: cargo
-    directory: /crates/wohl-door
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
+      # rs-matter is pinned by git rev in the manifests, outside Dependabot's
+      # reach — its bumps stay deliberate, hand-made rev moves.
+      minor-patch:
+        update-types:
+          - minor
+          - patch
