@@ -1,0 +1,21 @@
+Bazel build (//:all — exercises WASM component glue)
+Kani: wohl-air
+Kani: wohl-alert
+Kani: wohl-door
+Kani: wohl-leak
+Kani: wohl-ota
+Kani: wohl-power
+Kani: wohl-temp
+Script portability (shellcheck + Python 3.9 floor)
+Scry sound-AI (Matter seam)
+Trust-escape ledger (assumes may only shrink)
+Verification gate (rivet-driven)
+Verified-line guard
+Verus (bazel test //proofs/verus)
+Witness MC/DC (Matter seam)
+cargo test (workspace, incl. proptest)
+cargo-deny (supply-chain)
+cargo-fuzz smoke (60s/target)
+fmt + clippy
+rivet validate (ASPICE artifacts)
+sigil attestation (sign composed component)
