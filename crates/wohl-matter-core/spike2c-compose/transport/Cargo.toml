@@ -6,5 +6,5 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 [dependencies]
-wit-bindgen = "0.41"
+wit-bindgen = "0.63"
 [workspace]
