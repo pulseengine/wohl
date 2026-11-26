@@ -33,10 +33,14 @@ updates:
       github-actions-all:
         patterns:
           - "*"
+  # / (the workspace) and /fuzz are NOT listed: both depend on ../relay by
+  # path (siblings checkout), which Dependabot's clone cannot reach, and its
+  # cargo updater fails the WHOLE grouped update on path_dependencies_not_
+  # reachable (run 45692453614, 2026-11-25). Workspace registry bumps come
+  # through the RUSTSEC sweeps and deliberate cargo-update rounds instead;
+  # cargo-deny in CI stays the advisory watch for them.
   - package-ecosystem: cargo
     directories:
-      - /
-      - /fuzz
       - /crates/wohl-leak/wasm
       - /crates/wohl-matter-core/spike2-exec
       - /crates/wohl-matter-core/spike2c-compose/mcore
