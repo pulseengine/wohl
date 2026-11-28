@@ -396,16 +396,24 @@ jobs:
         run: bazel test //proofs/verus:alert_dedup_verify --test_output=summary --lockfile_mode=error
 
       # Red control: an out-of-date Bazel lock must turn CI red. The
-      # lock records MODULE.bazel's hash, so any edit without a lock
-      # regeneration must make error-mode refuse. Perturb, expect
-      # refusal, restore.
+      # perturbation must change RESOLUTION, not just bytes: Bazel's
+      # fine-grained lockfile records no MODULE.bazel hash, so a comment
+      # append is invisible to error-mode. The old comment-append control
+      # only ever "refused" because the committed lock was missing
+      # extension entries that `bazel mod deps` needs — vacuous, exposed
+      # by the first complete lock regeneration (PR #121). Flip a
+      # bazel_dep version without a lock update, expect refusal, restore.
       - name: "Control: perturbed MODULE.bazel fails lockfile_mode=error"
         working-directory: wohl
         run: |
           set -euo pipefail
-          echo "# lockfile-control perturbation" >> MODULE.bazel
+          sed -i 's/bazel_dep(name = "bazel_skylib", version = "1.9.0")/bazel_dep(name = "bazel_skylib", version = "1.8.0")/' MODULE.bazel
+          if git diff --quiet MODULE.bazel; then
+            echo "::error::perturbation sed matched nothing; the control no longer perturbs anything"
+            exit 1
+          fi
           if bazel mod deps --lockfile_mode=error > /dev/null 2>&1; then
-            echo "::error::MODULE.bazel was perturbed without a lock update and error-mode did not refuse; the Bazel lock is not actually enforced"
+            echo "::error::MODULE.bazel resolution was perturbed without a lock update and error-mode did not refuse; the Bazel lock is not actually enforced"
             git checkout -- MODULE.bazel
             exit 1
           fi
