@@ -17,7 +17,7 @@ and test cleanly under `cargo +1.85.0 ... -p wohl-matter-bridge -p wohl-hub`.
 
 ## Required root `Cargo.toml` edits
 
-In `/Users/r/git/pulseengine/wohl/Cargo.toml`:
+In the repository root `Cargo.toml`:
 
 1. Add `"crates/wohl-matter-bridge"` to `[workspace] members = [...]`.
 2. Add the crate to `[workspace.dependencies]` so future consumers can
