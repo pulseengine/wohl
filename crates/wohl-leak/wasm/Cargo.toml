@@ -6,7 +6,7 @@ rust-version = "1.87.0"
 [lib]
 crate-type = ["cdylib"]
 [dependencies]
-wit-bindgen = "0.41.0"
+wit-bindgen = "0.63.0"
 # Added to the bazel crate-universe seed so `@crates//:rs-matter` is
 # available to the wohl-matter-core WASM component (rules_wasm_component
 # bindgen `deps`). rs-matter core is rustcrypto-only — no `os` feature,
